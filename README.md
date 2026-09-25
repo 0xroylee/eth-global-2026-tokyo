@@ -22,6 +22,7 @@ The team confirmed these choices on 25 September 2026:
 
 | Document | Purpose |
 | --- | --- |
+| [Agent instructions](AGENTS.md) | Reuse existing solutions, focused testing, scoped instructions, and implementation models |
 | [Requirements](docs/requirements.md) | Confirmed rules, user journeys, fixture economics, and scope |
 | [Technical specification](docs/technical-spec.md) | Two-pool architecture, atomic settlement, stage math, interfaces, and tests |
 | [Delivery plan](docs/delivery-plan.md) | GitHub issues, dependencies, two-person work allocation, and demo schedule |

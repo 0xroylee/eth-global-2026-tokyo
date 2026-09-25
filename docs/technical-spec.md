@@ -33,7 +33,7 @@ Deploy one round, one shared hook, and two canonical pools. Each attack chooses 
 | Arena, wallet flows, gaming UI | `apps/web/` | Teammate B: UI + interface + gaming |
 | Optional read-only activity service | `apps/activity/` | A, only after core works |
 
-These are proposed locations, not existing implementation files. Bun manages TypeScript packages and tests. Solidity with Foundry provides contract compilation, local-chain integration tests, and fuzzing. React with Vite is the frontend default. Pin dependency versions and commit the lockfile when implementation begins.
+These are proposed locations, not existing implementation files. Bun manages TypeScript packages and tests. Solidity with Foundry provides contract compilation and focused integration tests. React with Vite is the frontend default. Pin dependency versions and commit the lockfile when implementation begins. Follow the [implementation rules](agents/implementation.md) to evaluate existing packages, templates, and reference code before building new components.
 
 ## Deployment gate
 
@@ -86,7 +86,7 @@ AttackRouter, collectible, token, and manager addresses are immutable or set onc
 
 ### AttackRouter
 
-Use a dedicated router with a fixed manager and two allowed pools. The public attack function derives the player from `msg.sender`, selects a pool from an enum, and records one authenticated in-flight context. Protect the request against reentrancy.
+Use a dedicated attack entry point with a fixed manager and two allowed pools. First evaluate existing v4 router and settlement implementations, then adapt the smallest suitable one. Custom code must cover only the missing game-specific behavior. The public attack function derives the player from `msg.sender`, selects a pool from an enum, and records one authenticated in-flight context. Protect the request against reentrancy.
 
 Only PoolManager may enter `unlockCallback`, and only during an active request. Exclude arbitrary external calls, arbitrary currencies, arbitrary recipients, relayers, and delegated attack beneficiaries.
 
@@ -177,7 +177,7 @@ Proposed inputs are `kind`, `quoteAmountIn`, `maxAmmoToBurn`, `minGrossAmmoOut`,
 6. Router receives the adjusted swap delta, settles actual MockUSD debt, and takes the remaining ammunition for the player. If prefunded input is not fully used, return the difference. Charge actual debt rather than the input cap.
 7. Unlock must end with zero currency deltas. Slippage, invalid context, insufficient damage, transfer failure, or settlement failure reverts the trade, burn, stage changes, contribution, and logs together.
 
-Prove this against real v4 core before extending the UI. Test both sorted currency orientations for **each** ammunition kind. A mocked manager or a simulated quote alone cannot establish correct settlement.
+Prove this against real v4 core before extending the UI. Cover the actual deployed currency orientation for each ammunition pool; reuse a parameterized check if the implementation supports both orientations. A mocked manager or a simulated quote alone cannot establish correct settlement.
 
 `minGrossAmmoOut` bounds purchased output before burn. It is different from the leftover amount the wallet receives. The UI must not present gross output as a net wallet transfer. A quote includes both.
 
@@ -272,23 +272,10 @@ An RPC failure displays stale data, not zero HP or cleared claim flags. A backen
 
 ## Required verification
 
-Use real v4 core for contract integration. Use Foundry fuzz/invariant tests for damage and money. Use Bun tests for client math, events, and errors. The final issue includes a browser test with multiple wallets.
+Follow the [testing rules](agents/testing.md). The main evidence is one reusable two-wallet E2E journey through funding, entry, both attacks, all three stages, and token/NFT claims against real v4 core.
 
-| Area | Evidence required |
-| --- | --- |
-| Network | Chain ID, manager provenance, hook flag match, two seeded pools, successful swaps |
-| Activation | Exact prize receipt, starter reserve, immutable rules, invalid config rejected |
-| Entry | Paid mint and allocation once, cap/reserve checks, failed mint rollback |
-| Physical attack | Correct pool/output token, supply delta, weight 1, HP/contribution, output leftovers |
-| Magic attack | Correct pool/output token, supply delta, weight 3, effective-damage weighting |
-| v4 settlement | Both currency orientations per kind, positive returned delta, no outstanding currency delta, actual input/refund, all-or-nothing failure |
-| Identity | Forged hookData, arbitrary router, direct callback, wrong key, wrong token/mode, reentrant context rejected |
-| Stage | Exact clear, overkill, one-base-unit boundary, ceil rounding, no spill, new full HP, expected-stage race |
-| Fees | Stage-clearing swap pays old fee; next swap in either pool pays new fee |
-| Concurrency | Two wallets race at low stage HP; one cannot unknowingly spend in the next stage |
-| Claims | Before final defeat, zero contribution, duplicate, payout floors, order independence, reentrancy, receiver failure |
-| Expiry | Deadline boundary, late attack, maker refund once, earlier defeat keeps claims open |
-| Sync | Refresh, duplicate/missing/reordered logs, replaced blocks, RPC failure, wrong deployment |
-| Demo | Two wallets, entry, both auto-buy attack types, all stages, token and NFT claims |
+Assert receipts, actual token supply/balance changes, returned ammunition, weighted contribution, shared stage fees, and payouts within that journey. Use a compact contract integration scenario for the core failures that the browser journey cannot reliably exercise: settlement rollback, unauthorized damage, a stage race, duplicate or premature claims, and expiry/refund accounting.
 
-Ordinary trades, direct token transfers, and token burns outside the game must never create contribution. No test in this table has been run during planning. Each issue must attach evidence for its implemented commit.
+Reuse fixtures and evidence across issues. Cover the actual deployed token order and 6/18-decimal amounts; add alternate orders or a small fuzz check when needed to resolve a concrete arithmetic or settlement risk. A broad fuzz suite and separate tests for every helper, UI state, or upstream library behavior are not default requirements.
+
+Ordinary trades, direct token transfers, and token burns outside the game must never create contribution. These correctness rules remain required even when several are verified in one scenario. Attach the tested commit and meaningful E2E/core evidence when closing an implementation issue. No project implementation test has run yet.

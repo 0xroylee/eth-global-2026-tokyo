@@ -4,6 +4,8 @@ Status: implementation work is not started. Estimates are person-hours. GitHub i
 
 ## Delivery strategy
 
+Follow the [agent instructions](../AGENTS.md): inspect existing solutions before custom implementation, verify through shared E2E/core checks, and use the specified Sol high / Luna xhigh model routing. These rules govern the work in the linked issues.
+
 First prove a real v4 swap and output-burn settlement on the selected chain. Then deliver a physical attack before generalizing it to magic. Keep one complete user-visible journey per issue, with contract state, client behavior, and verification together.
 
 One teammate owns contracts + backend. The other owns UI + interface + gaming. The frontend teammate can build against the specified state/events while contract work proceeds. Mock-backed UI is preparation; a P0 feature closes only after its real integration works.
@@ -77,7 +79,7 @@ P0 estimates total **19–31 person-hours**. With two people, some UI work overl
 | Tonight, next block | Fund, entry, physical attack, then magic and stage fees | Local two-wallet path works with real contracts |
 | Tonight, final block | Claims, expiry, testnet deploy/seed, UI wiring | Both attack receipts and deployed addresses exist |
 | Tomorrow, 09:00–09:30, timezone pending | Fix integration failures and execute the full journey | Core demo succeeds |
-| Tomorrow, 09:30–10:00, timezone pending | Freeze, record fallback, rehearse, prepare evidence | Two clean runs or a specific unresolved blocker |
+| Tomorrow, 09:30–10:00, timezone pending | Freeze, record fallback, rehearse, prepare evidence | Core E2E passes on the frozen commit, or a specific unresolved blocker is recorded |
 
 If testnet readiness fails after 90 minutes, continue locally while A obtains a working provider or sponsor guidance. Keep BP01's remote acceptance open. Do not silently change chains.
 
@@ -92,6 +94,8 @@ Use the parent epic and child issues below. Each issue includes owner roles, dep
 Teammates claim by assigning themselves or commenting with owner and branch. GitHub handles are not guessed. Use `codex/` for branches created by Codex. Link PRs to the issue, and update dependent triage when prerequisite changes land.
 
 Done means the observable user journey works and the PR includes the tested commit plus relevant tests, screenshot, or transaction evidence. A merged contract with an unwired UI does not close a feature slice. A closed issue is evidence only if its acceptance actually passed.
+
+Reuse the same E2E journey and focused core checks across issues. An issue's list of failure cases does not require a separate test suite or one test for every bullet. Follow the [testing rules](agents/testing.md) when selecting verification.
 
 ## Sixty-second presentation
 
