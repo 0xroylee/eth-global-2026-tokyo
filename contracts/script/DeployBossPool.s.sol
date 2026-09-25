@@ -196,7 +196,7 @@ contract DeployBossPool is Script {
         result = string.concat(result, vm.toString(starterPaid), "\",\"starterRoyUnspent\":\"");
         result = string.concat(result, vm.toString(starterBudget - starterPaid), "\",\"lockedRouterROY\":\"");
         result = string.concat(result, vm.toString(routerRoy - (starterBudget - starterPaid)), "\",\"poolManagerBossHP\":\"");
-        result = string.concat(result, vm.toString(deployment.bossHP.balanceOf(address(deployment.manager))), "\",\"prizeEscrowMockUSD\":\"");
+        result = string.concat(result, vm.toString(deployment.bossHP.balanceOf(address(deployment.manager))), "\",\"mockUSDInHook\":\"");
         return string.concat(result, vm.toString(deployment.mockUSD.balanceOf(address(deployment.hook))), "\"}");
     }
 
