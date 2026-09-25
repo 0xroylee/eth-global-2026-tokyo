@@ -1,12 +1,12 @@
 # Boss Pool refill math
 
-Status: numerical design model, updated for BossHP-based rewards without burns, 26 September 2026. Stage progression counts actual purchases; eligible BossHP represents reward rights. The worked claim model uses transferable tokens surrendered into permanent claim custody, a proposed default rather than an implemented feature. Values below are a test configuration, not approved deployment parameters or a claim of market stability. The passing local real-v4 scenario recorded below used the previous burn path; ordinary output delivery and token-based rewards have not passed that scenario.
+Status: numerical model with a BP01 no-burn implementation, 26 September 2026. Stage progression counts actual purchases; eligible BossHP represents reward rights and is surrendered into permanent custody at claim. The current shared Foundry fixture passes four focused cases, including a full HP0 round/claims path and an HP1 mirrored-range attack/refill regression. Historical burn-based observations remain separately labeled below. Values are local test parameters, not a claim of market stability or target-chain verification.
 
 ## Assumptions
 
-- One ROY / BossHP battle pool. BossHP is token0, ROY token1; both use 18 decimals.
+- One ROY / BossHP battle pool; both tokens use 18 decimals. The equations use normalized ROY-per-BossHP prices, independently of address sorting.
 - Nominal stage HP is 300, 600, and 900.
-- Every stage trades over the same finite tick range `[0, 1920]`, tick spacing 60.
+- Every stage uses the same finite range, tick spacing 60. Use `[0, 1920]` when BossHP is currency0, and `[-1920, 0]` when BossHP is currency1. Both start at normalized price 1 and finish near 1.211659 ROY/HP. Hook immutable bounds are authoritative for the router and manifest.
 - Price is ROY per BossHP. `P_low = 1`; `P_high = 1.0001^1920 = 1.211658885759174828926510469707860814750856832246328162756272699402253`.
 - Fixed swap fee `f = 0.003` in both directions. Protocol fee is zero.
 - Only registered game-owned liquidity participates. Players receive BossHP and its actual authorized purchase output advances the stage. Eligible tokens carry transferable reward rights. No token is burned. Only the controller can reverse-swap during Transition; player sell-backs are prohibited.
@@ -17,6 +17,8 @@ Status: numerical design model, updated for BossHP-based rewards without burns, 
 - Calculations in the first sections use continuous amounts. The integer v4 implementation must separately account for base-unit rounding.
 
 The position equations come from the [Uniswap v3 whitepaper](https://app.uniswap.org/whitepaper-v3.pdf); v4 uses the same concentrated-liquidity model. Exact step fees and rounding follow the pinned [SwapMath](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/SwapMath.sol) and [SqrtPriceMath](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/SqrtPriceMath.sol). The numerical model and deductions below are our calculations.
+
+For HP1, the attack starts at raw tick 0 and moves down to -1920. Its initial tick crossing has zero output, then one positive-output interval. The reverse refill can split at raw tick -60, the bitmap word boundary for spacing 60. The implementation sums rounded input and fee for both refill intervals; a single continuous `H/(1-f)` formula alone is not an exact integer funding quote. The HP1 regression measures total stage-one spend of 331.219793595396366740 ROY and verifies the normalized start/end/reset prices.
 
 ## Stage equations
 

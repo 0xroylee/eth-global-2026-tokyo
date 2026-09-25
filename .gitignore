@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.scratch/
+
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+

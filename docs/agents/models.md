@@ -1,16 +1,7 @@
-# Implementation model routing
+# Model routing
 
-Use these exact model and reasoning-effort combinations for implementation:
+For BP01, the user's latest explicit instruction selects `gpt-6-luna` at `xhigh` for all implementation and `gpt-6-sol` at `high` for review. This task-specific choice supersedes the older routing text in BP01 issue #2 and earlier project guidance. It does not change global settings or automatically apply to later tasks.
 
-| Work | Model | Reasoning effort |
-| --- | --- | --- |
-| Contracts, v4 settlement, custody, shared state, difficult debugging, or changes across multiple layers | `gpt-6-sol` | `high` |
-| Bounded UI/game presentation, straightforward viem wiring, scripts, or documentation after interfaces and behavior are clear | `gpt-6-luna` | `xhigh` |
+When an agent is assigned work, set its exact model and effort through the runtime controls when available. Give it a bounded responsibility, relevant files and interfaces, acceptance criteria, and applicable testing guidance. Agents share the codebase and must preserve others' changes.
 
-Default to Sol high when the implementation boundary or correctness requirements are unclear. Move a blocked Luna task to Sol high when it needs broader reasoning. This routing does not change the two teammates' ownership of their work.
-
-When assigning an implementation task, set both the model and effort explicitly through the available runtime controls. Give the worker a bounded responsibility, relevant files and interfaces, acceptance criteria, and the applicable testing guide. Workers share the codebase and must preserve others' changes.
-
-Keep the exact requested model IDs and effort levels. If the runtime cannot select a requested combination, report that limitation instead of silently substituting another model. Do not launch agents merely to use both models.
-
-This file sets repository policy for future implementation. It does not itself change the model of a running task or global Codex settings.
+Keep requested model IDs and effort levels exact. If the runtime cannot select a requested combination, report that limitation rather than silently substituting another model. Do not launch agents merely to use multiple models; use delegation only when the user or applicable project instruction calls for it.
