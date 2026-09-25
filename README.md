@@ -28,7 +28,7 @@ The team confirmed these choices on 25 September 2026:
 | [Source notes](docs/sources.md) | Verified sponsor requirements and protocol references |
 | [Uniswap feedback draft](FEEDBACK.md) | Observed friction and implementation feedback still to collect |
 
-Claim work through the linked issues. Each feature issue includes end-to-end behavior, acceptance criteria, test evidence, and blockers. Suggested roles are not GitHub assignees.
+Start at [the parent epic](https://github.com/0xroylee/eth-global-2026-tokyo/issues/1) or [the demo milestone](https://github.com/0xroylee/eth-global-2026-tokyo/milestone/1). Claim work through the linked issues. Each feature issue includes end-to-end behavior, acceptance criteria, test evidence, and blockers. Suggested roles are not GitHub assignees.
 
 ## Technical approach
 

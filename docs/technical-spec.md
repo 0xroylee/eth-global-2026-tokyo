@@ -193,7 +193,7 @@ This is a direct hook-contract call, **not** a swap callback. It is P1 and does 
 
 Both pool keys are dynamic-fee pools from creation. `beforeSwap` reads the same shared stage and returns the proposed fee in v4 units: 3000, 6000, or 10000, with the required override flag. These are 0.30%, 0.60%, and 1.00%.
 
-An attack that clears a stage pays the fee of the stage before the attack. The next swap in **either** pool pays the next stage's fee. Before activation and after defeat or expiry, ordinary trades use the base fee. Attack mode remains disabled outside the active interval.
+An attack that clears a stage pays the fee of the stage before the attack. The next swap in **either** pool pays the next stage's fee. Before activation and after defeat or expiry, ordinary trades use the base fee. Treat a reached round deadline as inactive even before anyone calls expire. Attack mode remains disabled outside the active interval.
 
 `afterSwap` records the absolute MockUSD leg once for the canonical pool. Maintain volume by pool and optionally sum those same-currency values. Do not add ROY units to MROY or MockUSD units. Do not count the burn as another swap. Volume is manipulable and gives no reward weight.
 

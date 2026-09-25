@@ -10,24 +10,24 @@ One teammate owns contracts + backend. The other owns UI + interface + gaming. T
 
 ## Work breakdown
 
-GitHub issue links are added after publication.
+Start with [the parent epic](https://github.com/0xroylee/eth-global-2026-tokyo/issues/1) or [the demo milestone](https://github.com/0xroylee/eth-global-2026-tokyo/milestone/1). All 14 work items are linked below and attached as native sub-issues. Their implementation blockers are also recorded as native GitHub dependencies.
 
 | Key | Slice | Priority | Depends on | Lead | Estimate | Stories |
 | --- | --- | --- | --- | --- | --- | --- |
-| BP01 | Connect to Robinhood testnet and prove both v4 pools | P0 | None | A | 2–4 h | US01 |
-| BP02 | Fund and display the three-stage boss round | P0 | BP01 | A + B | 2–3 h | US02 |
-| BP03 | Enroll with Little Roy NFT and starter physical ammo | P0 | BP02 | A + B | 2–3 h | US03 |
-| BP04 | Execute physical auto-buy-and-burn attacks | P0 | BP03 | A + B | 3–5 h | US04 |
-| BP05 | Execute magic attacks with weighted contribution | P0 | BP04 | A + B | 2–3 h | US05 |
-| BP06 | Present three stages and share dynamic fees across pools | P0 | BP05 | B + A | 2–3 h | US06 |
-| BP07 | Claim proportional MockUSD and a victory NFT | P0 | BP06 | A + B | 2–3 h | US07 |
-| BP08 | Spend starter and leftover ammo through a separate held-burn action | P1 | BP05 | A + B | 1–2 h | US08 |
-| BP09 | Reconstruct shared activity and leaderboard | P1 | BP05 | A + B | 2–3 h | US09 |
-| BP10 | Expire an unfinished round and refund its unawarded prize | P0 | BP02, BP04 | A + B | 1–2 h | US10 |
-| BP11 | Verify and rehearse the complete two-wallet testnet demo | P0 | BP07, BP10 | B + A | 2–3 h | US01–US07, US10 |
-| BP12 | Publish judge evidence and complete UF submission materials | P0 | BP11 | B + A | 1–2 h | US11 |
-| BP13 | Evaluate bounded phase-triggered ammo releases | P2 backlog | BP11 + approved emission policy | A | 2–4 h after decision | Optional |
-| BP14 | Add World ID at an agreed eligibility step | P2 backlog | BP11 + approved identity policy | A + B | 3–5 h after decision | Optional |
+| [BP01](https://github.com/0xroylee/eth-global-2026-tokyo/issues/2) | Connect to Robinhood testnet and prove both v4 pools | P0 | None | A | 2–4 h | US01 |
+| [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3) | Fund and display the three-stage boss round | P0 | [BP01](https://github.com/0xroylee/eth-global-2026-tokyo/issues/2) | A + B | 2–3 h | US02 |
+| [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | Enroll with Little Roy NFT and starter physical ammo | P0 | [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3) | A + B | 2–3 h | US03 |
+| [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | Execute physical auto-buy-and-burn attacks | P0 | [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | A + B | 3–5 h | US04 |
+| [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | Execute magic attacks with weighted contribution | P0 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | A + B | 2–3 h | US05 |
+| [BP06](https://github.com/0xroylee/eth-global-2026-tokyo/issues/7) | Present three stages and share dynamic fees across pools | P0 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | B + A | 2–3 h | US06 |
+| [BP07](https://github.com/0xroylee/eth-global-2026-tokyo/issues/8) | Claim proportional MockUSD and a victory NFT | P0 | [BP06](https://github.com/0xroylee/eth-global-2026-tokyo/issues/7) | A + B | 2–3 h | US07 |
+| [BP08](https://github.com/0xroylee/eth-global-2026-tokyo/issues/9) | Spend starter and leftover ammo through a separate held-burn action | P1 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | A + B | 1–2 h | US08 |
+| [BP09](https://github.com/0xroylee/eth-global-2026-tokyo/issues/10) | Reconstruct shared activity and leaderboard | P1 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | A + B | 2–3 h | US09 |
+| [BP10](https://github.com/0xroylee/eth-global-2026-tokyo/issues/11) | Expire an unfinished round and refund its unawarded prize | P0 | BP02, BP04 | A + B | 1–2 h | US10 |
+| [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | Verify and rehearse the complete two-wallet testnet demo | P0 | BP07, BP10 | B + A | 2–3 h | US01–US07, US10 |
+| [BP12](https://github.com/0xroylee/eth-global-2026-tokyo/issues/13) | Publish judge evidence and complete UF submission materials | P0 | [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | B + A | 1–2 h | US11 |
+| [BP13](https://github.com/0xroylee/eth-global-2026-tokyo/issues/14) | Evaluate bounded phase-triggered ammo releases | P2 backlog | BP11 + approved emission policy | A | 2–4 h after decision | Optional |
+| [BP14](https://github.com/0xroylee/eth-global-2026-tokyo/issues/15) | Add World ID at an agreed eligibility step | P2 backlog | BP11 + approved identity policy | A + B | 3–5 h after decision | Optional |
 
 A = contracts + backend. B = UI + interface + gaming. Handles were not supplied, so issues stay unassigned.
 
