@@ -129,17 +129,10 @@ contract BossPoolCoreTest is Test {
         supplyStartSqrtPriceX96 = TickMath.getSqrtPriceAtTick(startTick);
         supplyLowerTick = startTick - 6_000;
         supplyUpperTick = startTick + 6_000;
-        uint128 supplyLiquidity = _supplyLiquidity(
-            supplyStartSqrtPriceX96, supplyLowerTick, supplyUpperTick, mockIsCurrency0
-        );
-        router.seedSupplyPool(supplyStartSqrtPriceX96, supplyLowerTick, supplyUpperTick, supplyLiquidity);
-        router.activate();
-
-        _enroll(ALICE);
-        _enroll(BOB);
     }
 
     function test_TwoWalletTwoHopThreeStagesClaimsAndRollback() public {
+        _prepareActiveRound();
         _assertGatesAndRejectUnauthorizedSwap();
         _attackPartiallyWithAlice();
         _assertFailedTransitionRollsBack();
@@ -302,6 +295,7 @@ contract BossPoolCoreTest is Test {
     }
 
     function test_DeadlineStopsEnrollmentAndAttackAndRefundsPrizeOnce() public {
+        _prepareActiveRound();
         uint256 aliceUSD = mockUSD.balanceOf(ALICE);
         vm.warp(roundDeadline);
         vm.prank(ALICE);
@@ -326,6 +320,24 @@ contract BossPoolCoreTest is Test {
         hook.refundExpiredPrize();
     }
 
+    function test_DeadlineRejectsSupplySeedAndActivationBeforeLockingLP() public {
+        vm.warp(roundDeadline);
+        vm.expectRevert(BossRouter.InvalidSetup.selector);
+        _seedSupplyPool();
+        assertFalse(router.supplyPoolSeeded());
+        assertFalse(hook.poolInitialized());
+
+        vm.warp(roundDeadline - 1);
+        _seedSupplyPool();
+        assertTrue(router.supplyPoolSeeded());
+        vm.warp(roundDeadline);
+        vm.expectRevert(BossRouter.InvalidSetup.selector);
+        router.activate();
+        assertFalse(router.activated());
+        assertFalse(hook.poolInitialized(), "deadline rejection leaves the Boss pool uninitialized");
+        assertEq(uint8(hook.status()), uint8(BossHook.RoundStatus.Setup));
+    }
+
     function _enroll(address player) private {
         vm.startPrank(player);
         mockUSD.approve(address(hook), type(uint256).max);
@@ -333,6 +345,21 @@ contract BossPoolCoreTest is Test {
         vm.stopPrank();
         assertTrue(hook.enrolled(player));
         assertEq(roy.balanceOf(player), 100e18);
+    }
+
+    function _prepareActiveRound() private {
+        _seedSupplyPool();
+        router.activate();
+        _enroll(ALICE);
+        _enroll(BOB);
+    }
+
+    function _seedSupplyPool() private {
+        bool mockIsCurrency0 = address(mockUSD) < address(roy);
+        uint128 liquidity = _supplyLiquidity(
+            supplyStartSqrtPriceX96, supplyLowerTick, supplyUpperTick, mockIsCurrency0
+        );
+        router.seedSupplyPool(supplyStartSqrtPriceX96, supplyLowerTick, supplyUpperTick, liquidity);
     }
 
     function _attack(address player, uint256 maxMockUSD, uint8 stage)

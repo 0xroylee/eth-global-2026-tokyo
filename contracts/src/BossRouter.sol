@@ -156,7 +156,8 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         nonReentrant
     {
         if (
-            address(bossHook) == address(0) || supplyPoolSeeded || activated || liquidity == 0
+            address(bossHook) == address(0) || block.timestamp >= bossHook.deadline() || supplyPoolSeeded
+                || activated || liquidity == 0
                 || tickLower >= tickUpper || tickLower % TICK_SPACING != 0 || tickUpper % TICK_SPACING != 0
         ) revert InvalidSetup();
         uint160 lowerSqrt = TickMath.getSqrtPriceAtTick(tickLower);
@@ -177,6 +178,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
     function activate() external onlyOwner nonReentrant {
         if (
             activated || mode != Operation.Idle || !supplyPoolSeeded || address(bossHook) == address(0)
+                || block.timestamp >= bossHook.deadline()
                 || bossHP.balanceOf(address(this)) != bossHP.totalSupply()
                 || bossHP.balanceOf(address(this)) < minimumBossHPForVictoryPath()
                 || roy.balanceOf(address(this)) < STARTER_ROY_BUDGET

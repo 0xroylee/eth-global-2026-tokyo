@@ -204,7 +204,10 @@ contract BossHook is ReentrancyGuard {
 
     function activateFromRouter() external {
         if (msg.sender != address(router)) revert Unauthorized();
-        if (status != RoundStatus.Setup || router.mode() != MODE_SETUP || !prizeFunded || !poolInitialized) {
+        if (
+            status != RoundStatus.Setup || block.timestamp >= deadline || router.mode() != MODE_SETUP
+                || !prizeFunded || !poolInitialized
+        ) {
             revert InvalidRound();
         }
         _assertRegisteredPositions(0);
@@ -237,7 +240,10 @@ contract BossHook is ReentrancyGuard {
     }
 
     function beforeInitialize(address sender, PoolKey calldata key, uint160) external returns (bytes4) {
-        if (msg.sender != address(manager) || sender != address(router) || router.mode() != MODE_SETUP) {
+        if (
+            msg.sender != address(manager) || sender != address(router) || router.mode() != MODE_SETUP
+                || block.timestamp >= deadline
+        ) {
             revert InvalidHookContext();
         }
         if (
@@ -266,7 +272,9 @@ contract BossHook is ReentrancyGuard {
         uint8 stage;
         uint128 expectedDelta;
         if (router.mode() == MODE_SETUP) {
-            if (status != RoundStatus.Setup || currentStage != 0) revert InvalidHookContext();
+            if (status != RoundStatus.Setup || currentStage != 0 || block.timestamp >= deadline) {
+                revert InvalidHookContext();
+            }
             stage = 0;
             expectedDelta = stageLiquidity[0];
         } else if (router.mode() == MODE_TRANSITION) {
