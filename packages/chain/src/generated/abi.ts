@@ -3933,4 +3933,3 @@ export const bossCollectiblesAbi = [
     "inputs": []
   }
 ] as const;
-

@@ -90,7 +90,7 @@
     "starterRoyUnspent": "10000000000000000000000",
     "lockedRouterROY": "40000000000000000597619",
     "poolManagerBossHP": "300000000000000000000",
-    "prizeEscrowMockUSD": "1000000000"
+    "mockUSDInHook": "1000000000"
   },
   "schemaVersion": 1,
   "rpcUrl": "http://127.0.0.1:8547",

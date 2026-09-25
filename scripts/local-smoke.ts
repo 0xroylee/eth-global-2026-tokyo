@@ -20,8 +20,8 @@ async function main() {
   if (round.status !== 1 || round.currentStage !== 0 || round.stageSold.some((sold) => sold !== 0n)) {
     throw new Error("The seeded local round is not active at stage 1 with zero player damage.");
   }
-  if (round.originalPrize !== 1_000_000_000n || round.mockUSDEscrow !== round.originalPrize) {
-    throw new Error("The local prize escrow does not match the funded 1,000 MockUSD fixture.");
+  if (round.originalPrize !== 1_000_000_000n || round.mockUSDInHook < round.originalPrize) {
+    throw new Error("The Hook MockUSD balance is below the funded 1,000 MockUSD original prize.");
   }
   if (round.bossHPTotalSupply !== 2_000n * 10n ** 18n) {
     throw new Error("BossHP total supply does not match the fixed 2,000 HP fixture.");
@@ -44,7 +44,7 @@ async function main() {
   console.log(`Verified local deployment at block ${manifest.deployedAtBlock} on chain ${manifest.chainId}.`);
   console.log(`Round: ${statusNames[round.status]} · stage ${round.currentStage + 1} · sold ${round.stageSold.map((amount) => amount.toString()).join(", ")}`);
   console.log(`Boss pool: HP currency${round.bossHPCurrency0 ? 0 : 1} · ticks ${round.bossTickLower} to ${round.bossTickUpper} · normalized stage-1 band verified.`);
-  console.log(`Prize: ${round.originalPrize.toString()} MockUSD base units; BossHP supply: ${round.bossHPTotalSupply.toString()}.`);
+  console.log(`Original prize: ${round.originalPrize.toString()} MockUSD base units; Hook balance: ${round.mockUSDInHook.toString()}; BossHP supply: ${round.bossHPTotalSupply.toString()}.`);
   console.log(`BossHP custody: router ${round.bossHPInRouter.toString()}, PoolManager ${round.bossHPInPoolManager.toString()}, hook ${round.bossHPInHook.toString()}.`);
 }
 

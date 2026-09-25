@@ -19,7 +19,7 @@ The user confirmed this replacement for the earlier physical/magic design:
 
 ## Status
 
-The private Bun workspace, minimal read-only Vite arena, generated contract client, and local deployment flow are in place. Four focused Foundry cases pass, including the full no-burn round and a token-order pricing regression. The final chain-31337 seed/read smoke and browser read pass. See [BP01 scope and verification](docs/bp01-foundation.md). No Robinhood testnet deployment or browser-wallet attack flow has been verified.
+The private Bun workspace, minimal read-only Vite arena, generated contract client, and local deployment flow are in place. Four focused Foundry cases pass, including the full no-burn round and a token-order pricing regression. The final chain-31337 seed/read smoke and browser read pass. See [BP01 scope and verification](docs/bp01-foundation.md). No Robinhood testnet deployment or browser transaction flow has been verified.
 
 The 1,000 MockUSD prize is a test fixture. [Refill math](docs/refill-math.md) gives candidate prices and reserve amounts, with the no-burn accounting change distinguished from historical test evidence. Earlier ROY/MROY allocation tables and price-impact estimates are superseded.
 
@@ -69,7 +69,7 @@ Run `bun run contracts:test` for the shared core fixture and `bun run abi:check`
 
 ```text
 contracts/       Solidity, Foundry, deployment artifacts
-apps/web/        Arena, wallet interface, game presentation
+apps/web/        Read-only arena shell
 packages/chain/  Generated ABIs, public manifests, viem helpers/types
 scripts/         Seed, focused liquidity/E2E scenario, smoke commands
 ```

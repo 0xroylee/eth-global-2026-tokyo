@@ -1,6 +1,6 @@
 # Source notes
 
-Reviewed on 26 September 2026. These references support the current no-burn BossHP plan. No target-chain deployment or working application has been verified. Historical local burn-based proofs and numerical models have narrower evidence scopes.
+Reviewed on 26 September 2026. These references support the no-burn BossHP implementation. BP01 now has passing local core tests, actual Anvil deployment and a verified read-only arena. No Robinhood deployment or complete browser attack/claim journey is verified. Historical burn proofs remain separately labeled; see [current BP01 evidence](bp01-foundation.md).
 
 ## Sponsor requirements
 
@@ -40,7 +40,7 @@ Relevant source snapshots:
 - [Hooks.sol](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/Hooks.sol): returned hook deltas are deducted from the caller's swap delta. Hook calls can be skipped for a swap initiated by that hook itself. Use a separate attack router.
 - [PoolManager.sol](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/PoolManager.sol): `take` moves currency and accounts a negative delta. Swap accounts the hook's returned delta. Unlock rejects unsettled currency deltas. Its `burn` function burns ERC-6909 claims, **not the ROY ERC-20 supply**.
 
-The current design uses the supply pool followed by the Boss pool. afterSwap counts actual BossHP output, returns zero hook delta, and lets the router deliver tokens normally. A separate BossRouter initiates operations so intended callbacks are not suppressed. Before/after swap and liquidity guards support our design; the complete no-burn/token-redemption route still needs the shared real-v4 proof. Callback identity, stage bounds, reserve-funded maintenance and rollback are the core verification targets. Fees are fixed in the candidate fixture.
+The implementation uses the supply pool followed by the Boss pool. afterSwap counts actual BossHP output, returns zero hook delta, and lets the router deliver tokens normally. A separate BossRouter initiates operations so intended callbacks are not suppressed. The current shared real-v4 fixture covers the full HP0 no-burn/token-redemption path, a mirrored HP1 price/refill path, deadline rejection and expiry. Callback identity, stage bounds, reserve-funded maintenance and rollback are core checks. LP fees are fixed and protocol fees must be zero in the supported route.
 
 The five selected callbacks are beforeInitialize, beforeSwap, afterSwap, beforeAddLiquidity and beforeRemoveLiquidity. Return-delta permissions are off. The hook must be deployed to an address whose flags match that permission set; use the upstream HookMiner rather than assuming an arbitrary address works.
 

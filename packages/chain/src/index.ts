@@ -44,6 +44,7 @@ export type LocalDeploymentManifest = {
 };
 
 export type LocalRoundSnapshot = {
+  blockNumber: bigint;
   status: number;
   currentStage: number;
   stageSold: readonly [bigint, bigint, bigint];
@@ -56,7 +57,7 @@ export type LocalRoundSnapshot = {
   bossSqrtUpperX96: bigint;
   bossInitialSqrtPriceX96: bigint;
   originalPrize: bigint;
-  mockUSDEscrow: bigint;
+  mockUSDInHook: bigint;
   finalEligibleHP: bigint;
   redeemedHP: bigint;
   paidPrize: bigint;
@@ -144,6 +145,7 @@ export async function readLocalRound(
   player?: Address,
 ): Promise<LocalRoundSnapshot> {
   const client = createLocalPublicClient(manifest);
+  const blockNumber = await client.getBlockNumber({ cacheTime: 0 });
   const hook = manifest.addresses.hook;
   const bossHP = manifest.addresses.bossHP;
   const [
@@ -165,7 +167,7 @@ export async function readLocalRound(
     bossSqrtUpperX96,
     bossInitialSqrtPriceX96,
     originalPrize,
-    mockUSDEscrow,
+    mockUSDInHook,
     finalEligibleHP,
     redeemedHP,
     paidPrize,
@@ -174,38 +176,39 @@ export async function readLocalRound(
     bossHPInRouter,
     bossHPInPoolManager,
   ] = await Promise.all([
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "status" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "currentStage" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [0] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [1] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [2] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageCapacity", args: [0] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageCapacity", args: [1] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageCapacity", args: [2] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageEndSqrtPriceX96", args: [0] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageEndSqrtPriceX96", args: [1] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageEndSqrtPriceX96", args: [2] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "bossIsCurrency0" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "LOWER_TICK" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "UPPER_TICK" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "sqrtLowerX96" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "sqrtUpperX96" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "lastSqrtPriceX96" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "originalPrize" }),
-    client.readContract({ address: manifest.addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [hook] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "finalEligibleHP" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "redeemedHP" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "paidPrize" }),
-    client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "totalSupply" }),
-    client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [hook] }),
-    client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [manifest.addresses.router] }),
-    client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [manifest.addresses.poolManager] }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "status", blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "currentStage", blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [0], blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [1], blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [2], blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageCapacity", args: [0], blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageCapacity", args: [1], blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageCapacity", args: [2], blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageEndSqrtPriceX96", args: [0], blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageEndSqrtPriceX96", args: [1], blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageEndSqrtPriceX96", args: [2], blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "bossIsCurrency0", blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "LOWER_TICK", blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "UPPER_TICK", blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "sqrtLowerX96", blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "sqrtUpperX96", blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "lastSqrtPriceX96", blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "originalPrize", blockNumber }),
+    client.readContract({ address: manifest.addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [hook], blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "finalEligibleHP", blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "redeemedHP", blockNumber }),
+    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "paidPrize", blockNumber }),
+    client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "totalSupply", blockNumber }),
+    client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [hook], blockNumber }),
+    client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [manifest.addresses.router], blockNumber }),
+    client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [manifest.addresses.poolManager], blockNumber }),
   ]);
   const walletBossHP = player
-    ? await client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [player] })
+    ? await client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [player], blockNumber })
     : undefined;
 
   return {
+    blockNumber,
     status,
     currentStage,
     stageSold: [sold0, sold1, sold2],
@@ -218,7 +221,7 @@ export async function readLocalRound(
     bossSqrtUpperX96,
     bossInitialSqrtPriceX96,
     originalPrize,
-    mockUSDEscrow,
+    mockUSDInHook,
     finalEligibleHP,
     redeemedHP,
     paidPrize,

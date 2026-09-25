@@ -25,11 +25,8 @@ h1 span { color: #95a7f6; }
 .boss-caption { position: absolute; bottom: 5px; color: #7d87a3; font-size: 9px; }
 .state-panel { padding: 25px 27px 23px; border: 1px solid rgba(173,188,232,.15); border-radius: 13px; background: rgba(17,22,39,.78); box-shadow: 0 14px 55px rgba(0,0,0,.18); }
 .panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
-.panel-actions { display: flex; align-items: center; gap: 10px; }
 .panel-heading .eyebrow { margin-bottom: 8px; }
 h2 { margin: 0; font-size: 19px; font-weight: 500; letter-spacing: -.025em; }
-.connect-button { padding: 9px 12px; border: 1px solid rgba(171,187,241,.25); border-radius: 8px; color: #d5dcf5; background: rgba(119,139,206,.09); cursor: pointer; font-size: 11px; transition: border-color .18s, background .18s; }
-.connect-button:hover { border-color: rgba(171,187,241,.55); background: rgba(119,139,206,.16); }
 .status-badge { display: inline-flex; align-items: center; gap: 8px; margin-top: 1px; padding: 8px 10px; border: 1px solid rgba(190,197,220,.16); border-radius: 99px; color: #9da8c3; font-size: 9px; white-space: nowrap; }
 .is-live { color: #91e7c5; border-color: rgba(93,212,165,.26); }
 .is-live .status-dot { background: #4fdaa5; box-shadow: 0 0 12px rgba(79,218,165,.55); }
@@ -47,10 +44,9 @@ h2 { margin: 0; font-size: 19px; font-weight: 500; letter-spacing: -.025em; }
 .stage-cell:first-child { border-left: 0; }
 .stage-cell strong { color: #e7ebf8; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
 .stage-cell small { color: #828da8; font-size: 10px; font-weight: 400; }
-.balance-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 12px 0; }
+.balance-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px 0; }
 .balance-grid .metric { padding-left: 12px; }
 .address-line { margin: 18px 0 0; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); color: #a2abc1; font-size: 12px; }
-.wallet-message { margin: 10px 0 0; color: #99a8d2; font-size: 11px; line-height: 1.5; }
 .state-message { margin: 20px 0 0; padding-top: 17px; border-top: 1px solid rgba(255,255,255,.08); color: #a2abc1; font-size: 13px; line-height: 1.6; }
 code { color: #bbc7ff; font: 11px "DM Mono", monospace; }
 .error-message { color: #ffaaa4; }
@@ -64,7 +60,6 @@ code { color: #bbc7ff; font: 11px "DM Mono", monospace; }
   .boss-core { width: 99px; height: 112px; }
   .footer { flex-direction: column; }
   .panel-heading { flex-direction: column; }
-  .panel-actions { flex-wrap: wrap; }
   .round-metrics { grid-template-columns: 1fr; gap: 16px; }
   .round-metrics .metric, .balance-grid .metric { padding-left: 0; border-left: 0; }
   .stage-grid { grid-template-columns: 1fr; }

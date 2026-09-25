@@ -26,7 +26,7 @@ The shared `BossPoolCoreTest` contains four cases: a full HP0 two-wallet round/c
 | `bun run typecheck` / `bun run web:build` | Pass; Vite reports a non-blocking bundle-size warning |
 | `bun run local:seed` / `bun run local:smoke` | Real CREATE2/local deployment and normalized-price/custody reads pass |
 | Browser, missing manifest | Shows NOT DEPLOYED and instructions; no fake game values |
-| Browser, final local manifest | LIVE only after chain/receipt/code checks; Active stage 1, 1,000 MockUSD escrow, 2,000 HP supply, Router 1,700 / PoolManager 300 / Hook 0 HP |
+| Browser, final local manifest | LIVE only after chain/receipt/code checks; Active stage 1, 1,000 MockUSD original prize, 2,000 HP supply, Router 1,700 / PoolManager 300 / Hook 0 HP |
 
 The source review resolved enrollment, deadline, initial custody, supply-capacity and currency-order pricing findings. The fixed contract implementation is recorded in commits `8f9dce0`, `572a206` and `7a874ff`; the full workspace/integration review accompanies the pull request. Fresh command evidence is also retained in the local `.scratch/deliver-code/bp01-contract-foundation/` directory.
 
@@ -38,7 +38,7 @@ ROY supply is 100,000, all initially held by Router. The supply LP consumes appr
 
 ## Limits and next slices
 
-The arena reads state and optional local-wallet balances. It does not yet offer the complete browser attack/claim journey or finished game assets. The held-ROY route, LP/treasury/fee recovery and production NFT metadata remain downstream work. There is no recovery path for Router treasury/LP assets in this foundation, so they remain locked; permanently redeemed HP is intentionally never recoverable.
+The arena reads round state and protocol custody. Browser-wallet connection, the complete attack/claim interface and finished game assets remain downstream work. The held-ROY route, LP/treasury/fee recovery and production NFT metadata are also deferred. There is no recovery path for Router treasury/LP assets in this foundation, so they remain locked; permanently redeemed HP is intentionally never recoverable.
 
 A fresh Robinhood testnet `eth_chainId` probe on 26 September again returned HTTP 403 from this environment. No target-chain ID/bytecode result or deployment was obtained. BP11 remains the target-chain release gate. The local deployment uses the pinned v4 PoolManager; [contracts/README.md](../contracts/README.md) records dependency provenance and per-file licenses.
 
