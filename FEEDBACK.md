@@ -1,6 +1,6 @@
 # Uniswap developer feedback
 
-Status: planning-stage draft. Boss Pool has not yet been deployed or tested. Update this file with actual implementation experience before submission. The feedback form has not been submitted.
+Status: planning-stage draft. The Boss Pool application has not yet been deployed or tested. A separate local v4 feasibility proof passed eight narrow checks; this is not project E2E or target-chain evidence. Update this file with actual implementation experience before submission. The feedback form has not been submitted.
 
 ## What we are building
 

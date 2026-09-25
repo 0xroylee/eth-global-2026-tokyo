@@ -24,6 +24,9 @@ The visible experience is a shared boss fight. The mechanism is a sponsor-funded
 | D10 | Two teammates: one owns contracts + backend; one owns UI + interface + gaming. |
 | D11 | Publish the plan and issues in `0xroylee/eth-global-2026-tokyo`. |
 | D12 | Three original pixel-inspired forms, a token reward, and an NFT reward. No maps, armies, or extra stages. |
+| D13 | Fixed initial ammunition supply with no active-round or stage emissions. |
+| D14 | Lock treasury ammunition through the round deadline and keep seed LP available during the round. |
+| D15 | Size liquidity from attack demand and a real v4 scenario. Vesting, total supply, and slippage bounds do not guarantee a market price. |
 
 D04 replaces the initial single-token concept. D05 replaces the proposed separate Buy / Attack primary flow. D08 replaces a single HP bar divided by percentage thresholds. Do not implement those earlier alternatives.
 
@@ -47,31 +50,20 @@ These are planning defaults chosen to keep the build bounded. Symbols and fixtur
 | Claims | Open indefinitely after defeat. Separate token and NFT claims, each once per wallet. |
 | Rounding | Floor token payouts. Prize dust stays locked. Tiny attack rounding is specified in the technical document. |
 | Administration | No live HP edits, contribution edits, repricing, upgrades, or active prize withdrawal. |
+| Treasury release | Fixed-time lock at least through the round deadline, including an early victory. Gradual team vesting is deferred. |
+| LP withdrawal | Both game pools reject principal liquidity reductions from activation until the round deadline, including after early victory. Setup changes before activation and withdrawals after the deadline are allowed. |
 
 Entry and burn costs do not establish human uniqueness. Testnet faucets also remove meaningful monetary Sybil cost. World ID requires a separate product policy and remains backlog.
 
 ## Demo economy
 
-These are reproducible fixtures, not real dollar valuations.
+[Economy and liquidity](economy.md) is the source of truth for supply allocations, candidate LP budgets, calculation assumptions, and the simulation gate. The deeper LP candidate replaces the earlier small-pool fixture but is not a deployed or simulated configuration yet.
 
-| Parameter | Proposed value |
-| --- | --- |
-| Prize escrow | 1,000 MockUSD |
-| Physical initial pool price | 0.1 MockUSD per ROY |
-| Magic initial pool price | 0.5 MockUSD per MROY |
-| Physical LP seed | 10,000 ROY + 1,000 MockUSD |
-| Magic LP seed | 2,000 MROY + 1,000 MockUSD |
-| Maker's quote funding | 3,000 MockUSD total: prize plus two separate LP allocations |
-| Physical supply | 100,000 ROY: 10,000 LP, 10,000 entry reserve, 80,000 demo treasury |
-| Magic supply | 20,000 MROY: 2,000 LP, 18,000 demo treasury |
-| Entry reserve | 100 enrollments × 100 ROY |
-| Stage HP | 300, 600, 900 damage units. Total damage to finish is 1,800. |
-| Damage | 1 ROY = 1 unit; 1 MROY = 3 units, subject to remaining current-stage HP |
-| LP fee | Stage 1: 0.30%; stage 2: 0.60%; stage 3: 1.00%, on both pools |
+Total boss HP is 1,800. An all-physical clear burns 1,800 ROY; an all-magic clear burns 600 MROY. Initial supplies remain 100,000 ROY and 20,000 MROY, split between LP, starter reserve, and locked treasury. These burn requirements do not cap ordinary buying or excess output held in wallets.
 
-Initial prices do not remain fixed. Magic may cease to be five times physical after trading. The interface quotes the actual current price and damage before asking for a signature. At the proposed initial prices, magic costs more per damage unit as well as more per token. It provides more damage per token, not a guaranteed economic advantage.
+Initial unit prices target 0.1 MockUSD per ROY and 0.5 per MROY. The five-times price ratio can change after trading. At the starting prices, magic costs more per damage unit as well as more per token. There is no promised economic advantage or stable market price.
 
-The maker funds prize and liquidity separately. LP fees accrue to LP positions. Entry does not replenish the prize. Sponsor-controlled supply and starter allocations mean the demo needs an external subsidy. Real-value economics are a separate project.
+The maker separately funds prize and liquidity. LP fees accrue to LP positions. Entry does not replenish the prize. The demo remains sponsor-funded and uses test assets.
 
 ## User stories
 
@@ -111,10 +103,12 @@ Use one original silhouette that grows and changes energy across three forms. Sh
 - Stage 3 defeat freezes contributions and enables exact proportional token claims and deterministic victory NFT claims.
 - Both pools read fees from the same hook-owned stage. Ordinary trading produces no contribution.
 - A fresh browser reconstructs state, and an optional service never authorizes damage or claims.
+- Supply allocation reconciles to fixed initial supply; treasury and LP restrictions remain enforced through the round deadline.
+- The actual v4 liquidity scenario records the chosen ranges, attack costs, end prices, and remaining active liquidity before deployment settings are frozen.
 
 ## Scope cuts
 
-World ID, phase-triggered token releases, global leaderboard service, and Burn held ammo are optional or backlog. Core Attack always performs a real swap.
+World ID, a global leaderboard service, and Burn held ammo are optional or backlog. Stage-triggered emissions and long-term team vesting are outside this round; any future emission policy requires a separate product decision and new round. Core Attack always performs a real swap.
 
 Exclude Mirror Duel, synthetic shorts, Stamp Rally routes, extra levels, armies, maps, GPS, lotteries, referrals, gas sponsorship, trading bots, and a general game engine. Do not add cross-pool routing merely to use both pools in one unlock. An attack chooses one ammunition pool.
 

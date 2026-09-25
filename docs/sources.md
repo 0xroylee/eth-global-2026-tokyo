@@ -58,3 +58,13 @@ Use [viem simulateContract](https://viem.sh/docs/contract/simulateContract) befo
 - Mainnet addresses prove a testnet deployment exists. They do not.
 - A view quote proves burn settlement works. Only a successful transaction and state assertions establish that.
 - Genesis v4, PULSE, HooLotto, or Chain Hook lack a feature. The supplied comparisons are hypotheses until their source code and current behavior are checked.
+
+## Supply locks and workspace decisions
+
+The [OpenZeppelin finance reference](https://docs.openzeppelin.com/contracts/5.x/api/finance) documents ERC-20 vesting and a zero-duration fixed timelock. This is an existing implementation to evaluate for treasury tokens. It does not custody a v4 LP NFT or promise price stability.
+
+The pinned [Hooks.sol](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/Hooks.sol) calls `beforeRemoveLiquidity` for non-positive liquidity changes when that permission is set. The planned round guard rejects negative changes only. Zero-delta fee collection stays allowed. Hook self-call suppression means the hook must not expose a path that bypasses this guard by initiating its own liquidity removal.
+
+[Bun workspaces](https://bun.com/docs/pm/workspaces) provide local package linking with `workspace:*` and installation across the monorepo. This supports the planned shared chain package without an additional monorepo orchestration tool.
+
+The numerical liquidity examples in [economy](economy.md) are our calculations from the stated fee-free, full-range approximation. They are not observations from a deployed pool. [Uniswap LP calculations](https://developers.uniswap.org/docs/get-started/concepts/liquidity-providers/lp-calculations) and [concentrated liquidity](https://developers.uniswap.org/docs/get-started/concepts/liquidity-providers/concentrated-liquidity) explain why real v4 ranges and active liquidity must be modeled before finalizing the seed.

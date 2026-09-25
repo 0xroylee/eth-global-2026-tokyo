@@ -1,39 +1,48 @@
 # Boss Pool technical specification
 
-Status: proposed implementation contract, 25 September 2026. [Requirements](requirements.md) records confirmed choices. No contract or test described here has been implemented yet.
+Status: proposed implementation contract, 25 September 2026. [Requirements](requirements.md) records confirmed choices; [economy](economy.md) owns candidate allocations and liquidity assumptions. The project remains unimplemented. An isolated local v4 proof passed eight core-mechanism checks, but did not verify the full application, production authentication/custody, 6/18-decimal setup, or Robinhood deployment.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
     W[Player wallet and arena UI] -->|Physical or Magic Attack| R[AttackRouter]
-    R -->|one unlock, chosen pool| PM[Uniswap v4 PoolManager]
-    PM --> P[ROY / MockUSD pool]
-    PM --> M[MROY / MockUSD pool]
-    P -->|swap callbacks| H[Shared BossHook]
-    M -->|swap callbacks| H
+    R -->|one unlock, chosen pool| PM[PoolManager: ROY / MockUSD and MROY / MockUSD pool states]
+    PM -->|beforeSwap and afterSwap for either pool| H[Shared BossHook]
     H -->|take ammunition, return delta| PM
     H -->|ERC-20 burn| A[ROY or MROY]
     H --> S[Stage HP, contributions, prize escrow]
     W -->|entry and claims| H
     H --> N[Entry and victory NFTs]
-    H -.->|events and views| B[Optional Bun read service]
-    B -.-> W
+    H -.->|views and events through viem| W
 ```
 
 Deploy one round, one shared hook, and two canonical pools. Each attack chooses one pool. There is no cross-pool route in the core build. A fresh deployment starts the next rehearsal.
 
-### Workspace and ownership
+### Monorepo and ownership
 
-| Responsibility | Proposed location | Owner |
+Use a small Bun workspace monorepo. Both teammates change one versioned set of contracts, generated ABIs, deployment metadata, and UI. Separate repositories would add version handoffs without a current independent release requirement.
+
+| Responsibility | Planned location | Owner |
 | --- | --- | --- |
-| Solidity, Foundry tests, deploy scripts | `contracts/` | Teammate A: contracts + backend |
-| ABIs, manifests, viem reads/writes, event types | `packages/chain/` | A, reviewed with B |
-| Seed, smoke, and demo scripts | `scripts/` | A |
-| Arena, wallet flows, gaming UI | `apps/web/` | Teammate B: UI + interface + gaming |
-| Optional read-only activity service | `apps/activity/` | A, only after core works |
+| Solidity, Foundry tests, deployment and local contract artifacts | `contracts/` | A: contracts + backend |
+| Generated ABIs, public chain/deployment manifest, viem helpers and types | `packages/chain/` | A, interface reviewed with B |
+| Seed, liquidity scenario, smoke, and shared E2E orchestration | `scripts/` | A |
+| Arena, wallet flows, game UI | `apps/web/` | B: UI + interface + gaming |
 
-These are proposed locations, not existing implementation files. Bun manages TypeScript packages and tests. Solidity with Foundry provides contract compilation and focused integration tests. React with Vite is the frontend default. Pin dependency versions and commit the lockfile when implementation begins. Follow the [implementation rules](agents/implementation.md) to evaluate existing packages, templates, and reference code before building new components.
+This is a planned layout, not an existing scaffold. Root `package.json` is private and defines workspaces for `apps/*` and `packages/*`. Keep one root `bun.lock`. Name the shared package `@boss-pool/chain`, keep it private, and consume it through `workspace:*`. Root TypeScript scripts and the web app use the same package.
+
+Foundry owns the Solidity toolchain under `contracts/`; it does not need a JavaScript workspace just to compile Solidity. Use root Bun scripts to invoke the selected Forge commands. Generated client ABIs flow from compiled contracts into the shared package. Never maintain a second handwritten ABI in the frontend.
+
+The shared package exports only public chain definitions, verified deployment addresses/blocks, generated ABI/types, and reusable viem operations. Keep React/UI code in `apps/web`. Deployer keys and server secrets must never enter a package imported by the browser. A real deployment, not a compile, supplies addresses to the manifest.
+
+When a contract interface changes, update its generated ABI and affected consumers in the same PR. Commit the generated client ABI so B can run the UI without deploying contracts. The root build/verification flow detects stale generation using the same export command rather than another test framework.
+
+BP01 adds the minimal install, contract-build/ABI-export, web-dev/build, typecheck, and targeted E2E commands. These command names are not available yet. Keep scripts discoverable in package manifests rather than duplicating them across agent documents.
+
+Start with direct viem reads/writes. A's backend work is contracts, deployment, scripts, and shared integration. Add a read-only service under `apps/` only when BP09 demonstrates an RPC or shared-activity need. No Turbo, Nx, database, queue, shared UI library, or extra package split is required for the core demo. [Bun workspaces](https://bun.com/docs/pm/workspaces)
+
+Solidity with Foundry and React with Vite remain the implementation defaults. Pin versions and reuse compatible official templates/libraries under the [implementation rules](agents/implementation.md).
 
 ## Deployment gate
 
@@ -47,9 +56,10 @@ Before treating a deployment as usable:
 4. Verify the selected EVM/compiler target supports the selected v4 core, including transient storage where required.
 5. Mine and deploy BossHook at an address whose flags match its callback permissions. Recompute CREATE2 salt if bytecode or constructor arguments change.
 6. Initialize both sorted token pairs with dynamic-fee capability and valid tick spacing. Calculate prices with 18-decimal ammunition and 6-decimal MockUSD. Seed active liquidity independently for both pools.
-7. Execute actual swaps through both pools and verify callbacks and settled currency deltas.
+7. Reuse a local real-v4 fixture to prove output-burn settlement before entry/NFT integration. Run the [liquidity scenario](economy.md) with actual decimals, ranges, fees, and attack bounds.
+8. Freeze the successful candidate configuration and execute actual swaps through both testnet pools. Record callbacks and settled currency deltas. Local evidence does not replace the remote checks.
 
-The deployment manifest contains chain ID, deployment block, explorer, PoolManager provenance, all addresses, both PoolKeys and PoolIds, decimals, configuration, compiler settings, source commits, bytecode hashes, and deployment transaction hashes. Keep secrets outside source control and browser bundles.
+The deployment manifest contains chain ID, deployment block, explorer, PoolManager provenance, all addresses, both PoolKeys and PoolIds, decimals, actual LP ranges/allocations, attack input bounds, treasury unlock time, liquidity-removal policy, scenario results, configuration, compiler settings, source commits, bytecode hashes, and deployment transaction hashes. Keep secrets outside source control and browser bundles.
 
 Local Anvil is the first verification environment and a labeled fallback. It does not close the Robinhood deployment requirement. The planning environment received HTTP 403 from the documented testnet RPC and verified no remote contract. See [sources](sources.md).
 
@@ -57,7 +67,7 @@ Local Anvil is the first verification environment and a labeled fallback. It doe
 
 ### Ammunition and MockUSD
 
-ROY and MROY are standard fixed-supply ERC-20 tokens with 18 decimals and a real supply-decreasing burn function. Mint fixture allocations at setup. No public faucet or unrestricted minter remains on either ammunition token during the round.
+ROY and MROY are standard fixed-supply ERC-20 tokens with 18 decimals and a real supply-decreasing burn function. Mint the fixed initial supply at setup and reconcile LP, starter, and locked treasury allocations. No public faucet or active-round mint authority remains on either ammunition token. Stage changes release no new supply.
 
 BossHook burns tokens it owns. The optional held-ammunition path uses a player allowance and cannot destroy arbitrary wallet balances. `PoolManager.burn` burns ERC-6909 accounting claims, not the ammunition ERC-20 supply.
 
@@ -73,9 +83,10 @@ BossHook stores enrollment and claim records independently of token ownership. S
 
 BossHook owns configuration, enrollment, stage, current-stage HP, per-token burn totals, weighted contributions, prize custody, and claim flags. No database computes authoritative rewards.
 
-Proposed permissions are `beforeInitialize`, `beforeSwap`, `afterSwap`, and `afterSwapReturnDelta`. Match the exact flags to the pinned v4 version and hook address. Disable unused callbacks.
+Proposed permissions are `beforeInitialize`, `beforeRemoveLiquidity`, `beforeSwap`, `afterSwap`, and `afterSwapReturnDelta`. Match the exact flags to the pinned v4 version and hook address. Disable unused callbacks.
 
 - `beforeInitialize` accepts only the configured ammunition / MockUSD pairs, dynamic-fee setting, and tick spacing.
+- `beforeRemoveLiquidity` rejects negative liquidity changes in either canonical pool from activation until the frozen round deadline. Zero-liquidity fee collection is allowed. The guard includes early defeat and does not depend on someone calling `expire`.
 - `beforeSwap` checks authenticated attack mode when present and selects the shared stage fee.
 - `afterSwap` measures volume, consumes the allowed output token, burns it, and updates boss state for an authenticated attack.
 - Enrollment, terminal-state actions, and claims operate on the same hook-owned records.
@@ -93,6 +104,16 @@ Only PoolManager may enter `unlockCallback`, and only during an active request. 
 The hook callback's `sender` is the router, not the player. Validate the router identity and compare attack metadata with the router's active context. Never use `tx.origin`. Never credit a frontend-supplied address without authenticated context. Use a separate router rather than making the hook initiate its own swap, because hook self-calls can skip callbacks.
 
 For ordinary trading, support a clearly separate mode that produces no contribution. A third-party router can make an ordinary swap, but cannot forge attack-mode credit.
+
+### Treasury and LP restrictions
+
+Reuse a standard treasury asset timelock, such as OpenZeppelin `VestingWallet` with zero duration. Its fixed release time must be at least the round deadline. Activation verifies the intended allocations and unlock time. There is no early-unlock or upgrade path that can release that treasury ammunition during the round. A gradual vesting schedule is not required.
+
+LP is protected separately by the `beforeRemoveLiquidity` rule above. It applies to every position in the two game pools during the lock interval, not just the maker. Disclose that withdrawal condition before accepting LP. Principal withdrawals before activation or at/after the deadline remain possible. Adding liquidity and collecting already-earned fees do not grant permission to remove locked principal.
+
+Seed and manage positions through a separate position manager/router. BossHook must not own an unrestricted self-call path to `modifyLiquidity`, because v4 may skip hook callbacks for hook-initiated operations. Reuse the pinned v4 hook interface and helpers; the round-specific removal check is the small product rule to add. Include its permission bit before mining the final hook address.
+
+A token timelock cannot lock an LP NFT. These controls constrain token availability and liquidity removal; neither prevents price movement or liquidity becoming inactive outside its range.
 
 ## Lifecycle and custody
 
@@ -112,7 +133,7 @@ stateDiagram-v2
 
 Store stage index, current-stage HP, three immutable HP budgets, two immutable damage multipliers, contribution totals, per-player contribution, actual burn totals by ammunition kind, deadline, and prize/claim records.
 
-Activation validates funded prize, entry reserve, nonzero ordered configuration, positive HP budgets, allowed fee values, deadline, and both pool configurations. Initialization must use a deployment-controlled path or validate the expected initialization price to prevent front-running the seed price. Do not activate until usable liquidity is proven.
+Activation validates funded prize, entry reserve, nonzero ordered configuration, positive HP budgets, allowed fee values, deadline, and both pool configurations. Initialization must use a deployment-controlled path or validate the expected initialization price to prevent front-running the seed price. Do not activate until the actual liquidity scenario passes, current seed liquidity is present, treasury allocations are locked through the deadline, and the liquidity-removal permission/guard is enabled.
 
 Track these balances separately even when the same contract holds them:
 
@@ -260,9 +281,9 @@ For a stage-clearing attack, emit AttackApplied with zero HP for the completed s
 
 Use viem public and wallet clients, a checked chain definition, generated ABIs, integer unit parsing, simulation, signed writes, and receipt confirmation. Handle replaced/cancelled transactions and wallet/chain changes. Prevent duplicate submissions from the same visible action while its result is unknown.
 
-A preview does not reserve the stage or price. Re-simulate after approval if state changed, then enforce onchain bounds. Decode confirmed receipt logs before updating canonical HP. Pending effects must not alter claim calculations.
+A preview does not reserve the stage or price. Use an ordinary, zero-contribution quote path to estimate gross output and derive expected burn/damage from a consistent state snapshot. A standard quoter is not the authenticated AttackRouter; do not weaken attack authentication to make it work. After allowance exists, simulate the real attack request and return a typed summary of spend, gross output, burn, damage, and leftovers. Re-simulate after approval if state changed, then enforce onchain bounds. Decode confirmed receipt logs before updating canonical HP. Pending effects must not alter claim calculations.
 
-Core UI reads views and bounded log ranges directly. Bun supplies workspace tooling, viem scripts, and fixtures even if no network service is needed. An optional read-only Bun process can build recent activity and a global leaderboard from events. It has no signing key, write endpoint, or authority over rewards.
+Core UI reads views and bounded log ranges directly through `@boss-pool/chain`. No backend service is part of the core scaffold. Bun supplies workspace tooling, viem scripts, and fixtures. If BP09 demonstrates the need, an optional read-only Bun process can build recent activity and a global leaderboard. It has no signing key, write endpoint, or authority over rewards.
 
 For this small demo, an in-memory projection replayable from the deployment block is enough. Do not add Redis, a queue, or an external database by default. Responses identify chain, hook address, indexed block/hash, and stale status. Integers serialize as decimal strings. Re-read claimable amounts from the contract before a claim.
 
@@ -274,7 +295,7 @@ An RPC failure displays stale data, not zero HP or cleared claim flags. A backen
 
 Follow the [testing rules](agents/testing.md). The main evidence is one reusable two-wallet E2E journey through funding, entry, both attacks, all three stages, and token/NFT claims against real v4 core.
 
-Assert receipts, actual token supply/balance changes, returned ammunition, weighted contribution, shared stage fees, and payouts within that journey. Use a compact contract integration scenario for the core failures that the browser journey cannot reliably exercise: settlement rollback, unauthorized damage, a stage race, duplicate or premature claims, and expiry/refund accounting.
+Assert receipts, actual token supply/balance changes, returned ammunition, weighted contribution, shared stage fees, and payouts within that journey. Use a compact contract integration scenario for the core failures that the browser journey cannot reliably exercise: settlement rollback, unauthorized damage, a stage race, duplicate or premature claims, treasury/LP withdrawal before and after the deadline, and expiry/refund accounting. Reuse that fixture for the few liquidity scenario configurations rather than building another suite.
 
 Reuse fixtures and evidence across issues. Cover the actual deployed token order and 6/18-decimal amounts; add alternate orders or a small fuzz check when needed to resolve a concrete arithmetic or settlement risk. A broad fuzz suite and separate tests for every helper, UI state, or upstream library behavior are not default requirements.
 

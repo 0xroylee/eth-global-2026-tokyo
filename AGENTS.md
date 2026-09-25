@@ -8,7 +8,7 @@ Keep this file short. Read the applicable guide before starting work:
 
 These guides govern implementation and verification. Earlier issue test lists describe risks to cover; they do not require a separate test for every item.
 
-For product behavior, consult [requirements](docs/requirements.md). For contract interfaces and accounting, consult the relevant section of the [technical specification](docs/technical-spec.md). Keep feature details in those documents.
+Read [CONTEXT.md](CONTEXT.md) for domain terms. For product behavior, consult [requirements](docs/requirements.md); for supply, locks, and liquidity, read [economy](docs/economy.md). The [technical specification](docs/technical-spec.md) owns monorepo boundaries, interfaces, and accounting. Keep feature details in those documents.
 
 <!-- CODEGRAPH_START -->
 ## CodeGraph
