@@ -54,8 +54,6 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
 
     uint24 public constant SWAP_FEE = 3_000;
     int24 public constant TICK_SPACING = 60;
-    int24 public constant BOSS_TICK_LOWER = 0;
-    int24 public constant BOSS_TICK_UPPER = 1_920;
     uint256 public constant STARTER_ROY_BUDGET = 10_000e18;
 
     IPoolManager public immutable manager;
@@ -271,7 +269,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         manager.modifyLiquidity(
             _bossPoolKey,
             ModifyLiquidityParams(
-                BOSS_TICK_LOWER, BOSS_TICK_UPPER, int256(uint256(liquidity)), bytes32(uint256(1))
+                bossHook.LOWER_TICK(), bossHook.UPPER_TICK(), int256(uint256(liquidity)), bytes32(uint256(1))
             ),
             bytes("")
         );
@@ -364,7 +362,8 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         manager.modifyLiquidity(
             _bossPoolKey,
             ModifyLiquidityParams(
-                BOSS_TICK_LOWER, BOSS_TICK_UPPER, int256(uint256(liquidity)), bytes32(uint256(nextStage + 1))
+                bossHook.LOWER_TICK(), bossHook.UPPER_TICK(),
+                int256(uint256(liquidity)), bytes32(uint256(nextStage + 1))
             ),
             bytes("")
         );

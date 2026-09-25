@@ -40,8 +40,9 @@ contract BossHook is ReentrancyGuard {
     uint8 private constant MODE_TRANSITION = 4;
     uint24 public constant SWAP_FEE = 3_000;
     int24 public constant TICK_SPACING = 60;
-    int24 public constant LOWER_TICK = 0;
-    int24 public constant UPPER_TICK = 1_920;
+    int24 public immutable LOWER_TICK;
+    int24 public immutable UPPER_TICK;
+    int24 private constant HP1_REFILL_SPLIT_TICK = -60;
     uint256 public constant ENROLLMENT_FEE = 10e6;
     uint256 public constant STARTER_ROY = 100e18;
     uint256 public constant MAX_ENROLLED = 100;
@@ -80,6 +81,7 @@ contract BossHook is ReentrancyGuard {
     mapping(uint8 stage => uint128) public stageLiquidity;
     mapping(uint8 stage => uint256) public stageAttackCount;
     mapping(uint8 stage => uint256) public roundingDust;
+    mapping(uint8 stage => uint160) public stageEndSqrtPriceX96;
     mapping(address player => bool) public enrolled;
     mapping(address player => bool) public hasAttacked;
     mapping(address player => bool) public victoryClaimed;
@@ -150,6 +152,8 @@ contract BossHook is ReentrancyGuard {
             tickSpacing: TICK_SPACING,
             hooks: IHooks(address(this))
         });
+        LOWER_TICK = bossIsCurrency0 ? int24(0) : int24(-1_920);
+        UPPER_TICK = bossIsCurrency0 ? int24(1_920) : int24(0);
         sqrtLowerX96 = TickMath.getSqrtPriceAtTick(LOWER_TICK);
         sqrtUpperX96 = TickMath.getSqrtPriceAtTick(UPPER_TICK);
 
@@ -460,12 +464,13 @@ contract BossHook is ReentrancyGuard {
 
     function minimumRoyForVictoryPath() external view returns (uint256 total) {
         for (uint8 stage = 0; stage < 3; stage++) {
-            uint128 liquidity = stageLiquidity[stage];
-            uint256 netRoy = bossIsCurrency0
-                ? SqrtPriceMath.getAmount1Delta(sqrtLowerX96, sqrtUpperX96, liquidity, true)
-                : SqrtPriceMath.getAmount0Delta(sqrtLowerX96, sqrtUpperX96, liquidity, true);
-            total += FullMath.mulDivRoundingUp(netRoy, FEE_DENOMINATOR, FEE_DENOMINATOR - SWAP_FEE);
+            total += _stageRoyInputRequirement(stage);
         }
+    }
+
+    function stageRoyInputRequirement(uint8 stage) external view returns (uint256) {
+        if (stage > 2) revert InvalidStage();
+        return _stageRoyInputRequirement(stage);
     }
 
     function _authenticatePoolCallback(address sender, PoolKey calldata key) private view {
@@ -481,10 +486,12 @@ contract BossHook is ReentrancyGuard {
         uint256 sold = stageSold[stage];
         if (sold == 0 || sold > capacity) revert InvalidStage();
         uint256 dust = capacity - sold;
-        // One interval step occurs per successful attack in this single-range pool.
-        // Each output step rounds down by <1 HP base unit; the funded capacity rounds up by <1.
+        // HP1 starts at its upper tick, so the first attack can cross that tick in a zero-output step.
+        // That crossing adds no rounding loss; each successful attack has one positive-output step.
+        // Output steps round down by <1 HP unit and funded capacity rounds up by <1.
         if (dust > stageAttackCount[stage] + 1) revert InvalidStage();
         roundingDust[stage] = dust;
+        (stageEndSqrtPriceX96[stage],,,) = manager.getSlot0(_bossPoolId);
         emit StageCleared(stage, sold, capacity, dust);
 
         if (stage == 2) {
@@ -522,9 +529,29 @@ contract BossHook is ReentrancyGuard {
     }
 
     function _refillInput(uint160 price, uint128 liquidity) private view returns (uint256) {
-        uint256 netInput = bossIsCurrency0
-            ? SqrtPriceMath.getAmount0Delta(sqrtLowerX96, price, liquidity, true)
-            : SqrtPriceMath.getAmount1Delta(price, sqrtUpperX96, liquidity, true);
+        if (bossIsCurrency0) {
+            return _grossInputForNet(SqrtPriceMath.getAmount0Delta(sqrtLowerX96, price, liquidity, true));
+        }
+
+        uint160 splitPrice = TickMath.getSqrtPriceAtTick(HP1_REFILL_SPLIT_TICK);
+        if (price >= splitPrice) {
+            return _grossInputForNet(SqrtPriceMath.getAmount1Delta(price, sqrtUpperX96, liquidity, true));
+        }
+
+        // The mirrored range crosses a bitmap word at tick -60, so v4 rounds two input and fee steps.
+        uint256 firstStepNet = SqrtPriceMath.getAmount1Delta(price, splitPrice, liquidity, true);
+        uint256 secondStepNet = SqrtPriceMath.getAmount1Delta(splitPrice, sqrtUpperX96, liquidity, true);
+        return _grossInputForNet(firstStepNet) + _grossInputForNet(secondStepNet);
+    }
+
+    function _stageRoyInputRequirement(uint8 stage) private view returns (uint256) {
+        uint256 netRoy = bossIsCurrency0
+            ? SqrtPriceMath.getAmount1Delta(sqrtLowerX96, sqrtUpperX96, stageLiquidity[stage], true)
+            : SqrtPriceMath.getAmount0Delta(sqrtLowerX96, sqrtUpperX96, stageLiquidity[stage], true);
+        return _grossInputForNet(netRoy);
+    }
+
+    function _grossInputForNet(uint256 netInput) private pure returns (uint256) {
         return FullMath.mulDivRoundingUp(netInput, FEE_DENOMINATOR, FEE_DENOMINATOR - SWAP_FEE);
     }
 

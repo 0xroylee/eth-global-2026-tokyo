@@ -59,6 +59,24 @@ contract BossPoolCoreTest is Test {
     using StateLibrary for IPoolManager;
     using TransientStateLibrary for IPoolManager;
 
+    struct HP1Round {
+        IPoolManager manager;
+        MockUSD mockUSD;
+        RoyToken roy;
+        BossHP bossHP;
+        BossCollectibles collectibles;
+        BossRouter router;
+        BossHook hook;
+        uint64 deadline;
+    }
+
+    struct AttackAmounts {
+        uint256 usdSpent;
+        uint256 royBought;
+        uint256 roySpent;
+        uint256 hpOut;
+    }
+
     uint256 private constant BOSS_HP_SUPPLY = 2_000e18;
     uint256 private constant ROY_SUPPLY = 100_000e18;
     uint256 private constant PRIZE = 1_000e6;
@@ -79,6 +97,7 @@ contract BossPoolCoreTest is Test {
     uint160 private supplyStartSqrtPriceX96;
     int24 private supplyLowerTick;
     int24 private supplyUpperTick;
+    uint256 private stageOnePartialRoySpent;
 
     function setUp() public {
         manager = IPoolManager(vm.deployCode("out/PoolManager.sol/PoolManager.json", abi.encode(address(this))));
@@ -142,6 +161,8 @@ contract BossPoolCoreTest is Test {
     }
 
     function _assertGatesAndRejectUnauthorizedSwap() private {
+        assertEq(hook.LOWER_TICK(), 0);
+        assertEq(hook.UPPER_TICK(), 1_920);
         assertEq(uint8(hook.status()), uint8(BossHook.RoundStatus.Active));
         assertEq(hook.currentStage(), 0);
         assertEq(hook.stageSold(0), 0);
@@ -174,6 +195,7 @@ contract BossPoolCoreTest is Test {
         uint256 aliceUSD = mockUSD.balanceOf(ALICE);
         (uint256 firstSpend, uint256 firstRoyBought, uint256 firstRoySpent, uint256 firstHPOut) =
             _attack(ALICE, 1e6, 0);
+        stageOnePartialRoySpent = firstRoySpent;
         assertGt(firstSpend, 0);
         assertLe(firstRoySpent, firstRoyBought);
         assertGt(firstHPOut, 0);
@@ -243,6 +265,16 @@ contract BossPoolCoreTest is Test {
         assertEq(hook.roundingDust(0), hook.stageCapacity(0) - hook.stageSold(0));
         assertEq(hook.roundingDust(1), hook.stageCapacity(1) - hook.stageSold(1));
         assertEq(hook.roundingDust(2), hook.stageCapacity(2) - hook.stageSold(2));
+        assertEq(hook.stageEndSqrtPriceX96(0), TickMath.getSqrtPriceAtTick(hook.UPPER_TICK()));
+        assertEq(hook.stageEndSqrtPriceX96(1), TickMath.getSqrtPriceAtTick(hook.UPPER_TICK()));
+        assertEq(hook.stageEndSqrtPriceX96(2), TickMath.getSqrtPriceAtTick(hook.UPPER_TICK()));
+        uint256 stageOneRoyalSpent = stageOnePartialRoySpent + stageOneRoySpent;
+        uint256 stageOneQuote = hook.stageRoyInputRequirement(0);
+        uint256 stageOneQuoteDifference = stageOneRoyalSpent > stageOneQuote
+            ? stageOneRoyalSpent - stageOneQuote
+            : stageOneQuote - stageOneRoyalSpent;
+        assertLe(stageOneQuoteDifference, 2 * hook.stageAttackCount(0) + 2);
+        assertApproxEqAbs(stageOneQuote, 331_219_793_595_396_366_740, 1e12);
         assertEq(bossHP.totalSupply(), finalSupplyBefore, "total supply unchanged through defeat");
         assertEq(manager.getNonzeroDeltaCount(), 0, "all final attack deltas settled");
         assertEq(hook.redeemedHP(), 0);
@@ -338,6 +370,52 @@ contract BossPoolCoreTest is Test {
         assertEq(uint8(hook.status()), uint8(BossHook.RoundStatus.Setup));
     }
 
+    function test_BossHPCurrencyOneKeepsNormalizedRangeAndRefillsAtomically() public {
+        HP1Round memory round = _deployHP1Round();
+        assertGt(uint160(address(round.bossHP)), uint160(address(round.roy)));
+        assertFalse(round.hook.bossIsCurrency0());
+        assertEq(round.hook.LOWER_TICK(), -1_920);
+        assertEq(round.hook.UPPER_TICK(), 0);
+        assertEq(round.hook.sqrtUpperX96(), TickMath.getSqrtPriceAtTick(0));
+        assertEq(uint8(round.hook.status()), uint8(BossHook.RoundStatus.Active));
+        assertEq(round.hook.currentStage(), 0);
+
+        PoolKey memory bossKey = round.router.bossPoolKey();
+        (uint160 startPrice,,,) = round.manager.getSlot0(bossKey.toId());
+        assertEq(startPrice, TickMath.getSqrtPriceAtTick(0), "human ROY/HP starts at 1");
+        _enrollForRound(round, ALICE);
+        _enrollForRound(round, BOB);
+
+        uint256 initialSupply = round.bossHP.totalSupply();
+        AttackAmounts memory partialAttack = _attackForRound(round, ALICE, 1e6, 0);
+        assertGt(partialAttack.hpOut, 0);
+        assertEq(round.bossHP.balanceOf(ALICE), partialAttack.hpOut);
+        (uint160 partialPrice,,,) = round.manager.getSlot0(bossKey.toId());
+        assertLt(partialPrice, startPrice, "human ROY/HP rises as the pool price falls");
+
+        AttackAmounts memory clearAttack = _attackForRound(round, BOB, 1_000e6, 0);
+        assertGt(clearAttack.hpOut, 0);
+        assertGt(clearAttack.royBought, clearAttack.roySpent, "unused supply-pool ROY returns to the player");
+        assertEq(round.hook.currentStage(), 1);
+        assertEq(round.hook.stageSold(1), 0, "clearing attack cannot spill");
+        assertEq(
+            round.hook.stageEndSqrtPriceX96(0),
+            TickMath.getSqrtPriceAtTick(-1_920),
+            "human ROY/HP ends at the configured upper price"
+        );
+        assertEq(-TickMath.getTickAtSqrtPrice(round.hook.stageEndSqrtPriceX96(0)), 1_920);
+        (uint160 resetPrice,,,) = round.manager.getSlot0(bossKey.toId());
+        assertEq(resetPrice, TickMath.getSqrtPriceAtTick(0), "controller refill restores human price 1");
+
+        uint256 stageRoySpent = partialAttack.roySpent + clearAttack.roySpent;
+        uint256 stageQuote = round.hook.stageRoyInputRequirement(0);
+        uint256 difference = stageRoySpent > stageQuote ? stageRoySpent - stageQuote : stageQuote - stageRoySpent;
+        assertLe(difference, 2 * round.hook.stageAttackCount(0) + 2, "per-step and per-swap ceil rounding");
+        assertApproxEqAbs(stageQuote, 331_219_793_595_396_366_740, 1e12);
+        assertEq(round.bossHP.totalSupply(), initialSupply, "currency1 route never burns HP");
+        assertEq(round.manager.getNonzeroDeltaCount(), 0, "all attack and refill deltas settle");
+    }
+
     function _enroll(address player) private {
         vm.startPrank(player);
         mockUSD.approve(address(hook), type(uint256).max);
@@ -345,6 +423,96 @@ contract BossPoolCoreTest is Test {
         vm.stopPrank();
         assertTrue(hook.enrolled(player));
         assertEq(roy.balanceOf(player), 100e18);
+    }
+
+    function _deployHP1Round() private returns (HP1Round memory round) {
+        round.manager = IPoolManager(vm.deployCode("out/PoolManager.sol/PoolManager.json", abi.encode(address(this))));
+        round.mockUSD = MockUSD(vm.deployCode("out/MockUSD.sol/MockUSD.json"));
+
+        bool foundHP1Order;
+        for (uint256 attempt; attempt < 8; attempt++) {
+            BossHP candidateHP = BossHP(
+                vm.deployCode("out/BossHP.sol/BossHP.json", abi.encode(address(this), BOSS_HP_SUPPLY))
+            );
+            RoyToken candidateRoy = RoyToken(
+                vm.deployCode("out/RoyToken.sol/RoyToken.json", abi.encode(address(this), ROY_SUPPLY))
+            );
+            if (address(candidateHP) > address(candidateRoy)) {
+                round.bossHP = candidateHP;
+                round.roy = candidateRoy;
+                foundHP1Order = true;
+                break;
+            }
+        }
+        assertTrue(foundHP1Order, "test fixture must exercise BossHP as currency1");
+
+        round.collectibles = BossCollectibles(
+            vm.deployCode("out/BossCollectibles.sol/BossCollectibles.json", abi.encode(address(this)))
+        );
+        round.router = BossRouter(
+            vm.deployCode(
+                "out/BossRouter.sol/BossRouter.json",
+                abi.encode(round.manager, round.mockUSD, round.roy, round.bossHP, address(this))
+            )
+        );
+        round.deadline = uint64(block.timestamp + 2 hours);
+        bytes memory constructorArgs = abi.encode(
+            round.manager,
+            round.router,
+            round.mockUSD,
+            round.roy,
+            round.bossHP,
+            round.collectibles,
+            address(this),
+            PRIZE,
+            uint256(round.deadline)
+        );
+        bytes memory initCode = abi.encodePacked(vm.getCode("out/BossHook.sol/BossHook.json"), constructorArgs);
+        TestCreate2Deployer create2Deployer = new TestCreate2Deployer();
+        (address predictedHook, bytes32 salt) = HookMiner.find(address(create2Deployer), HOOK_FLAGS, initCode, bytes(""));
+        round.hook = BossHook(create2Deployer.deploy(salt, initCode));
+        assertEq(address(round.hook), predictedHook);
+
+        round.router.setHook(round.hook);
+        round.collectibles.setMinter(address(round.hook));
+        round.bossHP.transfer(address(round.router), BOSS_HP_SUPPLY);
+        round.roy.transfer(address(round.router), ROY_SUPPLY);
+        round.mockUSD.faucet(address(round.router), SUPPLY_USD + 1e6);
+        round.mockUSD.faucet(address(this), PRIZE);
+        round.mockUSD.approve(address(round.hook), PRIZE);
+        round.hook.fundPrize();
+        round.mockUSD.faucet(ALICE, 4_000e6);
+        round.mockUSD.faucet(BOB, 4_000e6);
+
+        bool mockIsCurrency0 = address(round.mockUSD) < address(round.roy);
+        int24 supplyStartTick = mockIsCurrency0 ? int24(299_520) : int24(-299_520);
+        uint160 supplySqrt = TickMath.getSqrtPriceAtTick(supplyStartTick);
+        int24 supplyLower = supplyStartTick - 6_000;
+        int24 supplyUpper = supplyStartTick + 6_000;
+        uint128 supplyLiquidity = _supplyLiquidity(supplySqrt, supplyLower, supplyUpper, mockIsCurrency0);
+        round.router.seedSupplyPool(supplySqrt, supplyLower, supplyUpper, supplyLiquidity);
+        round.router.activate();
+    }
+
+    function _enrollForRound(HP1Round memory round, address player) private {
+        vm.startPrank(player);
+        round.mockUSD.approve(address(round.hook), type(uint256).max);
+        round.hook.enroll();
+        vm.stopPrank();
+        assertTrue(round.hook.enrolled(player));
+        assertEq(round.roy.balanceOf(player), 100e18);
+    }
+
+    function _attackForRound(HP1Round memory round, address player, uint256 maxMockUSD, uint8 stage)
+        private
+        returns (AttackAmounts memory result)
+    {
+        vm.startPrank(player);
+        round.mockUSD.approve(address(round.router), type(uint256).max);
+        (result.usdSpent, result.royBought, result.roySpent, result.hpOut) = round.router.attackWithMockUSD(
+            maxMockUSD, 1, 1, stage, block.timestamp + 1 hours
+        );
+        vm.stopPrank();
     }
 
     function _prepareActiveRound() private {
