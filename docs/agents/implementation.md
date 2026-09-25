@@ -13,7 +13,7 @@ Prefer, in order:
 
 Before adopting external code, check compatibility, license, maintenance, and the trust boundary it introduces. In the issue or PR, briefly identify what was reused. For a custom implementation, identify the concrete gap that existing options do not cover. A new research document or approval step is not required.
 
-For Boss Pool, inspect official v4 hook, router, settlement, and deployment examples before writing equivalents. Use established ERC-20/ERC-721 implementations and viem utilities. Keep custom work focused on attack authorization, burn accounting, stage rules, contribution, rewards, and the game UI. Verify what can be reused before assuming the planned dedicated router must be written from scratch.
+For Boss Pool, inspect official v4 hook, router, settlement, and deployment examples before writing equivalents. Use established ERC-20/ERC-721 implementations and viem utilities. Keep custom work focused on attack authorization, purchase accounting, stage rules, contribution, rewards, and the game UI. Verify what can be reused before assuming the planned dedicated router must be written from scratch.
 
 Implement the current core feature. Add a dependency only when it reduces the work and complexity needed now. Create an abstraction, service, or framework only when the current implementation requires it.
 

@@ -4,7 +4,7 @@ Focus verification on the end-to-end journey and core features. Build the smalle
 
 ## Main journey
 
-Maintain one reusable two-wallet E2E scenario: fund a round, enroll, use both physical and magic auto-buy attacks, clear all three stages, and claim MockUSD and a victory NFT. Assert actual receipts, balances, HP, weighted contribution, and reward amounts along that journey. Use real v4 core for its contract execution.
+Maintain one reusable two-wallet E2E scenario: fund a round, enroll, use the current auto-buy attack route, clear all three stages, and claim MockUSD and a victory NFT. Assert actual receipts, balances, HP, contribution, and reward amounts along that journey. Use real v4 core for its contract execution. The requirements and technical specification define the current token and stage behavior.
 
 Extend this scenario when a core feature changes. Reuse its fixtures and assertions across issues instead of creating a second suite for each feature or implementation layer.
 

@@ -1,68 +1,59 @@
 # Boss Pool
 
-Physical and magic attacks buy and burn ammunition through Uniswap v4. A shared hook runs a three-stage boss and awards a sponsor-funded prize by effective damage.
+Players spend ROY to buy BossHP through Uniswap v4. The hook counts actual BossHP purchases as damage without burning tokens. Each defeated stage unlocks a new allocation of BossHP liquidity. After final defeat, eligible BossHP represents a share of the sponsor-funded prize.
 
-廣東話 pitch：揀物理定魔法，一按 Attack 自動買入並 burn；hook 扣血、轉形態，打贏按有效傷害分獎。
+廣東話 pitch：MockUSD 買 ROY，ROY 換 BossHP；hook 累計買入 HP 當傷害，清一階先放下一階流動性，打贏按貢獻分獎。
 
-## Project status
+## Current direction
 
-This repository contains the detailed plan, diagrams, and teammate issues. It does not yet contain an application scaffold, deployed contracts, or a passing project E2E run. An isolated local v4 proof passed eight focused checks; that is feasibility evidence, not validation of the full product or Robinhood deployment.
+The user confirmed this replacement for the earlier physical/magic design:
 
-The team confirmed these choices on 25 September 2026:
+- Supply pool: **MockUSD / ROY**.
+- Boss pool: **ROY / BossHP**, with BossHP as a real ERC-20.
+- Primary Attack executes both swaps in one unlock. ROY is payment into the Boss pool; it is not burned by the attack.
+- BossHook accumulates actual BossHP output in `stageSold`. The router delivers BossHP to the player through ordinary settlement; no token burn or output-return delta is needed for damage.
+- Stage HP stays **300 → 600 → 900**. Clear the current sellable allocation, perform the controller-only price reset, then add the next stage's incremental liquidity. One attack cannot damage two stages.
+- Player BossHP sell-backs into the battle pool are disabled. Transfers do not deal new damage. The worked reward proposal lets eligible token transfers carry reward rights, then locks surrendered tokens at claim. Protocol reserve and fee HP remain excluded. See [reward math](docs/refill-math.md#rewards-follow-eligible-bosshp).
+- No MROY, magic-price multiplier, or parallel physical/magic pools.
+- Bun, TypeScript, viem, Solidity/Foundry, Uniswap v4, and Robinhood testnet remain the stack. A small Bun monorepo remains the plan.
 
-- Bun, TypeScript, viem, Uniswap v4, and Robinhood Chain testnet, chain ID `46630`.
-- Two attack tokens and two pools. Proposed symbols are physical `ROY` and magic `MROY`, each paired with `MockUSD`.
-- The primary **Attack** action buys the selected ammunition and burns it in one transaction after any required approval.
-- Physical damage multiplier is 1. Magic damage multiplier is 3. Rewards use actual effective damage. Volume gives no reward weight.
-- Separate stage HP: **300 → 600 → 900**. One attack cannot damage the next stage. Excess purchased tokens remain in the player's wallet.
-- MockUSD is a test asset. The 1,000 MockUSD prize has no real-dollar backing.
-- Two delivery roles: contracts + backend, and UI + interface + gaming.
-- Fixed ammunition supply for each round, no stage emissions, treasury locked through the round deadline, and LP availability verified before activation. Vesting is not a price-control mechanism.
+## Status
 
-The delivery plan uses a small Bun monorepo. Candidate LP funding and allocations must pass an actual v4 scenario before deployment.
+This repository contains the plan and teammate issues, not an implemented application. Local real-v4 scenarios proved the previous burn-based stage and refill paths. The current purchase-accounting path has not yet been executed in that fixture. BP01 must adapt the shared scenario and prove the full two-hop route before deployment.
 
-## Start here
+The 1,000 MockUSD prize is a test fixture. [Refill math](docs/refill-math.md) gives candidate prices and reserve amounts, with the no-burn accounting change distinguished from historical test evidence. Earlier ROY/MROY allocation tables and price-impact estimates are superseded.
+
+## Read and claim work
 
 | Document | Purpose |
 | --- | --- |
-| [Agent instructions](AGENTS.md) | Reuse existing solutions, focused testing, scoped instructions, and implementation models |
-| [Domain context](CONTEXT.md) | Shared terms for ammunition, damage, prizes, liquidity, and locks |
-| [Requirements](docs/requirements.md) | Confirmed rules, user journeys, fixture economics, and scope |
-| [Economy and liquidity](docs/economy.md) | Fixed supply, candidate LP allocation, treasury locks, and simulation gate |
-| [Technical specification](docs/technical-spec.md) | Two-pool architecture, atomic settlement, stage math, interfaces, and tests |
-| [Contract and game diagrams](docs/contract-game-diagrams.md) | Player journey, atomic attack execution, and separate fund flows |
-| [Delivery plan](docs/delivery-plan.md) | GitHub issues, dependencies, two-person work allocation, and demo schedule |
-| [Source notes](docs/sources.md) | Verified sponsor requirements and protocol references |
-| [Uniswap feedback draft](FEEDBACK.md) | Observed friction and implementation feedback still to collect |
+| [Agent instructions](AGENTS.md) | Reuse first, focused E2E/core checks, scoped guidance, Sol high / Luna xhigh |
+| [Domain context](CONTEXT.md) | ROY, BossHP, effective damage, stage reserve, and prize terminology |
+| [Requirements](docs/requirements.md) | Confirmed gameplay and proposed bounded defaults |
+| [Technical specification](docs/technical-spec.md) | Atomic two-hop settlement and stage LP control |
+| [Economy](docs/economy.md) | Separate ROY/BossHP budgets and the new proof gate |
+| [HP lifecycle](docs/hp-lifecycle.md) | Purchase counters, clearing evidence, and stage release |
+| [Refill math](docs/refill-math.md) | Prices, reserve funding, and historical core test evidence |
+| [Contract/game diagrams](docs/contract-game-diagrams.md) | No-burn attacks, stage release, and token reward custody |
+| [Detailed delivery plan](docs/delivery-plan.md) | Current issue scopes, owners, dependencies, checkpoints and verification |
+| [Sources](docs/sources.md) | Official references and limits of the available evidence |
+| [Feedback draft](FEEDBACK.md) | Observations to complete during implementation |
 
-Start at [the parent epic](https://github.com/0xroylee/eth-global-2026-tokyo/issues/1) or [the demo milestone](https://github.com/0xroylee/eth-global-2026-tokyo/milestone/1). Claim work through the linked issues. Each feature issue includes end-to-end behavior, acceptance criteria, test evidence, and blockers. Suggested roles are not GitHub assignees.
+Start with [the epic](https://github.com/0xroylee/eth-global-2026-tokyo/issues/1) and [BP01](https://github.com/0xroylee/eth-global-2026-tokyo/issues/2). The 14 child issues retain their identifiers with current BossHP scopes: 10 core, two optional, and two backlog. A starts the shared real-v4 proof/workspace while B prepares the arena and agrees the shared view/event shapes. The detailed plan separates local feasibility from the Robinhood release gate.
 
-## Technical approach
-
-One BossHook serves the ROY / MockUSD and MROY / MockUSD pools. A dedicated AttackRouter executes an exact-input buy. In `afterSwap`, the hook takes and burns the accepted ammunition, applies stage-capped damage, and returns the corresponding output delta. Unused output goes to the player. Failed settlement reverts both the attack and the trade.
-
-The hook's shared stage also sets dynamic fees for both pools. Contracts own HP, contribution, stage, and claim state. Bun services and the frontend only display chain facts.
-
-Solidity with Foundry is the proposed contract toolchain. React with Vite is the proposed frontend. These complement the confirmed Bun / TypeScript / viem stack.
-
-## Monorepo layout
-
-This layout is planned, not scaffolded yet:
+## Planned monorepo
 
 ```text
 contracts/       Solidity, Foundry, deployment artifacts
 apps/web/        Arena, wallet interface, game presentation
-packages/chain/  Generated ABIs, public deployment manifest, viem/types
-scripts/         Seed, liquidity scenario, smoke, and E2E orchestration
-docs/            Requirements, economy, architecture, and agent guides
+packages/chain/  Generated ABIs, public manifests, viem helpers/types
+scripts/         Seed, focused liquidity/E2E scenario, smoke commands
 ```
 
-Use Bun workspaces for `apps/web` and `packages/chain`, with one root lockfile. Foundry owns Solidity compilation. Both the frontend and root scripts consume `@boss-pool/chain`. Build the core with direct chain access; add a read-only service only if a concrete requirement needs it. No Turbo, Nx, database, or separate service is required for this layout.
+Use one Bun lockfile and a private `@boss-pool/chain` workspace. Foundry owns Solidity. Start with direct chain access. No separate backend service, Turbo, Nx, or database is required.
 
-V3 can host game logic in external contracts. Our claim is that v4 hooks integrate burn accounting and shared boss state into the swap lifecycle. We do not claim games or atomic workflows are impossible on V3.
+## Submission
 
-## Submission target
+The [Uniswap Foundation prize page](https://ethglobal.com/events/tokyo2026/prizes/uniswap-foundation) requires public open-source code, FEEDBACK.md, and the [developer feedback form](https://developers.uniswap.org/hackathon-feedback). Its standard track totals $6,000, split $3,000 / $2,000 / $1,000. Continuity eligibility is unverified.
 
-The [Tokyo Uniswap Foundation track](https://ethglobal.com/events/tokyo2026/prizes/uniswap-foundation) has a $6,000 standard-track total, split $3,000 / $2,000 / $1,000. The separate $4,000 track requires Continuity eligibility.
-
-Submission requires public open-source code, `FEEDBACK.md`, and the [Uniswap Developer Feedback Form](https://developers.uniswap.org/hackathon-feedback) linking that file. Add actual contract line permalinks, deployment evidence, and successful attack/claim receipts before submission. Those implementation checks are still open.
+The intended v4 evidence is a real two-hop attack, hook purchase accounting, stage refill/LP activation, and fully settled deltas. Add actual contract line links, receipts, and focused test evidence after implementation. Do not claim that V3 cannot run games or atomic workflows.

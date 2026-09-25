@@ -1,122 +1,153 @@
 # Boss Pool delivery plan
 
-Status: project implementation is not started. An isolated v4 mechanism proof exists, but the application and target-chain integration remain open. Estimates are person-hours. GitHub issues are the team's execution checklist.
+Updated 26 September 2026. This is the implementation handoff for the current no-burn BossHP design. The application is not implemented. The earlier local burn prototypes are historical mechanism evidence; they do not close the new delivery checks.
 
-## Delivery strategy
+## Outcome and scope
 
-Follow the [agent instructions](../AGENTS.md): inspect existing solutions before custom implementation, verify through shared E2E/core checks, and use the specified Sol high / Luna xhigh model routing. These rules govern the work in the linked issues.
+Two wallets enroll, use MockUSD to buy ROY and then BossHP, clear three boss stages, see two reserve-funded price resets, transfer eligible HP between wallets, and redeem HP for MockUSD. Historical participants can claim a separate victory NFT. The actual hook controls purchase counting and liquidity release.
 
-Use the [planned Bun monorepo](technical-spec.md#monorepo-and-ownership). BP01 establishes the workspace, shared ABI/manifest boundary, and a reusable local v4 liquidity/settlement scenario. Run that local proof before entry/NFT integration; BP04 still owns the full authenticated player flow. Verify actual swaps on the target chain before calling BP01 complete.
+The [requirements](requirements.md) own gameplay, [technical specification](technical-spec.md) owns contracts/interfaces/custody, [HP lifecycle](hp-lifecycle.md) owns clearing details, and [refill/reward math](refill-math.md) owns calculations. [CONTEXT.md](../CONTEXT.md) is the glossary.
 
-The [economy plan](economy.md) fixes supply and defers emissions, gradual vesting, and a backend service. Its deeper LP allocation is a candidate until real v4 results support deployment. BP02 adds treasury and LP restrictions to the funded round. Keep one complete user-visible journey per issue, with contract state, client behavior, and verification together.
+Confirmed: one ROY attack currency, one ROY/BossHP battle pool, one MockUSD/ROY supply pool, no attack burn, stages 300/600/900, staged HP liquidity, rewards represented by BossHP, Robinhood testnet, Bun/TypeScript/viem and a small monorepo. Physical/magic, MROY, damage multipliers, dynamic fees and public BossHP sell-backs are outside the core.
 
-One teammate owns contracts + backend. The other owns UI + interface + gaming. The frontend teammate can build against the specified state/events while contract work proceeds. Mock-backed UI is preparation; a P0 feature closes only after its real integration works.
+Working claim default: eligible HP is transferable; claim atomically surrenders it into permanent custody and pays a fixed proportional reward, without burning. This is the model used by the current plan. A frozen-balance alternative was discussed but not selected. Do not silently combine the two.
+
+## Ownership and repository
+
+A owns contracts, backend/integration responsibilities, deployment, scripts and generated shared-chain exports. B owns UI, wallet interface, game presentation and browser rehearsal. GitHub handles remain unknown; issues stay unassigned until claimed.
+
+Use the [Bun monorepo layout](technical-spec.md#monorepo-and-ownership):
+
+- `contracts/`: Foundry, two core contracts, standard tokens/NFTs and the shared core scenario. A owns it.
+- `packages/chain/`: generated ABI, public deployment manifest, viem actions/views and shared types. A owns contract-facing changes; B reviews consumption.
+- `apps/web/`: React/Vite arena and wallet flows. B owns it.
+- `scripts/`: seed, deploy, focused E2E and smoke commands. A owns them.
+
+One root Bun lockfile. Start with direct viem access; no backend service, database, queue, Turbo or Nx. Reuse the official v4 starter/helpers and OpenZeppelin before custom code. Keep AGENTS.md short and use the existing scoped guides; do not turn it into another product spec.
+
+Implementation model routing remains exact: **gpt-6-sol high** for contracts, custody, settlement and cross-layer changes; **gpt-6-luna xhigh** for bounded UI/wiring/docs after interfaces are clear. This is routing for future implementation, not permission to spawn unnecessary agents.
+
+## Candidate demo configuration
+
+| Parameter | Planning value | Gate before deployment |
+| --- | --- | --- |
+| Stage HP | 300 / 600 / 900 | Actual output and bounded dust in BP01 |
+| Prize | 1,000 MockUSD, 6 decimals | Separate fully funded prize ledger |
+| Entry | 10 MockUSD + 100 starter ROY, cap 100 | Starter funding and once-per-wallet enrollment |
+| BossHP supply | 2,000, 18 decimals | Prove integer reserve sufficiency for permitted attacks |
+| Battle fee | Fixed 0.30%, modeled protocol fee zero | Verify actual supported fees; reject unsupported configurations |
+| Battle price | 1 to about 1.211659 ROY/HP each stage | Same-range plan, correct currency ordering and reset limits |
+| Supply LP example | 50,000 ROY + 5,000 MockUSD | Full-range estimate must become actual v4 position amounts |
+| ROY supply candidate | 100,000 = 50,000 supply LP + 10,000 starter reserve + 40,000 locked treasury | Reconcile actual deployed allocation and rounding; no initial paired ROY assumed for the HP-side battle range |
+| Round deadline | Two hours after activation as a demo default | Fixed before activation; independent of event submission time |
+
+The calculated battle budget is about 1,987.318762 ROY and 1,802.708124 HP of total reserve spending. About 1,800 HP ends in player circulation and 2.708124 in LP fees. First refill restores 300 HP then adds 300; second restores 600 then adds 300. Final stage performs no reset.
+
+The 1,000-MockUSD prize versus about 217.58 MockUSD solo attack-plus-entry cost in the isolated supply example is a sponsor subsidy. The model does not establish fair participation, market stability, or Sybil resistance.
 
 ## Work breakdown
 
-Start with [the parent epic](https://github.com/0xroylee/eth-global-2026-tokyo/issues/1) or [the demo milestone](https://github.com/0xroylee/eth-global-2026-tokyo/milestone/1). All 14 work items are linked below and attached as native sub-issues. Their implementation blockers are also recorded as native GitHub dependencies.
+Keep the existing epic and 14 child issue identifiers. Rewrite their scopes rather than creating duplicate tickets. Each core slice includes its real client behavior and shared verification. [Epic](https://github.com/0xroylee/eth-global-2026-tokyo/issues/1) · [Demo milestone](https://github.com/0xroylee/eth-global-2026-tokyo/milestone/1).
 
-| Key | Slice | Priority | Depends on | Lead | Estimate | Stories |
-| --- | --- | --- | --- | --- | --- | --- |
-| [BP01](https://github.com/0xroylee/eth-global-2026-tokyo/issues/2) | Bootstrap Bun monorepo and validate v4 liquidity | P0 | None | A | 3–5 h | US01 |
-| [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3) | Fund, lock, and display the three-stage boss round | P0 | [BP01](https://github.com/0xroylee/eth-global-2026-tokyo/issues/2) | A + B | 3–4 h | US02 |
-| [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | Enroll with Little Roy NFT and starter physical ammo | P0 | [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3) | A + B | 2–3 h | US03 |
-| [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | Execute physical auto-buy-and-burn attacks | P0 | [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | A + B | 3–5 h | US04 |
-| [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | Execute magic attacks with weighted contribution | P0 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | A + B | 2–3 h | US05 |
-| [BP06](https://github.com/0xroylee/eth-global-2026-tokyo/issues/7) | Present three stages and share dynamic fees across pools | P0 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | B + A | 2–3 h | US06 |
-| [BP07](https://github.com/0xroylee/eth-global-2026-tokyo/issues/8) | Claim proportional MockUSD and a victory NFT | P0 | [BP06](https://github.com/0xroylee/eth-global-2026-tokyo/issues/7) | A + B | 2–3 h | US07 |
-| [BP08](https://github.com/0xroylee/eth-global-2026-tokyo/issues/9) | Spend starter and leftover ammo through a separate held-burn action | P1 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | A + B | 1–2 h | US08 |
-| [BP09](https://github.com/0xroylee/eth-global-2026-tokyo/issues/10) | Reconstruct shared activity and leaderboard | P1 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | A + B | 2–3 h | US09 |
-| [BP10](https://github.com/0xroylee/eth-global-2026-tokyo/issues/11) | Expire an unfinished round and refund its unawarded prize | P0 | BP02, BP04 | A + B | 1–2 h | US10 |
-| [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | Verify and rehearse the complete two-wallet testnet demo | P0 | BP07, BP10 | B + A | 2–3 h | US01–US07, US10 |
-| [BP12](https://github.com/0xroylee/eth-global-2026-tokyo/issues/13) | Publish judge evidence and complete UF submission materials | P0 | [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | B + A | 1–2 h | US11 |
-| [BP13](https://github.com/0xroylee/eth-global-2026-tokyo/issues/14) | Evaluate emissions for a future round | P2 backlog | BP11 + approved emission policy | A | 2–4 h after decision | Optional |
-| [BP14](https://github.com/0xroylee/eth-global-2026-tokyo/issues/15) | Add World ID at an agreed eligibility step | P2 backlog | BP11 + approved identity policy | A + B | 3–5 h after decision | Optional |
+| Issue | Verifiable slice | Priority | Blocked by | Lead | Planning effort |
+| --- | --- | --- | --- | --- | --- |
+| [BP01](https://github.com/0xroylee/eth-global-2026-tokyo/issues/2) | Prove the no-burn BossHP lifecycle and bootstrap the monorepo | P0 | None | A + B | 4–6 h |
+| [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3) | Fund and display a round with protected HP reserves and prize | P0 | [BP01](https://github.com/0xroylee/eth-global-2026-tokyo/issues/2) | A + B | 4–6 h |
+| [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | Enroll once and receive Little Roy NFT plus starter ROY | P0 | [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3) | A + B | 2–3 h |
+| [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | Attack through MockUSD to ROY to BossHP without burning | P0 | [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | A + B | 4–6 h |
+| [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | Clear stages and atomically refill the same BossHP pool | P0 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | A + B | 4–7 h |
+| [BP06](https://github.com/0xroylee/eth-global-2026-tokyo/issues/7) | Present three confirmed boss forms and recover arena state | P0 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | B + A | 3–5 h |
+| [BP07](https://github.com/0xroylee/eth-global-2026-tokyo/issues/8) | Redeem BossHP for MockUSD and claim a victory NFT | P0 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | A + B | 4–7 h |
+| [BP08](https://github.com/0xroylee/eth-global-2026-tokyo/issues/9) | Use held ROY to buy BossHP as an optional attack route | P1 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | A + B | 1–2 h |
+| [BP09](https://github.com/0xroylee/eth-global-2026-tokyo/issues/10) | Replay shared attacks and distinguish damage from reward holdings | P1 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | A + B | 2–3 h |
+| [BP10](https://github.com/0xroylee/eth-global-2026-tokyo/issues/11) | Expire unfinished rounds and preserve outstanding reward custody | P0 | [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3), [BP07](https://github.com/0xroylee/eth-global-2026-tokyo/issues/8) | A + B | 2–3 h |
+| [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | Deploy and rehearse the real two-wallet Robinhood testnet journey | P0 | [BP06](https://github.com/0xroylee/eth-global-2026-tokyo/issues/7), [BP07](https://github.com/0xroylee/eth-global-2026-tokyo/issues/8), [BP10](https://github.com/0xroylee/eth-global-2026-tokyo/issues/11) | A + B | 2–4 h |
+| [BP12](https://github.com/0xroylee/eth-global-2026-tokyo/issues/13) | Publish current judge evidence and complete Uniswap feedback | P0 | [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | A + B | 1–2 h |
+| [BP13](https://github.com/0xroylee/eth-global-2026-tokyo/issues/14) | Evaluate emissions or vesting for a future round only | P2 | [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | A + B | 2–4 h |
+| [BP14](https://github.com/0xroylee/eth-global-2026-tokyo/issues/15) | Define a World ID eligibility policy before integrating it | P2 | [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | A + B | 3–5 h |
 
-A = contracts + backend. B = UI + interface + gaming. Handles were not supplied, so issues stay unassigned.
+Ten P0 slices total **30–49 person-hours** as an initial planning range. This is not elapsed time, excludes unresolved provider/deployment delays, and must be revised after BP01. Contract dependencies mean two people cannot simply halve that number. The earlier 09:00 coding / 10:00 live checkpoint lacks a confirmed timezone and date relevance; do not treat it as a delivery commitment.
 
-BP08 and BP09 are optional. The core app still shows current-wallet balances, damage, claimable reward, and current stage with refresh recovery. Cutting the global leaderboard or inventory-burn button must not remove those core reads.
+BP08 and BP09 are optional. BP13 and BP14 require future product decisions. The core still includes wallet HP balance, current stage, reward preview and refresh recovery when the global activity screen is cut.
+
+## Dependency graph
 
 ```mermaid
-flowchart LR
-    A[BP01 Monorepo, chain, liquidity proof] --> B[BP02 Fund and lock round]
-    B --> C[BP03 Entry]
-    C --> D[BP04 Physical attack]
-    D --> E[BP05 Magic attack]
-    E --> F[BP06 Stages and shared fees]
-    F --> G[BP07 Claims]
-    E -.-> H[BP08 Held ammo, optional]
-    E -.-> I[BP09 Activity, optional]
-    B --> J[BP10 Expiry]
-    D --> J
-    G --> K[BP11 Demo]
-    J --> K
-    K --> L[BP12 Submission]
-    K -.-> M[BP13 Emissions, backlog]
-    K -.-> N[BP14 World ID, backlog]
+flowchart TD
+    A["BP01: local core proof and workspace"] --> B["BP02: funded round and custody"]
+    B --> C["BP03: entry"]
+    C --> D["BP04: two-hop attack"]
+    D --> E["BP05: stage refill and release"]
+    E --> F["BP06: confirmed arena"]
+    E --> G["BP07: HP redemption and NFT"]
+    B --> H["BP10: expiry and recovery"]
+    G --> H
+    F --> I["BP11: Robinhood E2E and rehearsal"]
+    G --> I
+    H --> I
+    I --> J["BP12: public evidence and submission"]
+    D -. optional .-> K["BP08: held ROY"]
+    D -. optional .-> L["BP09: activity"]
 ```
 
-## Parallel work for two teammates
+## Two-person execution sequence
 
-| Phase | Teammate A: contracts + backend | Teammate B: UI + interface + gaming | Handoff |
+| Checkpoint | A: contracts and integration | B: UI and gaming | Evidence to proceed |
 | --- | --- | --- | --- |
-| Start | Bun workspace, shared package, RPC and reusable v4 scenario | Arena layout, physical/magic controls, original three-form assets | Shared view/event types and sample payloads |
-| Entry | Fixed allocations, treasury/LP locks, entry, token/NFT permissions | Connect, allowance, enrollment, balances, error states | Entry ABI and successful receipt |
-| Combat | Physical settlement and stage accounting, then magic | Attack quote, approval/signature/receipt UX, hit effects | Actual outputs and event ordering |
-| Progress | Shared stage fees, expiry, claims | Full new HP bar per stage, victory and expired states | State snapshots and error decoding |
-| Release | Testnet seed, accounting tests, attack/claim evidence | End-to-end browser test, recording, narration, feedback package | Frozen commit and reproducible demo |
+| Start immediately | BP01: reuse core fixture, pin dependencies, establish workspace and chain probe | BP06 preparation: original three forms, arena states, wallet shell; agree shared types | Reproducible local core trace and shared shape draft |
+| Fund and enter | BP02/BP03: custody, bounded setup, enrollment, generated ABI | Connect round/entry views, approval and receipt states | Both wallets enrolled against local contracts |
+| First hit | BP04: real two-hop attack and ordinary HP delivery | Quote, signature, pending/failure/success feedback | Partial real attack, balances and stageSold agree |
+| Progression | BP05: same-pool refill, next LP, defeat, atomic failure | BP06: confirmed transitions, refresh and reduced motion | All three stages and two resets pass the shared scenario |
+| Rewards and terminal paths | BP07/BP10: transferable redemption, NFT, expiry, post-deadline custody | Claim approvals/results and expired/defeated screens | HP cannot be reused; prize and reserve balances reconcile |
+| Release | BP11: resolve target-chain access, provenance, deploy and run the same route | Testnet browser rehearsal and recording | Real Robinhood receipts, source commit, usable UI |
+| Submit | Supply verified source/transaction links and implementation observations | BP12: pitch, public README, recording and feedback form | Public evidence plus form confirmation |
 
-B can start original assets and fixture UI immediately. A owns the shared ABI and deployment manifest, with B reviewing compatibility. Avoid competing contract edits during the settlement work. Each feature issue names the piece both teammates must integrate.
+B's fixture work can start before its integration dependencies finish. It does not close an issue until the real route works. A publishes interface updates in the same change as contract changes; B does not maintain handwritten duplicate ABIs.
 
-## Schedule and feasibility
+## Interface handoff
 
-The requested checkpoint is **26 September 2026, 09:00 coding / 10:00 live**. Timezone is unconfirmed. Japan is one hour ahead of Hong Kong. This is a requested demo checkpoint, not a verified event submission deadline.
+BP01 drafts these shapes; the compiled ABI becomes authoritative when contracts exist.
 
-P0 estimates total **21–33 person-hours**, including workspace setup, liquidity configuration, and the round locks. This remains an optimistic estimate for a team familiar with the stack and with usable RPC access. With two people, some UI work overlaps, but much of the contract path is sequential. A complete build from this empty repository in the 09:00–10:00 hour is not credible. Use that hour for integration and rehearsal after work tonight.
+- Attack request: input cap, minimum ROY output, minimum HP output, expected stage and deadline. Player identity comes from the router caller.
+- Round view: status, current stage, nominal stage capacity, remaining sellable HP, stageSold values, prize, deadline and frozen eligible supply after victory.
+- Player view: enrollment, historical participation flag, token balances/allowances, victory-NFT claim flag and redeemable-HP reward preview.
+- Events: AttackApplied with both hop amounts; StageCleared; StageStarted after successful refill/LP addition; BossDefeated with finalEligibleHP; HP redemption; enrollment; expiry/refund.
+- Currency values: bigint in TypeScript and base units on-chain; decimal strings in serialized fixtures. Pool keys and addresses come only from verified manifests.
+- Transaction states: disconnected, wrong chain, approval needed, simulation failure, signature pending, submitted, confirmed, reverted, replaced, and stale-stage requote. The frontend's transition animation is not authoritative state.
 
-| Checkpoint | Work | Exit condition |
+The current hook permission set is beforeInitialize, beforeSwap, afterSwap, beforeAddLiquidity and beforeRemoveLiquidity. Callback flags must match the mined address. The Boss pool alone uses the game hook. A controller refill is a maintenance operation and cannot increase stageSold or eligible supply.
+
+## Shared verification and completion rules
+
+Use **one reusable two-wallet core/E2E scenario**, extended as issues land:
+
+1. Fund the prize, both pools and future reserves; enroll both wallets.
+2. Perform a partial two-hop attack and verify delivered BossHP with unchanged total supply.
+3. Finish each stage with a bounded final hit, verify no next-stage spill, two price resets, LP increments and reserve/player separation.
+4. Freeze actual eligible HP at defeat. Transfer a portion from one wallet to the other, redeem eligible HP into permanent custody, and claim separate victory NFTs.
+5. Assert total paid never exceeds originalPrize, redeemed HP never recirculates, and unissued/fee HP remains in controlled custody beyond the deadline while rights remain.
+
+Reuse that fixture for a failed-transition rollback, the reproduced final-base-unit boundary, an unfinished-round expiry, and a concrete authentication/custody rejection if the journey cannot cover it. These are risk checks, not a requirement for a test per function. No broad fuzz matrix, snapshots, coverage target or custom simulator.
+
+A slice closes only when its acceptance works through the real relevant contracts and client, with a tested commit and focused evidence. Passing older burn-based prototypes does not satisfy no-burn/token-redemption acceptance. Do not rerun unrelated tests after documentation-only changes.
+
+BP01 is the local feasibility gate. Chain readiness is reported there but remains a separate **BP11 release gate** if the RPC is blocked. Local development may continue; release cannot be called Robinhood-tested without target-chain receipts.
+
+## Evidence and unresolved gates
+
+| Status | Fact or assumption | Owner / next resolution |
 | --- | --- | --- |
-| Tonight, first 30 min | Claim work, agree shared-package boundaries, ABI/event shapes, candidate liquidity settings, and two-role ownership | Both teammates share the same contract |
-| Tonight, first 90 min | A timeboxes RPC and reuses the local v4 burn/liquidity fixture; B builds arena states and original assets | Local settlement proof works; testnet readiness has evidence or an explicit blocker |
-| Tonight, next block | Fund and lock allocations, entry, physical attack, then magic and stage fees | Local two-wallet path works with real contracts |
-| Tonight, final block | Claims, expiry/lock checks, testnet deploy from the simulated configuration, UI wiring | Both attack receipts and deployed addresses exist |
-| Tomorrow, 09:00–09:30, timezone pending | Fix integration failures and execute the full journey | Core demo succeeds |
-| Tomorrow, 09:30–10:00, timezone pending | Freeze, record fallback, rehearse, prepare evidence | Core E2E passes on the frozen commit, or a specific unresolved blocker is recorded |
+| Verified historical | A pinned real-v4 burn-based same-pool refill scenario passed one local test; integer dust and settlement were recorded | A adapts the same fixture in BP01 |
+| Verified arithmetic | Finite-range clearing, refill costs and fixed-denominator redemption calculations reconcile | A verifies real no-burn delivery/redemption in BP01 and BP07 |
+| Observed blocker | Official testnet RPC again returned HTTP 403 from this environment on 26 September | A resolves endpoint access and provenance in BP11 |
+| Unverified | Complete no-burn app, deployable production permissions, token redemption, two-hop E2E and Robinhood deployment | P0 acceptance remains open |
+| Working default | Transferable HP surrendered without burn; fixed fees; candidate funding amounts | Revisit only on a user decision or contrary execution evidence |
+| Not supplied | Teammate handles, checkpoint timezone and a verified submission deadline | Leave issues unassigned; use relative checkpoints |
 
-If testnet readiness fails after 90 minutes, continue locally while A obtains a working provider or sponsor guidance. Keep BP01's remote acceptance open. Do not silently change chains.
+## Cut order and demo
 
-Cut held-ammo convenience, global activity, emissions, World ID, rich sound, and extra animation first. Keep two real auto-buy attack types, weighted burn accounting, independent stage HP, shared stage fees, and token/NFT claims. A fixed-fee emergency build must say dynamic fees remain incomplete.
+Cut held-ROY convenience, global activity, dynamic fees, World ID, emissions/vesting, elaborate sound and extra animation first. Keep no-burn HP delivery, protected reward rights, stage gates, two-hop execution, basic entry/NFT rewards, and honest target-chain evidence.
 
-## Issue workflow
+Use prepared wallets and approvals. A 60–90 second demo can show entry, a partial attack, stage 1 → 2 → 3, defeat, current HP reward rights, redemption and the victory NFT. Accelerate presentation or use a disclosed prepared stage; do not fake contract effects or introduce an admin HP setter. Keep an uncut two-wallet recording as supporting evidence.
 
-Use the parent epic and child issues below. Each issue includes owner roles, dependencies, acceptance criteria, test evidence, and exclusions. Priority labels distinguish core, optional, and backlog work.
-
-`status:ready` means no unresolved prerequisite. `status:blocked` means final integration depends on another issue; fixture UI and tests can still be prepared. `status:backlog` means do not implement until its explicit product policy is approved.
-
-Teammates claim by assigning themselves or commenting with owner and branch. GitHub handles are not guessed. Use `codex/` for branches created by Codex. Link PRs to the issue, and update dependent triage when prerequisite changes land.
-
-Done means the observable user journey works and the PR includes the tested commit plus relevant tests, screenshot, or transaction evidence. A merged contract with an unwired UI does not close a feature slice. A closed issue is evidence only if its acceptance actually passed.
-
-Reuse the same E2E journey and focused core checks across issues. An issue's list of failure cases does not require a separate test suite or one test for every bullet. Follow the [testing rules](agents/testing.md) when selecting verification.
-
-## Sixty-second presentation
-
-This is a story timing target, not a promise that all wallet prompts and receipts complete in sixty seconds.
-
-| Time | Visible action | Evidence |
-| --- | --- | --- |
-| 0–10 s | Show funded boss, testnet label, NFT entry, and two attacks | Escrow and entry reads or an identified recorded transaction |
-| 10–25 s | Execute a physical auto-buy-and-burn | Swap/burn receipt, HP, contribution, leftover balance |
-| 25–40 s | Use magic and show all three stages | Multiplier 3, independent HP resets, confirmed stage events |
-| 40–50 s | Final hit and contribution split | Final defeat and frozen weighted denominator |
-| 50–60 s | Show token claim and victory NFT | Real wallet balances and receipts |
-
-Stage budgets allow a fixture script to target roughly three hits per stage: 100 physical damage per hit in stage 1, 200 in stage 2, and 100 MROY for 300 damage in stage 3. AMM output changes, so derive input quotes and cap burns at runtime. Do not hardcode a constant token price into the attack.
-
-Prepare wallets and approvals in advance. Keep an uncut two-wallet recording. A shortened live sequence may start from a prepared stage, but disclose earlier actions. Deploy a fresh arena for reset; do not add an admin HP override. No fake burn or fake claim is acceptable as protocol evidence.
-
-## Submission evidence
-
-Collect public code, a deliberate source-license choice, commit-pinned contract line links, the shared deployment manifest, fixed-supply allocation and unlock times, liquidity scenario results, attack receipts from both pools, claim receipts, focused test commands/results, a playable URL or reproducible run instructions, recorded fallback, completed FEEDBACK.md, and feedback-form confirmation.
-
-Continuity eligibility remains unverified. The $6,000 figure is the standard-track total, not first prize. Sources and deployment limitations are in [source notes](sources.md).
+The submission owner must verify the current sponsor page and complete both FEEDBACK.md and the required feedback form. The standard UF track totals $6,000; it is not a guaranteed award. Continuity eligibility is separate.
