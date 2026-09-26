@@ -2,7 +2,7 @@
 
 > **附註（2026-09-27 新增）**：實作進度與調整記錄見 **§14**。
 
-- 分支：`docs/boss-roster-hub`｜品質模式：standard（threshold 85）｜PLAN Round 2/3
+- 分支：`docs/boss-roster-hub`（實作：`feat/boss-roster-hub`）｜品質模式：standard（threshold 85）｜PLAN Round 2/3
 - 讀者：JK（frontend）、Roy（contracts 交界）、決策者｜交付物：實作計畫（交付物 2；研究報告＝交付物 1：`docs/superpowers/specs/2026-09-26-boss-roster-hub-research.md`）
 - 上游輸入：研究報告（Round 1，§x.x 引用即指該報告）、`.edison/research/{a1,a2,b}`；源碼 file:line 由 architect 於 2026-09-26 實讀驗證（§8）
 - 驗證紀律：「建議」＝設計建議非既有事實；「假設」＝未驗證前提；本文件只新增這一份計畫，不修改任何程式碼或其他文件
