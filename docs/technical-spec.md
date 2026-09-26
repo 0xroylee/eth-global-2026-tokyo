@@ -200,7 +200,7 @@ Base Sepolia is the default target, and the published deployment manifest is inc
 
 ## Deployment and proof gate
 
-The target is Base Sepolia chain ID `84532` at `https://sepolia.base.org`. The live encounter is recorded in `apps/web/public/deployments/base-sepolia.json` using its confirmed Factory launch at block `47332745`. Its origin Factory remains distinct from the current Factory used for new launches. It uses its own PoolManager built from pinned v4-core source; it is not an official Base PoolManager. The team-deployed Robinhood fixture remains historical evidence and does not represent an official Robinhood manager.
+The target is Base Sepolia chain ID `84532` at `https://sepolia.base.org`. The live Roy encounter is recorded in `apps/web/public/deployments/base-sepolia.json` using its confirmed Factory launch at block `47342620`. Its origin is the current continuous-liquidity Factory at `0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7`. The former timed Roy remains historical and is no longer the default encounter or a Roy presentation. Both use the existing team PoolManager built from pinned v4-core source; it is not an official Base PoolManager. The team-deployed Robinhood fixture remains historical evidence and does not represent an official Robinhood manager.
 
 BP01 adapts the existing compact real-v4 scenario: both swaps, ordinary BossHP delivery, cumulative purchase accounting, current-stage completion, and the reserve-funded refill/LP addition with all deltas settled. Reuse existing upstream fixtures and settlement helpers. Then verify the real target-chain route after deployment.
 
