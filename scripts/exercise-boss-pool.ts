@@ -298,7 +298,7 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
   assert(initial.bossHPTotalSupply === 2_000n * 10n ** 18n, "BossHP fixture supply must be 2,000 tokens");
   assert(initial.mockUSDDecimals === 6 && initial.royDecimals === 18 && initial.bossHPDecimals === 18, "token decimals changed");
   assert(initial.bossHPCustody === initial.bossHPTotalSupply, "BossHP supply must be in protocol or player custody");
-  assert(!initial.enrolledA && !initial.enrolledB, "both wallets must be fresh for this round");
+  assert(initial.nextCollectibleTokenId === 1n, "the fresh round must have no NFTs");
   assert(initial.stageCapacity[0] >= 300n * 10n ** 18n && initial.stageCapacity[0] <= 300n * 10n ** 18n + 1n, "stage 0 capacity changed");
   assert(initial.stageCapacity[1] >= 600n * 10n ** 18n && initial.stageCapacity[1] <= 600n * 10n ** 18n + 1n, "stage 1 capacity changed");
   assert(initial.stageCapacity[2] >= 900n * 10n ** 18n && initial.stageCapacity[2] <= 900n * 10n ** 18n + 1n, "stage 2 capacity changed");
@@ -343,53 +343,6 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
     requiredPerWallet: requiredWalletUSD.toString(),
   });
   await saveEvidence(evidencePath, state);
-
-  state.currentStep = "approve and enroll both wallets";
-  for (const player of players) {
-    await approveIfNeeded(runtime, state, evidencePath, player, addresses.mockUSD, mockUsdAbi, addresses.hook, 10n * 10n ** 6n, `approve Hook enrollment fee for player ${player.name}`);
-    const [usdBeforeEnroll, royBeforeEnroll] = await Promise.all([
-      client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [player.address] }),
-      client.readContract({ address: addresses.roy, abi: royTokenAbi, functionName: "balanceOf", args: [player.address] }),
-    ]);
-    await sendAndConfirm(
-      runtime,
-      state,
-      evidencePath,
-      player,
-      `enroll player ${player.name}`,
-      () => player.client.writeContract({
-        address: addresses.hook,
-        abi: bossPoolHookAbi,
-        functionName: "enroll",
-      }),
-    );
-    const enrolledEvent = eventArgs(lastReceipt(state), addresses.hook, bossPoolHookAbi, "Enrolled");
-    assert(sameAddress(asAddress(enrolledEvent.player), player.address), `player ${player.name} enrollment event mismatch`);
-    const entryFee = asBigInt(enrolledEvent.entryFee);
-    const starterRoy = asBigInt(enrolledEvent.starterRoy);
-    assert(entryFee === initial.enrollmentFee && starterRoy === 100n * 10n ** 18n, `player ${player.name} enrollment event amounts changed`);
-    const [usdAfterEnroll, royAfterEnroll] = await Promise.all([
-      client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [player.address] }),
-      client.readContract({ address: addresses.roy, abi: royTokenAbi, functionName: "balanceOf", args: [player.address] }),
-    ]);
-    assert(usdBeforeEnroll - usdAfterEnroll === entryFee, `player ${player.name} paid the wrong enrollment fee`);
-    assert(royAfterEnroll - royBeforeEnroll === starterRoy, `player ${player.name} received the wrong starter ROY amount`);
-    const entryTokenId = asBigInt(enrolledEvent.tokenId);
-    const entryOwner = await client.readContract({
-      address: addresses.collectibles,
-      abi: bossCollectiblesAbi,
-      functionName: "ownerOf",
-      args: [entryTokenId],
-    });
-    assert(sameAddress(entryOwner, player.address), `entry NFT for player ${player.name} was not minted`);
-    state.checkpoints.push({
-      name: `enrolled-${player.name}`,
-      entryTokenId: entryTokenId.toString(),
-      entryFee: entryFee.toString(),
-      starterRoy: starterRoy.toString(),
-    });
-    await saveEvidence(evidencePath, state);
-  }
 
   for (const player of players) {
     await approveIfNeeded(runtime, state, evidencePath, player, addresses.mockUSD, mockUsdAbi, addresses.router, maxUint256, `approve Router attack spend for player ${player.name}`);
@@ -545,13 +498,15 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
   assert(afterClaims.paidPrize <= afterClaims.originalPrize, "reward payouts exceeded the original prize");
   assert(afterClaims.originalPrize - afterClaims.paidPrize <= 1n, "two floor-rounded claims should leave at most one MockUSD base unit");
   assert(
-    afterClaims.mockUSDInHook === afterClaims.originalPrize + 2n * initial.enrollmentFee - afterClaims.paidPrize,
-    "Hook prize and enrollment-fee custody does not reconcile after claims",
+    afterClaims.mockUSDInHook === afterClaims.originalPrize - afterClaims.paidPrize,
+    "Hook prize custody does not reconcile after claims",
   );
   checkpoint(state, "claims-complete", afterClaims, { remainingHP: remainingHP.toString() });
   await saveEvidence(evidencePath, state);
 
-  state.currentStep = "claim both victory NFTs";
+  assert(afterClaims.nextCollectibleTokenId === 1n, "attacks and reward claims must not mint NFTs");
+
+  state.currentStep = "claim both optional victory NFTs";
   for (const player of players) {
     assert(await client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "hasAttacked", args: [player.address] }), `player ${player.name} has no attack record`);
     await sendAndConfirm(
@@ -799,7 +754,6 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     redeemedHP,
     paidPrize,
     originalPrize,
-    enrollmentFee,
     mockUSDInHook,
     mockUSDTotalSupply,
     royTotalSupply,
@@ -816,8 +770,7 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     bossHPInHook,
     bossHPInRouter,
     bossHPInPoolManager,
-    enrolledA,
-    enrolledB,
+    nextCollectibleTokenId,
     victoryClaimedA,
     victoryClaimedB,
   ] = await Promise.all([
@@ -836,7 +789,6 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "redeemedHP", ...read }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "paidPrize", ...read }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "originalPrize", ...read }),
-    client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "ENROLLMENT_FEE", ...read }),
     client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [addresses.hook], ...read }),
     client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "totalSupply", ...read }),
     client.readContract({ address: addresses.roy, abi: royTokenAbi, functionName: "totalSupply", ...read }),
@@ -853,8 +805,7 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     client.readContract({ address: addresses.bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [addresses.hook], ...read }),
     client.readContract({ address: addresses.bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [addresses.router], ...read }),
     client.readContract({ address: addresses.bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [addresses.poolManager], ...read }),
-    client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "enrolled", args: [wallets.A.address], ...read }),
-    client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "enrolled", args: [wallets.B.address], ...read }),
+    client.readContract({ address: addresses.collectibles, abi: bossCollectiblesAbi, functionName: "nextTokenId", ...read }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "victoryClaimed", args: [wallets.A.address], ...read }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "victoryClaimed", args: [wallets.B.address], ...read }),
   ]);
@@ -872,7 +823,6 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     redeemedHP,
     paidPrize,
     originalPrize,
-    enrollmentFee,
     mockUSDInHook,
     mockUSDTotalSupply,
     royTotalSupply,
@@ -890,8 +840,7 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     bossHPInRouter,
     bossHPInPoolManager,
     bossHPCustody: bossHPInHook + bossHPInRouter + bossHPInPoolManager + bossHPA + bossHPB,
-    enrolledA,
-    enrolledB,
+    nextCollectibleTokenId,
     victoryClaimedA,
     victoryClaimedB,
   };

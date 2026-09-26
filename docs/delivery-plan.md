@@ -4,7 +4,7 @@ Updated 26 September 2026. This is the implementation handoff for the current no
 
 ## Outcome and scope
 
-Two wallets enroll, use MockUSD to buy ROY and then BossHP, clear three boss stages, see two reserve-funded price resets, transfer eligible HP between wallets, and redeem HP for MockUSD. Historical participants can claim a separate victory NFT. The actual hook controls purchase counting and liquidity release.
+Two fresh wallets approve MockUSD when needed, buy ROY and BossHP in one Attack transaction, clear three boss stages, see two reserve-funded price resets, transfer eligible HP between wallets, and redeem HP for MockUSD. Historical participants can claim a separate victory NFT. The actual hook controls purchase counting and liquidity release.
 
 The [requirements](requirements.md) own gameplay, [technical specification](technical-spec.md) owns contracts/interfaces/custody, [HP lifecycle](hp-lifecycle.md) owns clearing details, and [refill/reward math](refill-math.md) owns calculations. [CONTEXT.md](../CONTEXT.md) is the glossary.
 
@@ -32,7 +32,7 @@ Implementation model routing remains exact: **gpt-6-sol high** for contracts, cu
 The [frontend architecture](technical-spec.md#frontend-architecture) owns the selected stack and client boundaries. Keep this work within the existing BP slices:
 
 1. **BP02/BP06 preparation:** migrate the read-only shell to Next.js App Router in `apps/web`, add Tailwind through PostCSS, and preserve deployment validation and real round reads. Replace Vite entry/configuration, scripts, and TypeScript setup. Keep the root Bun workspace commands usable. Check typecheck, production build, and the missing-deployment/live-local browser states.
-2. **BP03:** add the injected-wallet connection through viem, account/network handling, and enrollment approval/receipt flow. Start with prepared MetaMask test accounts for rehearsal.
+2. **BP03:** add the injected-wallet connection through viem, account/network handling, and MockUSD approval/receipt flow for direct attacks. Start with prepared MetaMask test accounts for rehearsal.
 3. **BP04:** agree the authenticated quote method in `packages/chain`, then implement input bounds, approval, simulation, attack, receipts, and stale-stage recovery.
 4. **BP05/BP06:** build the three boss forms and responsive Tailwind arena, with confirmed stage changes, keyboard support, reduced motion, and refresh recovery.
 5. **BP07/BP10/BP11:** add redemption, separate NFT claims, expiry, verified Base Sepolia configuration, and the existing two-wallet browser journey.
@@ -45,12 +45,12 @@ The stack decision does not mark the migration complete. Keep BP01's original Vi
 | --- | --- | --- |
 | Stage HP | 300 / 600 / 900 | Actual output and bounded dust in BP01 |
 | Prize | 1,000 MockUSD, 6 decimals | Separate fully funded prize ledger |
-| Entry | 10 MockUSD + 100 starter ROY, cap 100 | Starter funding and once-per-wallet enrollment |
+| Entry | Connect, approve MockUSD when needed, then Attack | No enrollment, entry NFT, entry fee, or starter grant |
 | BossHP supply | 2,000, 18 decimals | Prove integer reserve sufficiency for permitted attacks |
 | Battle fee | Fixed 0.30%, modeled protocol fee zero | Verify actual supported fees; reject unsupported configurations |
 | Battle price | 1 to about 1.211659 ROY/HP each stage | Same-range plan, correct currency ordering and reset limits |
 | Supply LP example | 50,000 ROY + 5,000 MockUSD | Full-range estimate must become actual v4 position amounts |
-| ROY supply candidate | 100,000 = 50,000 supply LP + 10,000 starter reserve + 40,000 locked treasury | Reconcile actual deployed allocation and rounding; no initial paired ROY assumed for the HP-side battle range |
+| ROY supply candidate | 100,000 = 50,000 supply LP + 50,000 locked treasury | Reconcile actual deployed allocation and rounding; no initial paired ROY assumed for the HP-side battle range |
 | Round deadline | Two hours after activation as a demo default | Fixed before activation; independent of event submission time |
 
 The calculated battle budget is about 1,987.318762 ROY and 1,802.708124 HP of total reserve spending. About 1,800 HP ends in player circulation and 2.708124 in LP fees. First refill restores 300 HP then adds 300; second restores 600 then adds 300. Final stage performs no reset.
@@ -65,7 +65,7 @@ Keep the existing epic and 14 child issue identifiers. Rewrite their scopes rath
 | --- | --- | --- | --- | --- | --- |
 | [BP01](https://github.com/0xroylee/eth-global-2026-tokyo/issues/2) | Prove the no-burn BossHP lifecycle and bootstrap the monorepo | P0 | None | A + B | 4–6 h |
 | [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3) | Fund and display a round with protected HP reserves and prize | P0 | [BP01](https://github.com/0xroylee/eth-global-2026-tokyo/issues/2) | A + B | 4–6 h |
-| [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | Enroll once and receive Little Roy NFT plus starter ROY | P0 | [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3) | A + B | 2–3 h |
+| [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | Connect and approve MockUSD for direct attacks; earlier enrollment scope is superseded | P0 | [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3) | A + B | 2–3 h |
 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | Attack through MockUSD to ROY to BossHP without burning | P0 | [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | A + B | 4–6 h |
 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | Clear stages and atomically refill the same BossHP pool | P0 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | A + B | 4–7 h |
 | [BP06](https://github.com/0xroylee/eth-global-2026-tokyo/issues/7) | Present three confirmed boss forms and recover arena state | P0 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | B + A | 3–5 h |
@@ -107,7 +107,7 @@ flowchart TD
 | Checkpoint | A: contracts and integration | B: UI and gaming | Evidence to proceed |
 | --- | --- | --- | --- |
 | Start immediately | BP01: reuse core fixture, pin dependencies, establish workspace and chain probe | BP06 preparation: original three forms, arena states, wallet shell; agree shared types | Reproducible local core trace and shared shape draft |
-| Fund and enter | BP02/BP03: custody, bounded setup, enrollment, generated ABI | Connect round/entry views, approval and receipt states | Both wallets enrolled against local contracts |
+| Fund and enter | BP02/BP03: custody, bounded setup, direct-attack approval, generated ABI | Connect round views, approval and receipt states | Both fresh wallets can attack local contracts |
 | First hit | BP04: real two-hop attack and ordinary HP delivery | Quote, signature, pending/failure/success feedback | Partial real attack, balances and stageSold agree |
 | Progression | BP05: same-pool refill, next LP, defeat, atomic failure | BP06: confirmed transitions, refresh and reduced motion | All three stages and two resets pass the shared scenario |
 | Rewards and terminal paths | BP07/BP10: transferable redemption, NFT, expiry, post-deadline custody | Claim approvals/results and expired/defeated screens | HP cannot be reused; prize and reserve balances reconcile |
@@ -122,8 +122,8 @@ BP01 drafts these shapes; the compiled ABI becomes authoritative when contracts 
 
 - Attack request: input cap, minimum ROY output, minimum HP output, expected stage and deadline. Player identity comes from the router caller.
 - Round view: status, current stage, nominal stage capacity, remaining sellable HP, stageSold values, prize, deadline and frozen eligible supply after victory.
-- Player view: enrollment, historical participation flag, token balances/allowances, victory-NFT claim flag and redeemable-HP reward preview.
-- Events: AttackApplied with both hop amounts; StageCleared; StageStarted after successful refill/LP addition; BossDefeated with finalEligibleHP; HP redemption; enrollment; expiry/refund.
+- Player view: historical participation flag, token balances/allowances, victory-NFT claim flag and redeemable-HP reward preview.
+- Events: AttackApplied with both hop amounts; StageCleared; StageStarted after successful refill/LP addition; BossDefeated with finalEligibleHP; HP redemption; expiry/refund.
 - Currency values: bigint in TypeScript and base units on-chain; decimal strings in serialized fixtures. Pool keys and addresses come only from verified manifests.
 - Transaction states: disconnected, wrong chain, approval needed, simulation failure, signature pending, submitted, confirmed, reverted, replaced, and stale-stage requote. The frontend's transition animation is not authoritative state.
 
@@ -133,7 +133,7 @@ The current hook permission set is beforeInitialize, beforeSwap, afterSwap, befo
 
 Use **one reusable two-wallet core/E2E scenario**, extended as issues land:
 
-1. Fund the prize, both pools and future reserves; enroll both wallets.
+1. Fund the prize, both pools and future reserves; use two fresh wallets with MockUSD and no entry NFTs.
 2. Perform a partial two-hop attack and verify delivered BossHP with unchanged total supply.
 3. Finish each stage with a bounded final hit, verify no next-stage spill, two price resets, LP increments and reserve/player separation.
 4. Freeze actual eligible HP at defeat. Transfer a portion from one wallet to the other, redeem eligible HP into permanent custody, and claim separate victory NFTs.
@@ -159,8 +159,8 @@ BP01 is the local feasibility gate. Chain readiness is reported there but remain
 
 ## Cut order and demo
 
-Cut held-ROY convenience, global activity, dynamic fees, World ID, emissions/vesting, elaborate sound and extra animation first. Keep no-burn HP delivery, protected reward rights, stage gates, two-hop execution, basic entry/NFT rewards, and honest target-chain evidence.
+Cut held-ROY convenience, global activity, dynamic fees, World ID, emissions/vesting, elaborate sound and extra animation first. Keep no-burn HP delivery, protected reward rights, stage gates, two-hop execution, direct attack entry and optional victory-NFT rewards, and honest target-chain evidence.
 
-Use prepared wallets and approvals. A 60–90 second demo can show entry, a partial attack, stage 1 → 2 → 3, defeat, current HP reward rights, redemption and the victory NFT. Accelerate presentation or use a disclosed prepared stage; do not fake contract effects or introduce an admin HP setter. Keep an uncut two-wallet recording as supporting evidence.
+Use prepared wallets and approvals. A 60–90 second demo can show connection, a partial attack, stage 1 → 2 → 3, defeat, current HP reward rights, redemption and the victory NFT. Accelerate presentation or use a disclosed prepared stage; do not fake contract effects or introduce an admin HP setter. Keep an uncut two-wallet recording as supporting evidence.
 
 The submission owner must verify the current sponsor page and complete both FEEDBACK.md and the required feedback form. The standard UF track totals $6,000; it is not a guaranteed award. Continuity eligibility is separate.

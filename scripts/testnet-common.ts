@@ -357,8 +357,7 @@ export async function verifyDeploymentOnChain(
     bossHPSupply !== 2_000n * 10n ** 18n ||
     hpInHook + hpInRouter + hpInManager !== bossHPSupply ||
     minimumBossHP > bossHPSupply || roySupply !== 100_000n * 10n ** 18n ||
-    royInHook + royInRouter + royInManager + royInDeployer !== roySupply ||
-    royInRouter < 10_000n * 10n ** 18n
+    royInHook + royInRouter + royInManager + royInDeployer !== roySupply
   ) {
     throw new Error("Live deployment state, contract identities, or locked-token custody failed verification.");
   }
