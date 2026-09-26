@@ -21,6 +21,14 @@ bun --env-file=.env.testnet.local run testnet:exercise
 
 The testnet exercise sends transactions from both test wallets. Fresh wallets attack across all three stages without enrollment or an entry NFT. The exercise verifies refills and settlement, transfers eligible BossHP, claims rewards, and claims victory NFTs. Run it only against the verified manifest and funded test-only wallets.
 
+If Forge completes a deployment but the endpoint has not exposed the final setup block yet, the deploy runner preserves a sanitized pending summary and receipt list under ignored `.scratch/`. Recover it with a read-only command; it verifies the existing receipts and pinned final setup block, then publishes the manifest without broadcasting again:
+
+```sh
+bun --env-file=.env.testnet.local scripts/testnet-deploy.ts --verify-pending
+```
+
+The normal deploy command refuses to broadcast while a pending summary exists.
+
 For local exercise evidence without replacing the checked-in local manifest, run a separate Anvil on port 8548, then use a scratch manifest path:
 
 ```sh

@@ -1,0 +1,739 @@
+{
+  "schemaVersion": 1,
+  "network": "testnet",
+  "chainId": 46630,
+  "deploymentTxHash": "0x9ca00e6932e57622e0da76d35eea6e6a424a49dc4d02bf7d9096776a5987b57e",
+  "deploymentBlock": "124450523",
+  "sourceCommit": "1802ffd6d8124e1eed722400fe20bb51f44caa9f",
+  "exerciseScriptSha256": "8871c3bf687f368bee956d8d127d130930a994244ae68e01ccc9d079a3aa820c",
+  "sourceDirty": false,
+  "addresses": {
+    "hook": "0xE2B98136353ce411EA9356F01Ac6AD12a597aAC0",
+    "router": "0x6f9161061097F088f8418Ec1B6213a49Db4BC76b",
+    "bossHP": "0xde375771d6fAF050D7964b232754Fe8Dd595f79b",
+    "roy": "0x44Abe271cF0695D08a459bdB70efbDF64DD92946",
+    "mockUSD": "0xa88f645FB3C57C2A104abc91fb8083705e98C655",
+    "collectibles": "0x7Be2E15A578a0B698Ad58500E7ba4969c8856d71",
+    "poolManager": "0xF831DFee52038A054d5ef2Fc05671C4E434b6A9E"
+  },
+  "players": {
+    "A": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+    "B": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9"
+  },
+  "startedAt": "2026-09-26T07:58:04.250Z",
+  "startBlock": "124484787",
+  "status": "failed",
+  "currentStep": "claim both victory NFTs",
+  "transactions": [
+    {
+      "step": "faucet MockUSD to player A",
+      "from": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+      "hash": "0xb191c2c14e9856c3d79f9467f5053738fb050797b7ce04004ad497effc9b7c6e",
+      "request": {
+        "hash": "0xb191c2c14e9856c3d79f9467f5053738fb050797b7ce04004ad497effc9b7c6e",
+        "kind": "faucetMockUSD",
+        "chainId": 46630,
+        "account": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+        "target": "0xa88f645FB3C57C2A104abc91fb8083705e98C655",
+        "calldata": "0x7b56c2b200000000000000000000000045d4e78c6ac2df422f02f3b9cf3a8271cd6c226200000000000000000000000000000000000000000000000000000000b2d05e00"
+      },
+      "status": "success",
+      "confirmedHash": "0xb191c2c14e9856c3d79f9467f5053738fb050797b7ce04004ad497effc9b7c6e",
+      "blockNumber": "124484822",
+      "gasUsed": "56277"
+    },
+    {
+      "step": "faucet MockUSD to player B",
+      "from": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+      "hash": "0x94b1d2b2bb82920616c89bfc6a1af69ae303fb76ef4bf4883205911a967da858",
+      "request": {
+        "hash": "0x94b1d2b2bb82920616c89bfc6a1af69ae303fb76ef4bf4883205911a967da858",
+        "kind": "faucetMockUSD",
+        "chainId": 46630,
+        "account": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+        "target": "0xa88f645FB3C57C2A104abc91fb8083705e98C655",
+        "calldata": "0x7b56c2b20000000000000000000000003d0a61bd3730524752330db5a815dd05a3d2ebe900000000000000000000000000000000000000000000000000000000b2d05e00"
+      },
+      "status": "success",
+      "confirmedHash": "0x94b1d2b2bb82920616c89bfc6a1af69ae303fb76ef4bf4883205911a967da858",
+      "blockNumber": "124484842",
+      "gasUsed": "56277"
+    },
+    {
+      "step": "approve Hook enrollment fee for player A",
+      "from": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+      "hash": "0x46473bc6ac743590722b6249871c35f622bdf95f9634efb63ad07f01481c827e",
+      "request": {
+        "hash": "0x46473bc6ac743590722b6249871c35f622bdf95f9634efb63ad07f01481c827e",
+        "kind": "approval",
+        "chainId": 46630,
+        "account": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+        "target": "0xa88f645FB3C57C2A104abc91fb8083705e98C655",
+        "calldata": "0x095ea7b3000000000000000000000000e2b98136353ce411ea9356f01ac6ad12a597aac0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "status": "success",
+      "confirmedHash": "0x46473bc6ac743590722b6249871c35f622bdf95f9634efb63ad07f01481c827e",
+      "blockNumber": "124484859",
+      "gasUsed": "51619"
+    },
+    {
+      "step": "enroll player A",
+      "from": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+      "hash": "0x3b86ada5fa142ac9d12ba97e2a452cb46f243194b564a4319aafc7d3ad080840",
+      "request": {
+        "hash": "0x3b86ada5fa142ac9d12ba97e2a452cb46f243194b564a4319aafc7d3ad080840",
+        "kind": "enroll",
+        "chainId": 46630,
+        "account": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+        "target": "0xE2B98136353ce411EA9356F01Ac6AD12a597aAC0",
+        "calldata": "0xe65f2a7e"
+      },
+      "status": "success",
+      "confirmedHash": "0x3b86ada5fa142ac9d12ba97e2a452cb46f243194b564a4319aafc7d3ad080840",
+      "blockNumber": "124484876",
+      "gasUsed": "219210"
+    },
+    {
+      "step": "approve Hook enrollment fee for player B",
+      "from": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+      "hash": "0x770103a328fb4d9faf3913811b10974b80e784d73f0c246b6ce4cff25360d501",
+      "request": {
+        "hash": "0x770103a328fb4d9faf3913811b10974b80e784d73f0c246b6ce4cff25360d501",
+        "kind": "approval",
+        "chainId": 46630,
+        "account": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+        "target": "0xa88f645FB3C57C2A104abc91fb8083705e98C655",
+        "calldata": "0x095ea7b3000000000000000000000000e2b98136353ce411ea9356f01ac6ad12a597aac0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "status": "success",
+      "confirmedHash": "0x770103a328fb4d9faf3913811b10974b80e784d73f0c246b6ce4cff25360d501",
+      "blockNumber": "124484889",
+      "gasUsed": "51619"
+    },
+    {
+      "step": "enroll player B",
+      "from": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+      "hash": "0x4fe52134428ab037bfd6635cafc80cd64f5c97ced8f728ce4e2e45f13ff06a3a",
+      "request": {
+        "hash": "0x4fe52134428ab037bfd6635cafc80cd64f5c97ced8f728ce4e2e45f13ff06a3a",
+        "kind": "enroll",
+        "chainId": 46630,
+        "account": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+        "target": "0xE2B98136353ce411EA9356F01Ac6AD12a597aAC0",
+        "calldata": "0xe65f2a7e"
+      },
+      "status": "success",
+      "confirmedHash": "0x4fe52134428ab037bfd6635cafc80cd64f5c97ced8f728ce4e2e45f13ff06a3a",
+      "blockNumber": "124484908",
+      "gasUsed": "185010"
+    },
+    {
+      "step": "approve Router attack spend for player A",
+      "from": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+      "hash": "0xc3b77ba3cb35b960b879254f82ea2da68f89b0fe477c5c7296c2b0390f78dc67",
+      "request": {
+        "hash": "0xc3b77ba3cb35b960b879254f82ea2da68f89b0fe477c5c7296c2b0390f78dc67",
+        "kind": "approval",
+        "chainId": 46630,
+        "account": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+        "target": "0xa88f645FB3C57C2A104abc91fb8083705e98C655",
+        "calldata": "0x095ea7b30000000000000000000000006f9161061097f088f8418ec1b6213a49db4bc76bffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "status": "success",
+      "confirmedHash": "0xc3b77ba3cb35b960b879254f82ea2da68f89b0fe477c5c7296c2b0390f78dc67",
+      "blockNumber": "124484934",
+      "gasUsed": "51619"
+    },
+    {
+      "step": "approve Router attack spend for player B",
+      "from": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+      "hash": "0xd431de7b1304147fcf26ff2ea8bb97d36b401ef1ee9e668f1021d019c1cb3fd2",
+      "request": {
+        "hash": "0xd431de7b1304147fcf26ff2ea8bb97d36b401ef1ee9e668f1021d019c1cb3fd2",
+        "kind": "approval",
+        "chainId": 46630,
+        "account": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+        "target": "0xa88f645FB3C57C2A104abc91fb8083705e98C655",
+        "calldata": "0x095ea7b30000000000000000000000006f9161061097f088f8418ec1b6213a49db4bc76bffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "status": "success",
+      "confirmedHash": "0xd431de7b1304147fcf26ff2ea8bb97d36b401ef1ee9e668f1021d019c1cb3fd2",
+      "blockNumber": "124484950",
+      "gasUsed": "51619"
+    },
+    {
+      "step": "partial stage 0 attack",
+      "from": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+      "hash": "0x4e8f0c8ab90c085ec4318c1407c2010780078dd63b5d01364e2088bd166139b6",
+      "request": {
+        "hash": "0x4e8f0c8ab90c085ec4318c1407c2010780078dd63b5d01364e2088bd166139b6",
+        "kind": "attack",
+        "chainId": 46630,
+        "account": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+        "target": "0x6f9161061097F088f8418Ec1B6213a49Db4BC76b",
+        "calldata": "0x2a1d4c8900000000000000000000000000000000000000000000000000000000000f42400000000000000000000000000000000000000000000000008b4e001ea1752fa80000000000000000000000000000000000000000000000008a75b08c2eb6f7450000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006ab77e90"
+      },
+      "status": "success",
+      "confirmedHash": "0x4e8f0c8ab90c085ec4318c1407c2010780078dd63b5d01364e2088bd166139b6",
+      "blockNumber": "124484971",
+      "gasUsed": "399437"
+    },
+    {
+      "step": "clear stage 0",
+      "from": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+      "hash": "0x1f560d0fd6994ef50000bd2a180a66eb24213ac076062b6d7d639169c01f7f78",
+      "request": {
+        "hash": "0x1f560d0fd6994ef50000bd2a180a66eb24213ac076062b6d7d639169c01f7f78",
+        "kind": "attack",
+        "chainId": 46630,
+        "account": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+        "target": "0x6f9161061097F088f8418Ec1B6213a49Db4BC76b",
+        "calldata": "0x2a1d4c89000000000000000000000000000000000000000000000000000000003b9aca00000000000000000000000000000000000000000000000204f5f17db4e1a45b0000000000000000000000000000000000000000000000000f8f3e45e1044d08b90000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006ab77eb4"
+      },
+      "status": "success",
+      "confirmedHash": "0x1f560d0fd6994ef50000bd2a180a66eb24213ac076062b6d7d639169c01f7f78",
+      "blockNumber": "124484989",
+      "gasUsed": "666588"
+    },
+    {
+      "step": "clear stage 1",
+      "from": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+      "hash": "0x546a5506162cdc0824681e734d42ecc395f2d1eab25994ea702d28baccffb740",
+      "request": {
+        "hash": "0x546a5506162cdc0824681e734d42ecc395f2d1eab25994ea702d28baccffb740",
+        "kind": "attack",
+        "chainId": 46630,
+        "account": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+        "target": "0x6f9161061097F088f8418Ec1B6213a49Db4BC76b",
+        "calldata": "0x2a1d4c89000000000000000000000000000000000000000000000000000000003b9aca000000000000000000000000000000000000000000000001d3ca39d41e880cebe00000000000000000000000000000000000000000000000203367ecda6607ffff0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000006ab77eba"
+      },
+      "status": "success",
+      "confirmedHash": "0x546a5506162cdc0824681e734d42ecc395f2d1eab25994ea702d28baccffb740",
+      "blockNumber": "124485017",
+      "gasUsed": "640678"
+    },
+    {
+      "step": "clear stage 2",
+      "from": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+      "hash": "0x5f2ac73fd85a844cd0efb0c7d13e4b6728a7f59667c80a067e57609685b9badb",
+      "request": {
+        "hash": "0x5f2ac73fd85a844cd0efb0c7d13e4b6728a7f59667c80a067e57609685b9badb",
+        "kind": "attack",
+        "chainId": 46630,
+        "account": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+        "target": "0x6f9161061097F088f8418Ec1B6213a49Db4BC76b",
+        "calldata": "0x2a1d4c89000000000000000000000000000000000000000000000000000000003b9aca000000000000000000000000000000000000000000000001a950e636c5c8ce94810000000000000000000000000000000000000000000000304d1be347990bffff0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000006ab77ec0"
+      },
+      "status": "success",
+      "confirmedHash": "0x5f2ac73fd85a844cd0efb0c7d13e4b6728a7f59667c80a067e57609685b9badb",
+      "blockNumber": "124485050",
+      "gasUsed": "480667"
+    },
+    {
+      "step": "transfer all player B BossHP to player A",
+      "from": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+      "hash": "0x5c2b9b744af7df3a0da46392f09c7de861c2719d28f8f59b5b4db9104e6c6fb3",
+      "request": {
+        "hash": "0x5c2b9b744af7df3a0da46392f09c7de861c2719d28f8f59b5b4db9104e6c6fb3",
+        "kind": "transferBossHP",
+        "chainId": 46630,
+        "account": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+        "target": "0xde375771d6fAF050D7964b232754Fe8Dd595f79b",
+        "calldata": "0xa9059cbb00000000000000000000000045d4e78c6ac2df422f02f3b9cf3a8271cd6c2262000000000000000000000000000000000000000000000040817cb009fe9d2a6d"
+      },
+      "status": "success",
+      "confirmedHash": "0x5c2b9b744af7df3a0da46392f09c7de861c2719d28f8f59b5b4db9104e6c6fb3",
+      "blockNumber": "124485075",
+      "gasUsed": "34690"
+    },
+    {
+      "step": "approve Hook for partial reward claim",
+      "from": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+      "hash": "0xb9c6b67dc5a8e8cb38b93ce848339aa7b03957c244d4f93cc062997ca798fc2b",
+      "request": {
+        "hash": "0xb9c6b67dc5a8e8cb38b93ce848339aa7b03957c244d4f93cc062997ca798fc2b",
+        "kind": "approval",
+        "chainId": 46630,
+        "account": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+        "target": "0xde375771d6fAF050D7964b232754Fe8Dd595f79b",
+        "calldata": "0x095ea7b3000000000000000000000000e2b98136353ce411ea9356f01ac6ad12a597aac0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "status": "success",
+      "confirmedHash": "0xb9c6b67dc5a8e8cb38b93ce848339aa7b03957c244d4f93cc062997ca798fc2b",
+      "blockNumber": "124485102",
+      "gasUsed": "51619"
+    },
+    {
+      "step": "partial reward claim",
+      "from": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+      "hash": "0x760addaa07c0a4049756fd69123b2cb1836a4133cbecbfe9519a83a52d43f472",
+      "request": {
+        "hash": "0x760addaa07c0a4049756fd69123b2cb1836a4133cbecbfe9519a83a52d43f472",
+        "kind": "claimReward",
+        "chainId": 46630,
+        "account": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+        "target": "0xE2B98136353ce411EA9356F01Ac6AD12a597aAC0",
+        "calldata": "0xae169a500000000000000000000000000000000000000000000000000de0b6b3a7640000"
+      },
+      "status": "success",
+      "confirmedHash": "0x760addaa07c0a4049756fd69123b2cb1836a4133cbecbfe9519a83a52d43f472",
+      "blockNumber": "124485113",
+      "gasUsed": "133759"
+    },
+    {
+      "step": "remaining reward claim",
+      "from": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+      "hash": "0x0ce56ac09db315e0c91ca7f7fda77ca006a8c2e71495b809152224af9ea1980e",
+      "request": {
+        "hash": "0x0ce56ac09db315e0c91ca7f7fda77ca006a8c2e71495b809152224af9ea1980e",
+        "kind": "claimReward",
+        "chainId": 46630,
+        "account": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+        "target": "0xE2B98136353ce411EA9356F01Ac6AD12a597aAC0",
+        "calldata": "0xae169a500000000000000000000000000000000000000000000000618623e87d4fbbfffd"
+      },
+      "status": "success",
+      "confirmedHash": "0x0ce56ac09db315e0c91ca7f7fda77ca006a8c2e71495b809152224af9ea1980e",
+      "blockNumber": "124485137",
+      "gasUsed": "77695"
+    }
+  ],
+  "checkpoints": [
+    {
+      "name": "active-round",
+      "blockNumber": "124484789",
+      "status": 1,
+      "currentStage": 0,
+      "stageSold": [
+        "0",
+        "0",
+        "0"
+      ],
+      "stageCapacity": [
+        "300000000000000000000",
+        "600000000000000000000",
+        "900000000000000000000"
+      ],
+      "roundingDust": [
+        "0",
+        "0",
+        "0"
+      ],
+      "finalEligibleHP": "0",
+      "redeemedHP": "0",
+      "paidPrize": "0",
+      "originalPrize": "1000000000",
+      "mockUSDInHook": "1000000000",
+      "mockUSDTotalSupply": "6001000000",
+      "royTotalSupply": "100000000000000000000000",
+      "bossHPTotalSupply": "2000000000000000000000",
+      "mockUSDA": "0",
+      "mockUSDB": "0",
+      "royA": "0",
+      "royB": "0",
+      "bossHPA": "0",
+      "bossHPB": "0",
+      "bossHPInHook": "0",
+      "bossHPInRouter": "1700000000000000000000",
+      "bossHPInPoolManager": "300000000000000000000",
+      "bossHPCustody": "2000000000000000000000"
+    },
+    {
+      "name": "public-preapproval-quotes",
+      "blockNumber": "124484789",
+      "status": 1,
+      "currentStage": 0,
+      "stageSold": [
+        "0",
+        "0",
+        "0"
+      ],
+      "stageCapacity": [
+        "300000000000000000000",
+        "600000000000000000000",
+        "900000000000000000000"
+      ],
+      "roundingDust": [
+        "0",
+        "0",
+        "0"
+      ],
+      "finalEligibleHP": "0",
+      "redeemedHP": "0",
+      "paidPrize": "0",
+      "originalPrize": "1000000000",
+      "mockUSDInHook": "1000000000",
+      "mockUSDTotalSupply": "6001000000",
+      "royTotalSupply": "100000000000000000000000",
+      "bossHPTotalSupply": "2000000000000000000000",
+      "mockUSDA": "0",
+      "mockUSDB": "0",
+      "royA": "0",
+      "royB": "0",
+      "bossHPA": "0",
+      "bossHPB": "0",
+      "bossHPInHook": "0",
+      "bossHPInRouter": "1700000000000000000000",
+      "bossHPInPoolManager": "300000000000000000000",
+      "bossHPCustody": "2000000000000000000000",
+      "quoteAStage": 0,
+      "quoteAOutput": "10077853197610964369",
+      "quoteBStage": 0,
+      "quoteBOutput": "299999999999999999999"
+    },
+    {
+      "name": "mockusd-funded",
+      "mockUSDTotalSupplyBeforeFaucet": "6001000000",
+      "mockUSDTotalSupplyAfterFaucet": "12001000000",
+      "requiredPerWallet": "3000000000"
+    },
+    {
+      "name": "enrolled-A",
+      "entryTokenId": "1",
+      "entryFee": "10000000",
+      "starterRoy": "100000000000000000000"
+    },
+    {
+      "name": "enrolled-B",
+      "entryTokenId": "2",
+      "entryFee": "10000000",
+      "starterRoy": "100000000000000000000"
+    },
+    {
+      "name": "attack-0-A",
+      "blockNumber": "124484972",
+      "status": 1,
+      "currentStage": 0,
+      "stageSold": [
+        "10077853197610964369",
+        "0",
+        "0"
+      ],
+      "stageCapacity": [
+        "300000000000000000000",
+        "600000000000000000000",
+        "900000000000000000000"
+      ],
+      "roundingDust": [
+        "0",
+        "0",
+        "0"
+      ],
+      "finalEligibleHP": "0",
+      "redeemedHP": "0",
+      "paidPrize": "0",
+      "originalPrize": "1000000000",
+      "mockUSDInHook": "1020000000",
+      "mockUSDTotalSupply": "12001000000",
+      "royTotalSupply": "100000000000000000000000",
+      "bossHPTotalSupply": "2000000000000000000000",
+      "mockUSDA": "2989000000",
+      "mockUSDB": "2990000000",
+      "royA": "100000000000000000000",
+      "royB": "100000000000000000000",
+      "bossHPA": "10077853197610964369",
+      "bossHPB": "0",
+      "bossHPInHook": "0",
+      "bossHPInRouter": "1700000000000000000000",
+      "bossHPInPoolManager": "289922146802389035631",
+      "bossHPCustody": "2000000000000000000000",
+      "quoteBlock": "124484795",
+      "maxMockUSD": "1000000",
+      "minRoyOut": "10037960751013244840",
+      "minBossHPOut": "9977074665634854725",
+      "quotedMockUSDSpent": "1000000",
+      "quotedRoyBought": "10139354293952772566",
+      "quotedRoySpent": "10139354293952772566",
+      "quotedBossHPOut": "10077853197610964369",
+      "quoteStageCleared": false,
+      "quoteBossDefeated": false,
+      "actualMockUSDSpent": "1000000",
+      "actualRoyBought": "10139354293952772566",
+      "actualRoySpent": "10139354293952772566",
+      "actualMockUSDRefunded": "0",
+      "actualRoyRefunded": "0",
+      "actualBossHPOut": "10077853197610964369",
+      "attackEventId": "0x4e8f0c8ab90c085ec4318c1407c2010780078dd63b5d01364e2088bd166139b6:8",
+      "transitionEventIds": []
+    },
+    {
+      "name": "stale-same-stage-quote-rejected",
+      "reason": "slippage",
+      "quotedBlock": "124484799",
+      "actualStage": 0,
+      "transactionsBefore": 9,
+      "transactionsAfter": 9
+    },
+    {
+      "name": "attack-0-B",
+      "blockNumber": "124484990",
+      "status": 1,
+      "currentStage": 1,
+      "stageSold": [
+        "299999999999999999999",
+        "0",
+        "0"
+      ],
+      "stageCapacity": [
+        "300000000000000000000",
+        "600000000000000000000",
+        "900000000000000000000"
+      ],
+      "roundingDust": [
+        "1",
+        "0",
+        "0"
+      ],
+      "finalEligibleHP": "0",
+      "redeemedHP": "0",
+      "paidPrize": "0",
+      "originalPrize": "1000000000",
+      "mockUSDInHook": "1020000000",
+      "mockUSDTotalSupply": "12001000000",
+      "royTotalSupply": "100000000000000000000000",
+      "bossHPTotalSupply": "2000000000000000000000",
+      "mockUSDA": "2989000000",
+      "mockUSDB": "1990000000",
+      "royA": "100000000000000000000",
+      "royB": "9411487263990113452647",
+      "bossHPA": "10077853197610964369",
+      "bossHPB": "289922146802389035630",
+      "bossHPInHook": "0",
+      "bossHPInRouter": "1099097291875626880639",
+      "bossHPInPoolManager": "600902708124373119362",
+      "bossHPCustody": "2000000000000000000000",
+      "quoteBlock": "124484977",
+      "maxMockUSD": "1000000000",
+      "minRoyOut": "9536242026258641476352",
+      "minBossHPOut": "287022925334365145273",
+      "quotedMockUSDSpent": "1000000000",
+      "quotedRoyBought": "9632567703291557046821",
+      "quotedRoySpent": "321080439301443594174",
+      "quotedBossHPOut": "289922146802389035630",
+      "quoteStageCleared": true,
+      "quoteBossDefeated": false,
+      "actualMockUSDSpent": "1000000000",
+      "actualRoyBought": "9632567703291557046821",
+      "actualRoySpent": "321080439301443594174",
+      "actualMockUSDRefunded": "0",
+      "actualRoyRefunded": "9311487263990113452647",
+      "actualBossHPOut": "289922146802389035630",
+      "attackEventId": "0x1f560d0fd6994ef50000bd2a180a66eb24213ac076062b6d7d639169c01f7f78:15",
+      "transitionEventIds": [
+        "0x1f560d0fd6994ef50000bd2a180a66eb24213ac076062b6d7d639169c01f7f78:5",
+        "0x1f560d0fd6994ef50000bd2a180a66eb24213ac076062b6d7d639169c01f7f78:14",
+        "0x1f560d0fd6994ef50000bd2a180a66eb24213ac076062b6d7d639169c01f7f78:13"
+      ]
+    },
+    {
+      "name": "stale-stage-quote-rejected",
+      "reason": "stage-changed",
+      "quotedStage": 0,
+      "actualStage": 1,
+      "transactionsBefore": 10,
+      "transactionsAfter": 10
+    },
+    {
+      "name": "attack-1-A",
+      "blockNumber": "124485021",
+      "status": 1,
+      "currentStage": 2,
+      "stageSold": [
+        "299999999999999999999",
+        "599999999999999999999",
+        "0"
+      ],
+      "stageCapacity": [
+        "300000000000000000000",
+        "600000000000000000000",
+        "900000000000000000000"
+      ],
+      "roundingDust": [
+        "1",
+        "1",
+        "0"
+      ],
+      "finalEligibleHP": "0",
+      "redeemedHP": "0",
+      "paidPrize": "0",
+      "originalPrize": "1000000000",
+      "mockUSDInHook": "1020000000",
+      "mockUSDTotalSupply": "12001000000",
+      "royTotalSupply": "100000000000000000000000",
+      "bossHPTotalSupply": "2000000000000000000000",
+      "mockUSDA": "1989000000",
+      "mockUSDB": "1990000000",
+      "royA": "8153925456970107479370",
+      "royB": "9411487263990113452647",
+      "bossHPA": "610077853197610964368",
+      "bossHPB": "289922146802389035630",
+      "bossHPInHook": "0",
+      "bossHPInRouter": "197291875626880641920",
+      "bossHPInPoolManager": "902708124373119358082",
+      "bossHPCustody": "2000000000000000000000",
+      "quoteBlock": "124485002",
+      "maxMockUSD": "1000000000",
+      "minRoyOut": "8629201393719291210720",
+      "minBossHPOut": "593999999999999999999",
+      "quotedMockUSDSpent": "1000000000",
+      "quotedRoyBought": "8716365044160900212849",
+      "quotedRoySpent": "662439587190792733479",
+      "quotedBossHPOut": "599999999999999999999",
+      "quoteStageCleared": true,
+      "quoteBossDefeated": false,
+      "actualMockUSDSpent": "1000000000",
+      "actualRoyBought": "8716365044160900212849",
+      "actualRoySpent": "662439587190792733479",
+      "actualMockUSDRefunded": "0",
+      "actualRoyRefunded": "8053925456970107479370",
+      "actualBossHPOut": "599999999999999999999",
+      "attackEventId": "0x546a5506162cdc0824681e734d42ecc395f2d1eab25994ea702d28baccffb740:15",
+      "transitionEventIds": [
+        "0x546a5506162cdc0824681e734d42ecc395f2d1eab25994ea702d28baccffb740:5",
+        "0x546a5506162cdc0824681e734d42ecc395f2d1eab25994ea702d28baccffb740:14",
+        "0x546a5506162cdc0824681e734d42ecc395f2d1eab25994ea702d28baccffb740:13"
+      ]
+    },
+    {
+      "name": "attack-2-B",
+      "blockNumber": "124485056",
+      "status": 3,
+      "currentStage": 2,
+      "stageSold": [
+        "299999999999999999999",
+        "599999999999999999999",
+        "899999999999999999999"
+      ],
+      "stageCapacity": [
+        "300000000000000000000",
+        "600000000000000000000",
+        "900000000000000000000"
+      ],
+      "roundingDust": [
+        "1",
+        "1",
+        "1"
+      ],
+      "finalEligibleHP": "1799999999999999999997",
+      "redeemedHP": "0",
+      "paidPrize": "0",
+      "originalPrize": "1000000000",
+      "mockUSDInHook": "1020000000",
+      "mockUSDTotalSupply": "12001000000",
+      "royTotalSupply": "100000000000000000000000",
+      "bossHPTotalSupply": "2000000000000000000000",
+      "mockUSDA": "1989000000",
+      "mockUSDB": "990000000",
+      "royA": "8153925456970107479370",
+      "royB": "16342772972413361283147",
+      "bossHPA": "610077853197610964368",
+      "bossHPB": "1189922146802389035629",
+      "bossHPInHook": "0",
+      "bossHPInRouter": "197291875626880641920",
+      "bossHPInPoolManager": "2708124373119358083",
+      "bossHPCustody": "2000000000000000000000",
+      "quoteBlock": "124485028",
+      "maxMockUSD": "1000000000",
+      "minRoyOut": "7845695638317342561409",
+      "minBossHPOut": "890999999999999999999",
+      "quotedMockUSDSpent": "1000000000",
+      "quotedRoyBought": "7924945089209436930717",
+      "quotedRoySpent": "993659380786189100217",
+      "quotedBossHPOut": "899999999999999999999",
+      "quoteStageCleared": true,
+      "quoteBossDefeated": true,
+      "actualMockUSDSpent": "1000000000",
+      "actualRoyBought": "7924945089209436930717",
+      "actualRoySpent": "993659380786189100217",
+      "actualMockUSDRefunded": "0",
+      "actualRoyRefunded": "6931285708423247830500",
+      "actualBossHPOut": "899999999999999999999",
+      "attackEventId": "0x5f2ac73fd85a844cd0efb0c7d13e4b6728a7f59667c80a067e57609685b9badb:9",
+      "transitionEventIds": [
+        "0x5f2ac73fd85a844cd0efb0c7d13e4b6728a7f59667c80a067e57609685b9badb:5",
+        "0x5f2ac73fd85a844cd0efb0c7d13e4b6728a7f59667c80a067e57609685b9badb:6"
+      ]
+    },
+    {
+      "name": "eligible-hp-transferred",
+      "blockNumber": "124485079",
+      "status": 3,
+      "currentStage": 2,
+      "stageSold": [
+        "299999999999999999999",
+        "599999999999999999999",
+        "899999999999999999999"
+      ],
+      "stageCapacity": [
+        "300000000000000000000",
+        "600000000000000000000",
+        "900000000000000000000"
+      ],
+      "roundingDust": [
+        "1",
+        "1",
+        "1"
+      ],
+      "finalEligibleHP": "1799999999999999999997",
+      "redeemedHP": "0",
+      "paidPrize": "0",
+      "originalPrize": "1000000000",
+      "mockUSDInHook": "1020000000",
+      "mockUSDTotalSupply": "12001000000",
+      "royTotalSupply": "100000000000000000000000",
+      "bossHPTotalSupply": "2000000000000000000000",
+      "mockUSDA": "1989000000",
+      "mockUSDB": "990000000",
+      "royA": "8153925456970107479370",
+      "royB": "16342772972413361283147",
+      "bossHPA": "1799999999999999999997",
+      "bossHPB": "0",
+      "bossHPInHook": "0",
+      "bossHPInRouter": "197291875626880641920",
+      "bossHPInPoolManager": "2708124373119358083",
+      "bossHPCustody": "2000000000000000000000",
+      "transferredHP": "1189922146802389035629"
+    },
+    {
+      "name": "claims-complete",
+      "blockNumber": "124485145",
+      "status": 3,
+      "currentStage": 2,
+      "stageSold": [
+        "299999999999999999999",
+        "599999999999999999999",
+        "899999999999999999999"
+      ],
+      "stageCapacity": [
+        "300000000000000000000",
+        "600000000000000000000",
+        "900000000000000000000"
+      ],
+      "roundingDust": [
+        "1",
+        "1",
+        "1"
+      ],
+      "finalEligibleHP": "1799999999999999999997",
+      "redeemedHP": "1799999999999999999997",
+      "paidPrize": "999999999",
+      "originalPrize": "1000000000",
+      "mockUSDInHook": "20000001",
+      "mockUSDTotalSupply": "12001000000",
+      "royTotalSupply": "100000000000000000000000",
+      "bossHPTotalSupply": "2000000000000000000000",
+      "mockUSDA": "2988999999",
+      "mockUSDB": "990000000",
+      "royA": "8153925456970107479370",
+      "royB": "16342772972413361283147",
+      "bossHPA": "0",
+      "bossHPB": "0",
+      "bossHPInHook": "1799999999999999999997",
+      "bossHPInRouter": "197291875626880641920",
+      "bossHPInPoolManager": "2708124373119358083",
+      "bossHPCustody": "2000000000000000000000",
+      "remainingHP": "1798999999999999999997"
+    }
+  ],
+  "failure": "Block at number \"124485152\" could not be found.\n\nVersion: viem@2.56.9"
+}

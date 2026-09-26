@@ -51,7 +51,8 @@ contract BossHook is ReentrancyGuard {
     uint8 private constant MODE_SETUP = 2;
     uint8 private constant MODE_ATTACK = 3;
     uint8 private constant MODE_TRANSITION = 4;
-    uint8 private constant MODE_RECOVER = 5;
+    uint8 private constant MODE_QUOTE = 5;
+    uint8 private constant MODE_RECOVER = 6;
     uint24 public constant SWAP_FEE = 3_000;
     int24 public constant TICK_SPACING = 60;
     int24 public immutable LOWER_TICK;
@@ -367,7 +368,8 @@ contract BossHook is ReentrancyGuard {
         if (price < sqrtLowerX96 || price > sqrtUpperX96) revert InvalidPool();
         if (protocolFee != 0 || lpFee != SWAP_FEE) revert InvalidPool();
 
-        if (router.mode() == MODE_ATTACK) {
+        uint8 operation = router.mode();
+        if (operation == MODE_ATTACK || operation == MODE_QUOTE) {
             if (
                 status != RoundStatus.Active || block.timestamp >= deadline || router.activePlayer() == address(0)
                     || router.expectedStage() != currentStage || params.zeroForOne == bossIsCurrency0
@@ -410,8 +412,10 @@ contract BossHook is ReentrancyGuard {
             return (IHooks.afterSwap.selector, 0);
         }
 
+        uint8 operation = router.mode();
         if (
-            router.mode() != MODE_ATTACK || status != RoundStatus.Active || params.zeroForOne == bossIsCurrency0
+            (operation != MODE_ATTACK && operation != MODE_QUOTE) || status != RoundStatus.Active
+                || params.zeroForOne == bossIsCurrency0
                 || router.expectedStage() != currentStage
         ) revert InvalidHookContext();
         if (bossIsCurrency0 ? price < lastSqrtPriceX96 : price > lastSqrtPriceX96) revert InvalidPool();

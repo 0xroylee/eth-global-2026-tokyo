@@ -88,9 +88,9 @@ Contracts, the factory deployment script, and generated client ABIs are in place
 
 ## Local verification
 
-Verified on 26 September 2026 against the uncommitted working tree based on `e89093fcc836cb1665523c2dbac6558a7b25e5d0`. The latest measured runtime sizes are:
+Verified on 26 September 2026 against the merge-updated working tree for PR #38. The latest measured runtime sizes are:
 
-- `cd contracts && forge build --sizes` passes runtime and initcode limits. Factory 17,965 bytes, hook 21,414 bytes, and router 22,015 bytes. All meet EIP-170 and initcode limits.
-- `cd contracts && forge test --match-contract BossPoolCoreTest -vv` passes all eight shared scenarios. Coverage includes the standalone round, factory rounds with either token ordering, three volume-gated stages, MEME prizes, creators reusing a token and launch salt, six-decimal MEME, failed-transition rollback, funding errors, expiry, and LP recovery with outstanding claims.
+- `cd contracts && forge build --sizes` passes runtime and initcode limits. Factory 17,965 bytes, hook 21,453 bytes, and router 24,534 bytes. The router is 42 bytes under EIP-170.
+- `cd contracts && forge test --match-contract BossPoolCoreTest -vv` passes all nine shared scenarios. Coverage includes the standalone round, factory rounds with either token ordering, three volume-gated stages, public quote simulation, MEME prizes, creators reusing a token and launch salt, six-decimal MEME, failed-transition rollback, funding errors, expiry, and LP recovery with outstanding claims.
 
 These runs use the real pinned v4 PoolManager. Network deployment remains unverified.

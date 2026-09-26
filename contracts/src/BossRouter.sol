@@ -33,6 +33,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         Setup,
         Attack,
         Transition,
+        Quote,
         Recover
     }
 
@@ -52,6 +53,18 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         uint256 roySpent;
         uint256 bossHPOut;
     }
+
+    struct QuoteResult {
+        uint256 mockUSDSpent;
+        uint256 royBought;
+        uint256 roySpent;
+        uint256 bossHPOut;
+        bool stageCleared;
+        bool bossDefeated;
+        uint8 nextStage;
+    }
+
+    address private constant QUOTE_SINK = address(0x000000000000000000000000000000000000dEaD);
 
     uint24 public constant SWAP_FEE = 3_000;
     int24 public constant TICK_SPACING = 60;
@@ -79,6 +92,16 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
     error InsufficientReserve();
     error UnsettledDelta();
     error SlippageExceeded();
+    error QuoteSimulation(
+        uint256 mockUSDSpent,
+        uint256 royBought,
+        uint256 roySpent,
+        uint256 bossHPOut,
+        bool stageCleared,
+        bool bossDefeated,
+        uint8 nextStage
+    );
+    error UnexpectedQuoteSuccess();
 
     event SupplyPoolSeeded(bytes32 indexed poolId, uint160 sqrtPriceX96, int24 tickLower, int24 tickUpper, uint128 liquidity);
     event RoundActivated(bytes32 indexed bossPoolId, uint160 sqrtPriceX96, uint128 initialLiquidity);
@@ -93,7 +116,6 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         uint256 royRefunded
     );
     event StageRefilled(uint8 indexed clearedStage, uint256 bossHPIn, uint256 royRecovered, uint8 nextStage);
-    event ReservesRecovered(address indexed maker);
 
     constructor(IPoolManager manager_, IERC20 mockUSD_, IERC20 roy_, IERC20 bossHP_, address initialOwner)
         Ownable(initialOwner)
@@ -281,7 +303,66 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         bossHP.safeTransfer(owner(), bossHP.balanceOf(address(this)));
         roy.safeTransfer(owner(), roy.balanceOf(address(this)));
         mockUSD.safeTransfer(owner(), mockUSD.balanceOf(address(this)));
-        emit ReservesRecovered(owner());
+    }
+
+    /// @notice Simulates the normal two-hop attack and any resulting stage transition without player funding.
+    /// @dev Not view: like V4Quoter, this executes real swap code and decodes only its intentional revert result.
+    function quoteAttackWithMockUSD(uint256 maxMockUSD, uint8 attackStage)
+        external
+        nonReentrant
+        returns (QuoteResult memory quote)
+    {
+        if (
+            !activated || mode != Operation.Idle || block.timestamp >= bossHook.deadline() || maxMockUSD == 0
+                || maxMockUSD > uint256(type(int256).max) || attackStage != bossHook.currentStage()
+                || bossHook.status() != BossHook.RoundStatus.Active
+        ) revert InvalidAttack();
+
+        (bool success, bytes memory reason) = address(this).call(
+            abi.encodeCall(this._quoteAttackFrame, (maxMockUSD, attackStage))
+        );
+        if (success) revert UnexpectedQuoteSuccess();
+        return _parseQuoteResult(reason);
+    }
+
+    /// @dev Self-only simulation frame. Its callback reverts with the quote after exercising both swaps and transition.
+    function _quoteAttackFrame(uint256 maxMockUSD, uint8 attackStage) external {
+        if (msg.sender != address(this) || mode != Operation.Idle) revert InvalidCallback();
+        mode = Operation.Quote;
+        activePlayer = QUOTE_SINK;
+        expectedStage = attackStage;
+        manager.unlock(
+            abi.encode(AttackRequest(QUOTE_SINK, maxMockUSD, 0, 0, 0, attackStage, bossHook.deadline()))
+        );
+        revert UnexpectedQuoteSuccess();
+    }
+
+    function _parseQuoteResult(bytes memory reason) private pure returns (QuoteResult memory quote) {
+        bytes4 selector;
+        if (reason.length >= 4) assembly ("memory-safe") { selector := mload(add(reason, 0x20)) }
+        if (selector != QuoteSimulation.selector || reason.length != 4 + 7 * 32) {
+            assembly ("memory-safe") { revert(add(reason, 0x20), mload(reason)) }
+        }
+
+        uint256 rawStageCleared;
+        uint256 rawBossDefeated;
+        uint256 rawNextStage;
+        assembly ("memory-safe") {
+            let data := add(reason, 0x24)
+            mstore(quote, mload(data))
+            mstore(add(quote, 0x20), mload(add(data, 0x20)))
+            mstore(add(quote, 0x40), mload(add(data, 0x40)))
+            mstore(add(quote, 0x60), mload(add(data, 0x60)))
+            rawStageCleared := mload(add(data, 0x80))
+            rawBossDefeated := mload(add(data, 0xa0))
+            rawNextStage := mload(add(data, 0xc0))
+        }
+        if (rawStageCleared > 1 || rawBossDefeated > 1 || rawNextStage > type(uint8).max) {
+            assembly ("memory-safe") { revert(add(reason, 0x20), mload(reason)) }
+        }
+        quote.stageCleared = rawStageCleared == 1;
+        quote.bossDefeated = rawBossDefeated == 1;
+        quote.nextStage = uint8(rawNextStage);
     }
 
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
@@ -289,6 +370,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         if (mode == Operation.SeedSupply) return _seedSupplyCallback(data);
         if (mode == Operation.Setup) return _activateCallback();
         if (mode == Operation.Attack) return _attackCallback(data);
+        if (mode == Operation.Quote) return _attackCallback(data);
         if (mode == Operation.Recover) return _recoverCallback();
         revert InvalidCallback();
     }
@@ -334,6 +416,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
 
     function _attackCallback(bytes calldata data) private returns (bytes memory) {
         AttackRequest memory request = abi.decode(data, (AttackRequest));
+        bool quoteMode = mode == Operation.Quote;
         if (
             request.player != activePlayer || request.stage != expectedStage || request.deadline < block.timestamp
                 || bossHook.status() != BossHook.RoundStatus.Active
@@ -345,7 +428,21 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
             if (request.maxMockUSD == 0) revert InvalidCallback();
         }
         AttackResult memory result = request.maxMockUSD == 0 ? _executeDirect(request) : _executeTwoHop(request);
+        bool stageCleared = bossHook.status() == BossHook.RoundStatus.StageCleared
+            || bossHook.status() == BossHook.RoundStatus.Defeated;
+        bool bossDefeated = bossHook.status() == BossHook.RoundStatus.Defeated;
         if (bossHook.status() == BossHook.RoundStatus.StageCleared) _runTransition(request.stage);
+        if (quoteMode) {
+            revert QuoteSimulation(
+                result.mockUSDSpent,
+                result.royBought,
+                result.roySpent,
+                result.bossHPOut,
+                stageCleared,
+                bossDefeated,
+                bossHook.currentStage()
+            );
+        }
         return abi.encode(result.mockUSDSpent, result.royBought, result.roySpent, result.bossHPOut);
     }
 
@@ -375,8 +472,10 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         result.royBought = _outputAmount(supplyDelta, supplyZeroForOne);
         if (result.mockUSDSpent == 0 || result.royBought < request.minRoyOut) revert SlippageExceeded();
         Currency mockCurrency = Currency.wrap(address(mockUSD));
-        _settle(mockCurrency, result.mockUSDSpent);
-        _assertZero(mockCurrency);
+        if (mode != Operation.Quote) {
+            _settle(mockCurrency, result.mockUSDSpent);
+            _assertZero(mockCurrency);
+        }
 
         bool bossZeroForOne = !bossHook.bossIsCurrency0();
         uint160 bossLimit = bossHook.bossIsCurrency0() ? bossHook.sqrtUpperX96() : bossHook.sqrtLowerX96();
@@ -396,7 +495,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         _deliverHP(request.player, result.bossHPOut);
         uint256 unusedRoy = result.royBought - result.roySpent;
         if (unusedRoy != 0) manager.take(royCurrency, request.player, unusedRoy);
-        _assertZero(mockCurrency);
+        if (mode != Operation.Quote) _assertZero(mockCurrency);
         _assertZero(royCurrency);
         _assertZero(bossCurrency);
     }

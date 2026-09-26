@@ -2350,6 +2350,24 @@ export const bossRouterAbi = [
   },
   {
     "type": "function",
+    "name": "_quoteAttackFrame",
+    "inputs": [
+      {
+        "name": "maxMockUSD",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "attackStage",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "activate",
     "inputs": [],
     "outputs": [],
@@ -2685,6 +2703,67 @@ export const bossRouterAbi = [
   },
   {
     "type": "function",
+    "name": "quoteAttackWithMockUSD",
+    "inputs": [
+      {
+        "name": "maxMockUSD",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "attackStage",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "quote",
+        "type": "tuple",
+        "internalType": "struct BossRouter.QuoteResult",
+        "components": [
+          {
+            "name": "mockUSDSpent",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "royBought",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "roySpent",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "bossHPOut",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "stageCleared",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "bossDefeated",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "nextStage",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "recoverAfterDeadline",
     "inputs": [],
     "outputs": [],
@@ -2925,19 +3004,6 @@ export const bossRouterAbi = [
   },
   {
     "type": "event",
-    "name": "ReservesRecovered",
-    "inputs": [
-      {
-        "name": "maker",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "RoundActivated",
     "inputs": [
       {
@@ -3100,6 +3166,47 @@ export const bossRouterAbi = [
   },
   {
     "type": "error",
+    "name": "QuoteSimulation",
+    "inputs": [
+      {
+        "name": "mockUSDSpent",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "royBought",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roySpent",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "bossHPOut",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "stageCleared",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "bossDefeated",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "nextStage",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "ReentrancyGuardReentrantCall",
     "inputs": []
   },
@@ -3117,6 +3224,11 @@ export const bossRouterAbi = [
   {
     "type": "error",
     "name": "SlippageExceeded",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnexpectedQuoteSuccess",
     "inputs": []
   },
   {

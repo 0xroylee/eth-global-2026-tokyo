@@ -6,7 +6,7 @@ This report documents the historical Robinhood target. Current testnet scripts t
 
 ## Deployment and setup
 
-The public source of truth for contract addresses, pool keys, configuration, provenance, and all 18 deployment receipts is [`robinhood-testnet.json`](../apps/web/public/deployments/robinhood-testnet.json). Each deployment and setup receipt was checked against the testnet RPC. Combined deployment and setup gas was `19,595,227`.
+The historical foundation addresses, pool keys, configuration, provenance, and all 18 deployment receipts are preserved in [`robinhood-foundation-deployment.json`](evidence/robinhood-foundation-deployment.json). Each deployment and setup receipt was checked against the testnet RPC. Combined deployment and setup gas was `19,595,227`. The app's current deployment manifest can point to a newer fixture; the receipts in this report belong to this archived foundation deployment.
 
 | Receipt | Block | Explorer transaction | Gas |
 | --- | ---: | --- | ---: |
@@ -51,4 +51,4 @@ Exercise source: [`exercise-boss-pool.ts`](../scripts/exercise-boss-pool.ts), co
 
 ## Reproduction status
 
-The verified Robinhood fixture is Defeated with all eligible HP redeemed, so it cannot run through the full journey again. Current `testnet:*` commands target Base Sepolia; see the [current Base Sepolia setup](contract-usage.md#base-sepolia-testnet-target) for new deployments. Expiry and prize-refund behavior have local Foundry coverage only; they have no Robinhood or Base Sepolia testnet receipts. The browser remains read-only.
+The verified Robinhood fixture is Defeated with all eligible HP redeemed, so it cannot run through the full journey again. Current `testnet:*` commands target Base Sepolia; see the [current Base Sepolia setup](contract-usage.md#base-sepolia-testnet-target) for new deployments. This historical report contains no browser-wallet exercise. The current player UI and manual wallet-popup status are in the [SDK verification report](sdk-verification.md). Expiry and prize-refund behavior have local Foundry coverage only; they have no Robinhood or Base Sepolia testnet receipts.

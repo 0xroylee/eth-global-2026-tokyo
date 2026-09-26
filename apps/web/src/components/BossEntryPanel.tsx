@@ -2,127 +2,150 @@
 
 /* eslint-disable @next/next/no-img-element -- art masters are static PNGs; no optimisation needed yet */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import Link from "next/link";
 import type { BossDefinition } from "@/game/bosses";
-import { BattleView } from "@/components/battle/BattleView";
 import { displayAmount, roundStatusLabel } from "@/lib/format";
-import { useMockBattle } from "@/lib/useMockBattle";
-import type { DeploymentState } from "@/lib/useLocalRound";
+import { type useBossPool } from "@/lib/useBossPool";
+import { BossActions } from "./BossActions";
+
+type Arena = ReturnType<typeof useBossPool>;
+const CAT_FORMS = ["/images/boss-cat-form-a.png", "/images/boss-cat-form-b.png", "/images/boss-cat-form-c.png"] as const;
 
 export function BossEntryPanel({
   boss,
-  deployment,
+  arena,
   onClose,
+  suspendInput = false,
+  onConnect,
+  onSwitch,
 }: {
   boss: BossDefinition;
-  deployment: DeploymentState;
+  arena: Arena;
   onClose: () => void;
+  suspendInput?: boolean;
+  onConnect?: () => void;
+  onSwitch?: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
-  const enterRef = useRef<HTMLButtonElement>(null);
-  const [battleOpen, setBattleOpen] = useState(false);
-  const battle = useMockBattle();
-
-  const closeBattle = useCallback(() => {
-    setBattleOpen(false);
-    enterRef.current?.focus();
-  }, []);
+  const actionRef = useRef<HTMLButtonElement>(null);
+  const live = arena.deployment.kind === "live" ? arena.deployment : null;
+  const stage = live?.round.currentStage ?? 0;
+  const portrait = boss.id === "cat" ? CAT_FORMS[Math.min(stage, 2)] : boss.portrait;
+  const supported = boss.id === "cat";
+  const needsWallet = supported && !arena.wallet.account;
+  const needsSwitch = supported && Boolean(arena.wallet.account) && arena.networkMismatch;
+  const actionsReady = supported && !needsWallet && !needsSwitch;
 
   useEffect(() => {
-    closeRef.current?.focus();
-  }, []);
-
-  // ESC dispatch: while the battle is open the panel ignores Escape, so the
-  // BattleView handler alone closes exactly one layer per press.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (battleOpen) {
-        closeBattle();
-        return;
-      }
+    if (suspendInput) return;
+    (needsWallet || needsSwitch ? actionRef : closeRef).current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
       onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [battleOpen, closeBattle, onClose]);
+  }, [needsSwitch, needsWallet, onClose, suspendInput]);
 
   return (
-    <>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="boss-entry-title"
-        className="absolute inset-0 z-20 grid place-items-center bg-ink/70 p-4 backdrop-blur-[2px]"
-      >
-        <div className="panel-enter w-full max-w-[420px] rounded-2xl border border-white/12 bg-panel/95 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.6)]">
-          <div className="flex items-start gap-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="boss-entry-title"
+      inert={suspendInput}
+      className="absolute inset-0 z-20 grid place-items-center bg-ink/70 p-4 backdrop-blur-[2px]"
+    >
+      <div className="panel-enter max-h-[min(32rem,calc(100dvh-2rem))] w-full max-w-[560px] overflow-y-auto rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)] sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-4">
             <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-ink">
-              {boss.portrait ? (
-                <img
-                  src={boss.portrait}
-                  alt=""
-                  className="size-full object-cover object-top [image-rendering:pixelated]"
-                />
+              {portrait ? (
+                <img src={portrait} alt="" className="size-full object-cover object-top [image-rendering:pixelated]" />
               ) : (
                 <span className="font-mono text-2xl text-dim">?</span>
               )}
             </div>
             <div className="min-w-0">
-              <p className="eyebrow mb-1">{boss.locked ? "GATE LOCKED" : "BOSS GATE"}</p>
+              <p className="eyebrow mb-1">{boss.locked ? "GATE LOCKED" : supported ? "BOSS GATE" : "FIXTURE ONLY"}</p>
               <h2 id="boss-entry-title" className="text-2xl font-semibold tracking-[-0.03em]">
                 {boss.name}
               </h2>
               <p className="mt-1 text-sm leading-relaxed text-muted">{boss.tagline}</p>
             </div>
           </div>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            aria-label="Close boss actions"
+            className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            CLOSE
+          </button>
+        </div>
 
-          <div className="hairline mt-5 border-t pt-4">
-            <BossHealth boss={boss} deployment={deployment} />
-          </div>
+        <div className="hairline mt-5 border-t pt-4">
+          <BossHealth boss={boss} deployment={arena.deployment} />
+        </div>
 
-          <div className="mt-5 flex gap-2">
-            <button
-              ref={enterRef}
-              type="button"
-              disabled={boss.id !== "cat"}
-              onClick={() => setBattleOpen(true)}
-              title={boss.id !== "cat" ? "Battle arena is the next build step" : undefined}
-              className={`flex-1 rounded-lg px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] transition-transform duration-150 ease-[var(--ease-out-strong)] focus-visible:outline-2 focus-visible:outline-[#8ab4ff] active:scale-[0.98] ${
-                boss.id === "cat"
-                  ? "bg-accent/20 text-accent-soft hover:bg-accent/25"
-                  : "bg-accent/20 text-accent-soft opacity-60"
-              }`}
+        {needsWallet && (
+          <button
+            ref={actionRef}
+            type="button"
+            onClick={onConnect}
+            className="mt-5 w-full rounded-lg bg-accent/20 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-accent-soft transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-accent/25 active:scale-[0.98]"
+          >
+            CONNECT WALLET TO CHALLENGE
+          </button>
+        )}
+        {needsSwitch && (
+          <button
+            ref={actionRef}
+            type="button"
+            onClick={onSwitch}
+            className="mt-5 w-full rounded-lg border border-[#f5b04a]/40 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-[#f5b04a] transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-[#f5b04a]/10 active:scale-[0.98]"
+          >
+            SWITCH WALLET TO {arena.selectedChainId}
+          </button>
+        )}
+        {actionsReady && <BossActions arena={arena} />}
+        {supported && (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/30 px-3 py-3">
+            <div>
+              <p className="font-mono text-[9px] tracking-[0.12em] text-dim">SEPARATE MOCK PREVIEW</p>
+              <p className="mt-1 text-xs text-muted">The pixel battle is a visual demo and never changes contract state.</p>
+            </div>
+            <Link
+              href="/mock-battle"
+              className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog transition-colors hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              {boss.locked ? "LOCKED" : boss.id === "cat" ? "ENTER BATTLE" : "ENTER BATTLE · NEXT STEP"}
-            </button>
-            <button
-              ref={closeRef}
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-white/12 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-fog transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.97]"
-            >
-              BACK · ESC
-            </button>
+              OPEN MOCK BATTLE
+            </Link>
           </div>
+        )}
+        {!supported && (
+          <p className="mt-4 rounded-lg border border-white/8 px-3 py-3 text-xs leading-relaxed text-muted">
+            This gate is a visual fixture. No contract or attack route is deployed for it.
+          </p>
+        )}
+
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-auto rounded-lg border border-white/12 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-fog transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.97]"
+          >
+            CLOSE · ESC
+          </button>
         </div>
       </div>
-
-      {battleOpen && (
-        <BattleView
-          state={battle.state}
-          phase={battle.phase}
-          deadlineAt={battle.deadlineAt}
-          onAttack={battle.attack}
-          onClose={closeBattle}
-        />
-      )}
-    </>
+    </div>
   );
 }
 
-function BossHealth({ boss, deployment }: { boss: BossDefinition; deployment: DeploymentState }) {
-  // Only the cat is backed by the deployed round today.
+function BossHealth({ boss, deployment }: { boss: BossDefinition; deployment: Arena["deployment"] }) {
   if (boss.id !== "cat") {
     return (
       <Row label="BOSS HP" badge="NO CONTRACT YET">
