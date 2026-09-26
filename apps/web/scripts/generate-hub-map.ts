@@ -68,6 +68,9 @@ reserveRoute(19, 4, 3, 7); // cols 19..21, rows 4..10
 // Clearing to macro-whale gate: east, then north.
 reserveRoute(25, 12, 9, 3); // cols 25..33
 reserveRoute(31, 6, 3, 7); // cols 31..33, rows 6..12
+// Future region route. Reserved before stone edges and decoration so the
+// Macro Whale approach stays put and the exit is not planted over.
+reserveRoute(33, 12, 6, 3); // cols 33..38, rows 12..14
 
 const isStone = (c: number, r: number) => inBounds(c, r) && stone[index(c, r)] === 1;
 fillRect(0, 0, WIDTH, HEIGHT, (c, r) => {
@@ -161,6 +164,9 @@ const clusters: [number, number][] = [
 ];
 for (const [c, r] of clusters) placeTree(c, r);
 
+// Keep the exit approach and its sign clear of hanging canopy.
+fillRect(33, 11, 6, 4, (c, r) => setTile("overhead", c, r, 0));
+
 // 6. Hedge on any still-open outer edge cell so the map has no exits.
 fillRect(0, 0, WIDTH, HEIGHT, (c, r) => {
   const edge = c === 0 || r === 0 || c === WIDTH - 1 || r === HEIGHT - 1;
@@ -181,6 +187,14 @@ const fenceH = (col: number, row: number, w: number, gap: [number, number] | nul
 };
 fenceH(2, 18, 10, [11, 11]); // north of the pond, open at the east end
 fenceH(28, 21, 9, [31, 32]); // east garden, opening in the middle
+
+// Closed wooden barrier at the east route. Column 39 stays an outer wall.
+for (let row = 12; row <= 14; row++) {
+  const gid = row === 13 ? G.fenceVertical : G.fencePost;
+  setTile("props", 38, row, gid);
+  block(38, row, gid);
+  setTile("overhead", 38, row, 0);
+}
 
 // 8. Decoration after every reservation: torches beside gates, lanterns at the plaza,
 //    shrubs and rocks on open grass, flowers on the detail layer.
@@ -237,6 +251,7 @@ const map = {
   renderorder: "right-down",
   type: "map",
   version: "1.10",
+  nextobjectid: 6,
   tilesets: [
     {
       firstgid: 1,
@@ -280,6 +295,21 @@ const map = {
           visible: true,
           properties: [{ name: "bossId", type: "string", value: g.bossId }],
         })),
+        {
+          id: 5,
+          name: "region-exit",
+          type: "",
+          x: 38 * TILE,
+          y: 12 * TILE,
+          width: TILE,
+          height: 3 * TILE,
+          rotation: 0,
+          visible: true,
+          properties: [
+            { name: "exitId", type: "string", value: "east-route" },
+            { name: "status", type: "string", value: "coming-soon" },
+          ],
+        },
       ],
     },
   ],

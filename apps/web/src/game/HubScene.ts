@@ -73,6 +73,8 @@ export class HubScene extends Phaser.Scene {
   private guideAnchorY = 0;
   private hintTarget: Gate | null = null;
   private hintArrow: Phaser.GameObjects.Triangle | null = null;
+  private regionZone: Phaser.Geom.Rectangle | null = null;
+  private nearRegion = false;
   private unsubscribe: (() => void)[] = [];
   private atmosphere!: HubAtmosphere;
 
@@ -85,6 +87,7 @@ export class HubScene extends Phaser.Scene {
   }
 
   preload() {
+    this.load.on("loaderror", () => this.bridge.emit("scene:error", {}));
     this.load.tilemapTiledJSON("hub", "/game/hub.json");
     this.load.image("tiles", "/game/tiles.png");
     this.load.spritesheet("player-walk", "/game/player-compact-walk.png", { frameWidth: 32, frameHeight: 32 });
@@ -96,6 +99,8 @@ export class HubScene extends Phaser.Scene {
   create() {
     this.gates = [];
     this.nearGate = null;
+    this.regionZone = null;
+    this.nearRegion = false;
     this.registerWalk();
     makeCroppedTexture(this, "portrait-cat", "portrait-master-cat", { x: 120, y: 60, w: 880, h: 1240 }, 28);
     makeCroppedTexture(this, "portrait-macro-whale", "portrait-master-macro-whale", { x: 160, y: 80, w: 940, h: 940 }, 28);
@@ -126,6 +131,7 @@ export class HubScene extends Phaser.Scene {
     }
 
     const gateBodies = this.buildGates(map);
+    this.buildRegionExit(map);
     this.buildPlayer(spawn.x, spawn.y);
     this.physics.add.collider(this.player, collision);
     this.physics.add.collider(this.player, gateBodies);
@@ -164,11 +170,14 @@ export class HubScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.hintArrow?.destroy();
       this.hintArrow = null;
+      this.regionZone = null;
+      this.nearRegion = false;
       this.unsubscribe.forEach((u) => u());
       this.unsubscribe = [];
     });
 
     this.exposeDevProbe();
+    this.bridge.emit("region:near", { exitId: null });
     this.bridge.emit("scene:ready", {});
   }
 
@@ -189,6 +198,7 @@ export class HubScene extends Phaser.Scene {
       guideStep: this.guideStep,
       guideDistance: this.guideDistance,
       hintVisible: this.hintArrow?.visible ?? false,
+      nearRegion: this.nearRegion,
       gates: this.gates.map((g) => ({ id: g.boss.id, zone: { x: g.zone.x, y: g.zone.y, w: g.zone.width, h: g.zone.height } })),
     });
     (window as unknown as { __bpHub?: () => ReturnType<typeof probe> }).__bpHub = probe;
@@ -201,6 +211,7 @@ export class HubScene extends Phaser.Scene {
     this.atmosphere.update(time, this.reduceMotion);
     this.updateMovement();
     this.updateGateProximity();
+    this.updateRegionProximity();
     this.updateGuideHint(time);
   }
 
@@ -252,8 +263,28 @@ export class HubScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0)
         .setDepth(LABEL_DEPTH + 1);
+      const caption = boss.locked
+        ? null
+        : this.add
+            .text(cx, label.y + label.height, "BOSS POOL", {
+              fontFamily: "var(--font-dm-mono), monospace",
+              fontSize: "4px",
+              color: "#f5b04a",
+              letterSpacing: 0.6,
+              resolution: ZOOM,
+            })
+            .setOrigin(0.5, 0)
+            .setDepth(LABEL_DEPTH + 1);
+      const blockHeight = label.height + (caption?.height ?? 0);
       const plate = this.add
-        .rectangle(cx, label.y + label.height / 2, label.width + 6, label.height + 3, 0x0b0e18, 0.75)
+        .rectangle(
+          cx,
+          label.y + blockHeight / 2,
+          Math.max(label.width, caption?.width ?? 0) + 6,
+          blockHeight + 3,
+          0x0b0e18,
+          0.75,
+        )
         .setDepth(LABEL_DEPTH);
       plate.setStrokeStyle(1, color, 0.6);
 
@@ -315,14 +346,18 @@ export class HubScene extends Phaser.Scene {
     // Listen on the window, not Phaser. A focused music or sound button otherwise
     // keeps the key event off the canvas, so E never reaches the gate.
     const interact = (event: KeyboardEvent) => {
-      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || this.modalOpen || !this.nearGate) return;
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || this.modalOpen) return;
       const inspect = event.key === "e" || event.key === "E";
       const activatesFocusedControl = event.key === " " || event.key === "Enter";
       if (!inspect && !activatesFocusedControl) return;
       if (activatesFocusedControl && isPageControlTarget(event)) return;
       const target = event.target;
-      if (inspect && target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
-      this.bridge.emit("gate:enter", { bossId: this.nearGate.boss.id });
+      if (target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (this.nearGate) {
+        this.bridge.emit("gate:enter", { bossId: this.nearGate.boss.id });
+        return;
+      }
+      if (this.nearRegion) this.bridge.emit("region:inspect", { exitId: "east-route" });
     };
     window.addEventListener("keydown", interact, true);
     this.unsubscribe.push(() => window.removeEventListener("keydown", interact, true));
@@ -485,6 +520,53 @@ export class HubScene extends Phaser.Scene {
     }
     this.hintTarget = nearest;
     return nearest;
+  }
+
+  /** Wooden sign on the closed east route. The approach is the marker's own height, west of the barrier. */
+  private buildRegionExit(map: Phaser.Tilemaps.Tilemap) {
+    const markers = map.getObjectLayer(HUB_LAYERS.markers);
+    const obj = markers?.objects.find((marker) => marker.name === "region-exit");
+    if (!obj || obj.x === undefined || obj.y === undefined || !obj.width || !obj.height) return;
+    const exitId = obj.properties?.find((property: { name: string }) => property.name === "exitId")?.value;
+    if (exitId !== "east-route") return;
+
+    const reach = obj.height;
+    this.regionZone = new Phaser.Geom.Rectangle(obj.x - reach, obj.y, reach, obj.height);
+    // Board sits on the grass just north of the barrier so the path and player stay visible.
+    const cx = obj.x - 18;
+    const cy = obj.y - 14;
+    const title = this.add
+      .text(cx, cy - 4, "NEXT REGION", {
+        fontFamily: "var(--font-dm-mono), monospace",
+        fontSize: "5px",
+        color: "#f5b04a",
+        letterSpacing: 0.4,
+        resolution: ZOOM,
+      })
+      .setOrigin(0.5)
+      .setDepth(LABEL_DEPTH + 1);
+    const subtitle = this.add
+      .text(cx, cy + 4, "COMING SOON", {
+        fontFamily: "var(--font-dm-mono), monospace",
+        fontSize: "4px",
+        color: "#f3e2c4",
+        letterSpacing: 0.4,
+        resolution: ZOOM,
+      })
+      .setOrigin(0.5)
+      .setDepth(LABEL_DEPTH + 1);
+    this.add
+      .rectangle(cx, cy, Math.max(title.width, subtitle.width) + 8, title.height + subtitle.height + 6, 0x6a4324, 0.94)
+      .setStrokeStyle(1, 0xc48a45)
+      .setDepth(LABEL_DEPTH);
+  }
+
+  private updateRegionProximity() {
+    if (!this.regionZone) return;
+    const inside = Phaser.Geom.Rectangle.Contains(this.regionZone, this.player.x, this.player.y);
+    if (inside === this.nearRegion) return;
+    this.nearRegion = inside;
+    this.bridge.emit("region:near", { exitId: inside ? "east-route" : null });
   }
 
   private updateGateProximity() {
