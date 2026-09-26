@@ -88,6 +88,12 @@ const exitStatus = regionExit.properties?.find((p) => p.name === "status")?.valu
 assert(exitId === "east-route", `region-exit exitId must be east-route, got ${String(exitId)}`);
 assert(exitStatus === "coming-soon", `region-exit status must be coming-soon, got ${String(exitStatus)}`);
 assert(regionExit.width === HUB_TILESET.tileSize && regionExit.height === HUB_TILESET.tileSize * 3, "region-exit must cover the three barrier tiles");
+const marketMarkers = markers.objects.filter((o) => o.name === "market");
+assert(marketMarkers.length === 1, `markers must contain one market, got ${marketMarkers.length}`);
+const market = marketMarkers[0]!;
+const marketId = market.properties?.find((p) => p.name === "marketId")?.value;
+assert(marketId === "pool-ledger", `market marketId must be pool-ledger, got ${String(marketId)}`);
+assert(market.width > 0 && market.height > 0 && !market.point, "market must be a rectangle");
 
 // Collision grid and reachability
 const collision = tileLayers.find((l) => l.name === HUB_LAYERS.collision)!;
@@ -129,6 +135,11 @@ for (let row = barrier.row; row < barrier.row + 3; row++) {
   assert(blocked(barrier.col, row), `region-exit barrier ${barrier.col},${row} must stay blocked`);
 }
 assert(reachable[13 * WIDTH + 36], "region-exit approach center 36,13 is not reachable from spawn");
+
+// The market's approach is the tile directly below its rectangle, like a gate's.
+const marketApproach = toTile(market.x + market.width / 2, market.y + market.height + HUB_TILESET.tileSize / 2);
+assert(!blocked(marketApproach.col, marketApproach.row), `market approach ${marketApproach.col},${marketApproach.row} is blocked`);
+assert(reachable[marketApproach.row * WIDTH + marketApproach.col], `market at ${marketApproach.col},${marketApproach.row} is not reachable from spawn`);
 
 // Outer edge is fully blocked
 for (let col = 0; col < WIDTH; col++) {
