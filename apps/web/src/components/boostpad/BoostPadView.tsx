@@ -77,7 +77,6 @@ function WebFormMode() {
                     <button
                       type="button"
                       onClick={() => void arena.connect().catch(() => undefined)}
-                      disabled={arena.wallet.status === "checking"}
                       className="mt-2 border border-[#e7b56a]/50 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-[#e7b56a] transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] disabled:opacity-40"
                     >
                       {arena.wallet.status === "missing" ? "NO WALLET" : "CONNECT WALLET"}
