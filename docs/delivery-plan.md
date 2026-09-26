@@ -1,6 +1,6 @@
 # Boss Pool delivery plan
 
-Updated 26 September 2026. This is the implementation handoff for the current no-burn BossHP design. The application is not implemented. The earlier local burn prototypes are historical mechanism evidence; they do not close the new delivery checks.
+Updated 26 September 2026. This is the implementation handoff for the current no-burn BossHP design. BP01 provides local contracts, the shared client, and a read-only web shell; see [recorded evidence](bp01-foundation.md). The full browser game, migration to the selected Next.js/Tailwind stack, and Robinhood deployment remain open. Earlier local burn prototypes are historical mechanism evidence.
 
 ## Outcome and scope
 
@@ -8,7 +8,7 @@ Two wallets enroll, use MockUSD to buy ROY and then BossHP, clear three boss sta
 
 The [requirements](requirements.md) own gameplay, [technical specification](technical-spec.md) owns contracts/interfaces/custody, [HP lifecycle](hp-lifecycle.md) owns clearing details, and [refill/reward math](refill-math.md) owns calculations. [CONTEXT.md](../CONTEXT.md) is the glossary.
 
-Confirmed: one ROY attack currency, one ROY/BossHP battle pool, one MockUSD/ROY supply pool, no attack burn, stages 300/600/900, staged HP liquidity, rewards represented by BossHP, Robinhood testnet, Bun/TypeScript/viem and a small monorepo. Physical/magic, MROY, damage multipliers, dynamic fees and public BossHP sell-backs are outside the core.
+Confirmed: one ROY attack currency, one ROY/BossHP battle pool, one MockUSD/ROY supply pool, no attack burn, stages 300/600/900, staged HP liquidity, rewards represented by BossHP, Robinhood testnet, Next.js/TypeScript/Tailwind CSS, direct viem, Bun, and a small monorepo. Physical/magic, MROY, damage multipliers, dynamic fees and public BossHP sell-backs are outside the core.
 
 Working claim default: eligible HP is transferable; claim atomically surrenders it into permanent custody and pays a fixed proportional reward, without burning. This is the model used by the current plan. A frozen-balance alternative was discussed but not selected. Do not silently combine the two.
 
@@ -20,12 +20,24 @@ Use the [Bun monorepo layout](technical-spec.md#monorepo-and-ownership):
 
 - `contracts/`: Foundry, two core contracts, standard tokens/NFTs and the shared core scenario. A owns it.
 - `packages/chain/`: generated ABI, public deployment manifest, viem actions/views and shared types. A owns contract-facing changes; B reviews consumption.
-- `apps/web/`: React/Vite arena and wallet flows. B owns it.
+- `apps/web/`: Next.js App Router arena, Tailwind CSS UI, and direct viem wallet flows. B owns it; the existing Vite shell must be migrated.
 - `scripts/`: seed, deploy, focused E2E and smoke commands. A owns them.
 
 One root Bun lockfile. Start with direct viem access; no backend service, database, queue, Turbo or Nx. Reuse the official v4 starter/helpers and OpenZeppelin before custom code. Keep AGENTS.md short and use the existing scoped guides; do not turn it into another product spec.
 
 Implementation model routing remains exact: **gpt-6-sol high** for contracts, custody, settlement and cross-layer changes; **gpt-6-luna xhigh** for bounded UI/wiring/docs after interfaces are clear. This is routing for future implementation, not permission to spawn unnecessary agents.
+
+## Frontend build sequence
+
+The [frontend architecture](technical-spec.md#frontend-architecture) owns the selected stack and client boundaries. Keep this work within the existing BP slices:
+
+1. **BP02/BP06 preparation:** migrate the read-only shell to Next.js App Router in `apps/web`, add Tailwind through PostCSS, and preserve deployment validation and real round reads. Replace Vite entry/configuration, scripts, and TypeScript setup. Keep the root Bun workspace commands usable. Check typecheck, production build, and the missing-deployment/live-local browser states.
+2. **BP03:** add the injected-wallet connection through viem, account/network handling, and enrollment approval/receipt flow. Start with prepared MetaMask test accounts for rehearsal.
+3. **BP04:** agree the authenticated quote method in `packages/chain`, then implement input bounds, approval, simulation, attack, receipts, and stale-stage recovery.
+4. **BP05/BP06:** build the three boss forms and responsive Tailwind arena, with confirmed stage changes, keyboard support, reduced motion, and refresh recovery.
+5. **BP07/BP10/BP11:** add redemption, separate NFT claims, expiry, verified Robinhood configuration, and the existing two-wallet browser journey.
+
+The stack decision does not mark the migration complete. Keep BP01's original Vite build evidence as historical evidence and record fresh Next.js verification when that implementation lands.
 
 ## Candidate demo configuration
 
@@ -137,10 +149,11 @@ BP01 is the local feasibility gate. Chain readiness is reported there but remain
 
 | Status | Fact or assumption | Owner / next resolution |
 | --- | --- | --- |
-| Verified historical | A pinned real-v4 burn-based same-pool refill scenario passed one local test; integer dust and settlement were recorded | A adapts the same fixture in BP01 |
+| Verified historical | A pinned real-v4 burn-based same-pool refill scenario passed one local test; integer dust and settlement were recorded | Superseded for current local behavior by [BP01 evidence](bp01-foundation.md) |
 | Verified arithmetic | Finite-range clearing, refill costs and fixed-denominator redemption calculations reconcile | A verifies real no-burn delivery/redemption in BP01 and BP07 |
 | Observed blocker | Official testnet RPC again returned HTTP 403 from this environment on 26 September | A resolves endpoint access and provenance in BP11 |
-| Unverified | Complete no-burn app, deployable production permissions, token redemption, two-hop E2E and Robinhood deployment | P0 acceptance remains open |
+| Verified local | BP01 records no-burn contracts, transferable redemption, the shared real-v4 scenario, and a read-only web shell | Reuse [BP01 evidence](bp01-foundation.md) until relevant implementation changes |
+| Unverified | Complete browser game, Next.js/Tailwind migration, deployable production permissions, browser two-wallet E2E, and Robinhood deployment | P0 acceptance remains open |
 | Working default | Transferable HP surrendered without burn; fixed fees; candidate funding amounts | Revisit only on a user decision or contrary execution evidence |
 | Not supplied | Teammate handles, checkpoint timezone and a verified submission deadline | Leave issues unassigned; use relative checkpoints |
 
