@@ -1,6 +1,6 @@
 # Boss Pool
 
-Players spend ROY to buy BossHP through Uniswap v4. The hook counts actual BossHP purchases as damage without burning tokens. Each defeated stage unlocks a new allocation of BossHP liquidity. After final defeat, eligible BossHP represents a share of the sponsor-funded prize.
+Players spend MockUSD through the supply pool to buy ROY, then BossHP through Uniswap v4. The Hook counts actual BossHP output as damage without burning tokens. Each defeated stage unlocks a new allocation of BossHP liquidity. After final defeat, eligible BossHP represents a share of the sponsor-funded prize.
 
 廣東話 pitch：MockUSD 買 ROY，ROY 換 BossHP；hook 累計買入 HP 當傷害，清一階先放下一階流動性，打贏按貢獻分獎。
 
@@ -19,7 +19,7 @@ The user confirmed this replacement for the earlier physical/magic design:
 
 ## Status
 
-The private Bun workspace, minimal read-only Vite arena, generated contract client, and local deployment flow are in place. Four focused Foundry cases pass, including the full no-burn round and a token-order pricing regression. The final chain-31337 seed/read smoke and browser read pass. See [BP01 scope and verification](docs/bp01-foundation.md). No Robinhood testnet deployment or browser transaction flow has been verified.
+The private Bun workspace, minimal read-only Vite arena, generated contract client, and local deployment flow are in place. Four focused Foundry cases pass, including the full no-burn HP0 round and a targeted HP1 first-stage/refill case. The reusable local Anvil exercise also completes both wallets through all three stages, claims, and victory NFTs. A team-deployed, non-production fixture completed the full two-wallet journey on Robinhood testnet, including two refills, transferable HP claims, and both victory NFTs. See the [contract usage guide](docs/contract-usage.md) and [testnet verification report](docs/testnet-verification.md). The browser remains read-only; expiry and prize refund have local Foundry coverage only.
 
 The 1,000 MockUSD prize is a test fixture. [Refill math](docs/refill-math.md) gives candidate prices and reserve amounts, with the no-burn accounting change distinguished from historical test evidence. Earlier ROY/MROY allocation tables and price-impact estimates are superseded.
 
@@ -31,6 +31,8 @@ The 1,000 MockUSD prize is a test fixture. [Refill math](docs/refill-math.md) gi
 | [Domain context](CONTEXT.md) | ROY, BossHP, effective damage, stage reserve, and prize terminology |
 | [Requirements](docs/requirements.md) | Confirmed gameplay and proposed bounded defaults |
 | [Technical specification](docs/technical-spec.md) | Atomic two-hop settlement and stage LP control |
+| [Contract usage guide](docs/contract-usage.md) | Local deployment, player calls, rewards, reads, and testnet status |
+| [Testnet verification](docs/testnet-verification.md) | Verified team deployment and outstanding exercise evidence |
 | [Economy](docs/economy.md) | Separate ROY/BossHP budgets and the new proof gate |
 | [HP lifecycle](docs/hp-lifecycle.md) | Purchase counters, clearing evidence, and stage release |
 | [Refill math](docs/refill-math.md) | Prices, reserve funding, and historical core test evidence |
@@ -80,4 +82,4 @@ Use one Bun lockfile and a private `@boss-pool/chain` workspace. Foundry owns So
 
 The [Uniswap Foundation prize page](https://ethglobal.com/events/tokyo2026/prizes/uniswap-foundation) requires public open-source code, FEEDBACK.md, and the [developer feedback form](https://developers.uniswap.org/hackathon-feedback). Its standard track totals $6,000, split $3,000 / $2,000 / $1,000. Continuity eligibility is unverified.
 
-The intended v4 evidence is a real two-hop attack, hook purchase accounting, stage refill/LP activation, and fully settled deltas. Add actual contract line links, receipts, and focused test evidence after implementation. Do not claim that V3 cannot run games or atomic workflows.
+Local Foundry and Anvil runs verify the two-hop attack, Hook purchase accounting, stage refills, reward custody, and fully settled deltas. Robinhood testnet now has verified deployment and full player-journey receipts. Expiry/refund remains local-only evidence. Do not present the team PoolManager as an official Robinhood deployment or claim that V3 cannot run games or atomic workflows.
