@@ -20,6 +20,7 @@ import {
 } from "viem";
 import { bossFactoryAbi } from "./generated/abi";
 import { bossHookCreationCode, bossRouterCreationCode } from "./generated/bytecode";
+import { matchesRequestedTransaction } from "./transaction-match";
 
 const HOOK_FLAGS = 0x2ac0n;
 const HOOK_FLAG_MASK = 0x3fffn;
@@ -511,7 +512,7 @@ async function waitForFactoryReceipt(
   }
   const transaction = await publicClient.getTransaction({ hash: receipt.transactionHash });
   if (!matchesFactoryTransaction(transaction, operation) ||
-      !sameAddress(receipt.from, operation.account) || !sameAddress(receipt.to ?? ZERO_ADDRESS, targetOf(operation))) {
+      !sameAddress(receipt.from, transaction.from) || !sameAddress(receipt.to ?? ZERO_ADDRESS, transaction.to ?? ZERO_ADDRESS)) {
     throw new BossFactorySdkError("FACTORY_RECEIPT_MISMATCH", "The mined transaction does not match the saved Factory request. Keep it saved and resume later.");
   }
   return { receipt, replaced: Boolean(replacement) };
@@ -521,10 +522,7 @@ function matchesFactoryTransaction(
   transaction: { from: Address; to: Address | null; input: Hex; value: bigint; chainId?: number | null },
   operation: FactoryPendingOperation,
 ): boolean {
-  return sameAddress(transaction.from, operation.account) &&
-    sameAddress(transaction.to ?? ZERO_ADDRESS, targetOf(operation)) &&
-    sameHex(transaction.input, operation.calldata) && transaction.value === 0n &&
-    (transaction.chainId === null || transaction.chainId === operation.chainId);
+  return matchesRequestedTransaction(transaction, { ...operation, target: targetOf(operation) });
 }
 
 function targetOf(operation: FactoryPendingOperation): Address {
