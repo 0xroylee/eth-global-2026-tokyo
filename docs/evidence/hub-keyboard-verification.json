@@ -1,0 +1,34 @@
+{
+  "date": "2026-09-26",
+  "baseCommit": "750b4bd",
+  "environment": "Local production build, Base Sepolia public reads, no connected wallet",
+  "before": {
+    "action": "Activate the sound toolbar button, then press W",
+    "expectedFocus": "CANVAS",
+    "observedFocus": "BUTTON",
+    "passed": false
+  },
+  "browserChecks": [
+    { "case": "W closes Welcome and focuses the canvas", "passed": true },
+    { "case": "W closes Help and focuses the canvas", "passed": true },
+    { "case": "A closes the Boss panel and focuses the canvas", "passed": true },
+    { "case": "D closes the Chain panel and focuses the canvas", "passed": true },
+    { "case": "Clicking Help's close button restores canvas focus", "passed": true },
+    { "case": "W after toolbar activation returns focus to the canvas", "passed": true },
+    { "case": "The network selector retains focus when W is pressed", "passed": true },
+    { "case": "Enter still activates the focused sound button", "passed": true },
+    { "case": "The keyboard handoff works after navigating to battle and returning to the hub", "passed": true },
+    { "case": "No browser console errors during the production navigation check", "passed": true },
+    { "case": "The gate caption and round-status text no longer overlap", "passed": true }
+  ],
+  "commands": [
+    { "command": "bun run typecheck", "result": "passed" },
+    { "command": "bun test apps/web/src/lib/hubGuide.test.ts apps/web/src/lib/factory-form.test.ts apps/web/src/lib/factory-operation.test.ts", "result": "13 passed" },
+    { "command": "bun run web:build", "result": "passed" },
+    { "command": "git diff --check", "result": "passed" }
+  ],
+  "limits": [
+    "Browser automation verified key-event routing, dialog dismissal, focus, and navigation; sustained key-held walking was not measured.",
+    "No wallet signature or on-chain transaction was performed."
+  ]
+}
