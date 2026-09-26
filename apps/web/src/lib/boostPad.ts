@@ -1,4 +1,4 @@
-export const STAGE_IMAGE_IDS = ["form-a", "form-b", "form-c"] as const;
+export const STAGE_IMAGE_IDS = ["form-a", "form-b", "form-c", "whale", "little-roy", "roy-king", "roy-tide"] as const;
 
 export type StageImageId = (typeof STAGE_IMAGE_IDS)[number];
 
@@ -6,6 +6,10 @@ export const STAGE_IMAGES: Record<StageImageId, { label: string; src: string }> 
   "form-a": { label: "Form A", src: "/images/boss-cat-form-a.png" },
   "form-b": { label: "Form B", src: "/images/boss-cat-form-b.png" },
   "form-c": { label: "Form C", src: "/images/boss-cat-form-c.png" },
+  whale: { label: "Macro Whale", src: "/images/boss-macro-whale-portrait.png" },
+  "little-roy": { label: "Little ETH", src: "/images/little-roy-slime.png" },
+  "roy-king": { label: "Little ETH King", src: "/images/little-roy-king-a.png" },
+  "roy-tide": { label: "Little ETH Tide", src: "/images/little-roy-king-b.png" },
 };
 
 export type BossFormInput = {

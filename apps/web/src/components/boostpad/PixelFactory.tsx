@@ -74,7 +74,6 @@ export function PixelFactory({ pad, overlay = false }: { pad: BoostPadForm; over
                         <button
                           type="button"
                           onClick={() => void arena.connect().catch(() => undefined)}
-                          disabled={arena.wallet.status === "checking"}
                           className="mt-2 bg-[#092B61] px-3 py-2 text-[16px] leading-none text-white transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] disabled:opacity-40"
                         >
                           {arena.wallet.status === "missing" ? "NO WALLET" : "CONNECT WALLET"}
@@ -170,13 +169,13 @@ export function PixelFactory({ pad, overlay = false }: { pad: BoostPadForm; over
                                     type="button"
                                     aria-pressed={selected}
                                     onClick={() => chooseImage(index, id)}
-                                    className={`w-20 border-2 bg-white p-1 transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] ${
+                                    className={`w-20 border-2 bg-[#1a1612] p-1 transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] ${
                                       selected ? "border-[#092B61]" : "border-[#092B61]/25"
                                     }`}
                                   >
                                     {/* eslint-disable-next-line @next/next/no-img-element -- existing boss art */}
                                     <img src={STAGE_IMAGES[id].src} alt="" className="h-16 w-full object-contain [image-rendering:pixelated]" />
-                                    <span className="mt-1 block text-center text-[12px] leading-none">{STAGE_IMAGES[id].label}</span>
+                                    <span className="mt-1 block text-center text-[12px] leading-none text-[#f3e2c4]">{STAGE_IMAGES[id].label}</span>
                                   </button>
                                 );
                               })}

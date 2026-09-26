@@ -23,6 +23,7 @@ import {
   type SkippedApproval,
   type WaitResult,
 } from "@boss-pool/chain";
+import { isEip1193Provider, normalizeProviderDetail } from "@/wallet/discovery";
 import { createWalletClient, custom, defineChain, UserRejectedRequestError, type EIP1193Provider, type WalletClient } from "viem";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -43,6 +44,7 @@ type WalletState = {
   chainId?: number;
   status: "checking" | "missing" | "disconnected" | "connected";
   error?: string;
+  busy?: boolean;
 };
 
 type StoredPending = {
@@ -93,6 +95,7 @@ export function useBossPool() {
   const contextRef = useRef<VerifiedContext | null>(null);
   const pendingRef = useRef<StoredPending | null>(null);
   const writeLock = useRef(false);
+  const walletAttempt = useRef(0);
   const [pendingRecord, setPendingRecord] = useState<StoredPending | null>(null);
   const [writeState, setWriteState] = useState<WriteState>({ status: "idle" });
 
@@ -137,6 +140,7 @@ export function useBossPool() {
       setWallet({ provider, status: "disconnected" });
     };
 
+    const attempt = ++walletAttempt.current;
     setWallet({ provider, status: "checking" });
     provider.on("accountsChanged", updateAccounts);
     provider.on("chainChanged", updateChain);
@@ -145,7 +149,7 @@ export function useBossPool() {
       provider.request({ method: "eth_accounts" }),
       provider.request({ method: "eth_chainId" }),
     ]).then(([accounts, chainId]) => {
-      if (!active) return;
+      if (!active || attempt !== walletAttempt.current) return;
       const account = Array.isArray(accounts) && isAddressValue(accounts[0]) ? accounts[0] : undefined;
       setWallet({
         provider,
@@ -154,7 +158,7 @@ export function useBossPool() {
         status: account ? "connected" : "disconnected",
       });
     }).catch((error: unknown) => {
-      if (active) setWallet({ provider, status: "disconnected", error: errorMessage(error) });
+      if (active && attempt === walletAttempt.current) setWallet({ provider, status: "disconnected", error: errorMessage(error) });
     });
 
     return () => {
@@ -261,25 +265,42 @@ export function useBossPool() {
   }, [readyContext, walletClient]);
 
   const connect = useCallback(async () => {
-    const provider = wallet.provider ?? window.ethereum;
+    const providers = await discoverWalletProviders(wallet.provider);
+    const provider = providers[0];
     if (!provider) {
       setWallet({ status: "missing", error: "No injected wallet was found in this browser." });
       return;
     }
+    const attempt = ++walletAttempt.current;
+    setWallet((current) => ({
+      ...current,
+      provider,
+      busy: true,
+      error: undefined,
+      status: current.account ? "connected" : "disconnected",
+    }));
     try {
-      const [accounts, chainId] = await Promise.all([
-        provider.request({ method: "eth_requestAccounts" }),
-        provider.request({ method: "eth_chainId" }),
-      ]);
+      const accounts = await withTimeout(requestWalletAccounts(provider), 12_000);
+      if (attempt !== walletAttempt.current) return;
       const account = Array.isArray(accounts) && isAddressValue(accounts[0]) ? accounts[0] : undefined;
+      const chainId = await provider.request({ method: "eth_chainId" }).catch(() => undefined);
+      if (attempt !== walletAttempt.current) return;
       setWallet({
         provider,
         account,
         chainId: typeof chainId === "string" ? parseChainId(chainId) : undefined,
         status: account ? "connected" : "disconnected",
+        error: account ? undefined : "The wallet did not return an account. Open it, then press Connect Wallet again.",
       });
     } catch (error) {
-      setWallet((current) => ({ ...current, error: walletErrorMessage(error), status: current.account ? "connected" : "disconnected" }));
+      if (attempt !== walletAttempt.current) return;
+      setWallet((current) => ({
+        ...current,
+        provider,
+        busy: false,
+        error: walletErrorMessage(error),
+        status: current.account ? "connected" : "disconnected",
+      }));
       throw error;
     }
   }, [wallet.provider]);
@@ -583,6 +604,63 @@ function errorMessage(error: unknown): string {
 
 function walletErrorMessage(error: unknown): string {
   return isUserRejected(error) ? "Wallet request was rejected." : errorMessage(error);
+}
+
+function discoverWalletProviders(current?: EIP1193Provider): Promise<EIP1193Provider[]> {
+  return new Promise((resolve) => {
+    const found: { provider: EIP1193Provider; rank: number }[] = [];
+    const add = (provider: unknown, rank: number) => {
+      if (!isEip1193Provider(provider) || found.some((entry) => entry.provider === provider)) return;
+      found.push({ provider, rank });
+    };
+    const onAnnounce = (event: Event) => {
+      const wallet = normalizeProviderDetail((event as CustomEvent<unknown>).detail);
+      if (!wallet) return;
+      add(wallet.provider, wallet.info.rdns === "io.metamask" ? 0 : 1);
+    };
+    window.addEventListener("eip6963:announceProvider", onAnnounce);
+    window.dispatchEvent(new Event("eip6963:requestProvider"));
+    window.setTimeout(() => {
+      window.removeEventListener("eip6963:announceProvider", onAnnounce);
+      const ethereum = window.ethereum as (EIP1193Provider & { providers?: unknown[] }) | undefined;
+      for (const provider of ethereum?.providers ?? []) add(provider, providerRank(provider));
+      add(ethereum, providerRank(ethereum));
+      add(current, 3);
+      found.sort((left, right) => left.rank - right.rank);
+      resolve(found.map((entry) => entry.provider));
+    }, 250);
+  });
+}
+
+function providerRank(provider: unknown): number {
+  return provider && typeof provider === "object" && "isMetaMask" in provider && provider.isMetaMask ? 1 : 2;
+}
+
+async function requestWalletAccounts(provider: EIP1193Provider): Promise<unknown> {
+  try {
+    await provider.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] });
+  } catch (error) {
+    if (isUserRejected(error)) throw error;
+  }
+  return provider.request({ method: "eth_requestAccounts" });
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error("The wallet did not respond. Open the wallet extension, then press Connect Wallet again."));
+    }, ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 function providerErrorCode(error: unknown): number | undefined {

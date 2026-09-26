@@ -151,12 +151,6 @@ export function GameShell() {
             </span>
           </div>
           <div className="pointer-events-auto flex w-full flex-wrap items-start gap-2 sm:w-auto sm:justify-end">
-            <Link
-              href="/launch"
-              className="rounded-lg border border-accent-soft/35 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-accent-soft transition-colors hover:bg-accent/10"
-            >
-              LAUNCH A MEME BOSS
-            </Link>
             <button
               type="button"
               disabled={overlayOpen || canvasPhase === "error"}
@@ -205,10 +199,10 @@ export function GameShell() {
               <button
                 type="button"
                 onClick={connectWallet}
-                disabled={overlayOpen || arena.wallet.status === "checking"}
+                disabled={overlayOpen}
                 className="rounded-lg border border-white/10 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-fog disabled:opacity-40"
               >
-                {arena.wallet.status === "missing" ? "NO WALLET" : "CONNECT WALLET"}
+                {arena.wallet.busy ? "CONNECTING…" : arena.wallet.status === "missing" ? "NO WALLET" : "CONNECT WALLET"}
               </button>
             )}
             {arena.networkMismatch && (
