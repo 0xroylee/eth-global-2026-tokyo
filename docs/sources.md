@@ -1,6 +1,6 @@
 # Source notes
 
-Reviewed on 26 September 2026. These references support the no-burn BossHP implementation. BP01 now has passing local core tests, actual Anvil deployment and a verified read-only arena. No Robinhood deployment or complete browser attack/claim journey is verified. Historical burn proofs remain separately labeled; see [current BP01 evidence](bp01-foundation.md).
+Reviewed on 26 September 2026. These references support the no-burn BossHP implementation. BP01 has local core evidence, an actual Anvil deployment and a verified read-only arena. The historical Robinhood testnet fixture has deployment and player-journey receipts; the active Base Sepolia target and complete browser attack/claim journey remain unverified. Historical burn proofs remain separately labeled; see [current BP01 evidence](bp01-foundation.md).
 
 ## Sponsor requirements
 
@@ -10,7 +10,11 @@ The standard track totals $6,000, split $3,000 / $2,000 / $1,000. The separate C
 
 The page requires public open-source code, `FEEDBACK.md`, and the [developer feedback form](https://developers.uniswap.org/hackathon-feedback) linking that file. It also asks the README to identify relevant integration code. The form has not been submitted during planning.
 
-## Robinhood Chain
+## Base Sepolia
+
+Base's [JSON-RPC chain ID documentation](https://docs.base.org/base-chain/api-reference/ethereum-json-rpc-api/eth_chainId) identifies chain ID `84532` for Base Sepolia. A Base docs [RPC setup example](https://docs.base.org/cookbook/use-case-guides/finance/access-real-time-asset-data-pyth-price-feeds/) uses `https://sepolia.base.org` as the Base Sepolia RPC endpoint. The current deployment scripts use these values and deploy a team-owned pinned v4 PoolManager; this does not claim an official Base PoolManager deployment.
+
+## Historical Robinhood Chain target
 
 The [official wallet setup page](https://docs.robinhood.com/chain/add-network-to-wallet/) distinguishes:
 
@@ -21,7 +25,7 @@ The [official wallet setup page](https://docs.robinhood.com/chain/add-network-to
 
 The [Uniswap v4 deployment table](https://developers.uniswap.org/docs/protocols/v4/deployments) lists a Robinhood **mainnet** PoolManager at `0x8366a39cc670b4001a1121b8f6a443a643e40951`. Its testnet section does not list Robinhood testnet. Absence from the table is not proof that no compatible testnet deployment exists.
 
-A 25 September probe from this planning environment attempted `eth_chainId`, `eth_getCode`, and `eth_blockNumber` against the documented testnet endpoint and received **403 Forbidden**. A new `eth_chainId` request on 26 September again returned HTTP 403. No chain ID, bytecode, or block-height result was obtained. This observation does not establish an outage for other clients. BP01 records readiness; BP11 must resolve access through an available official or provider endpoint and verify the deployed route.
+A 25 September probe from this planning environment attempted `eth_chainId`, `eth_getCode`, and `eth_blockNumber` against the documented testnet endpoint and received **403 Forbidden**. A new `eth_chainId` request on 26 September again returned HTTP 403. No chain ID, bytecode, or block-height result was obtained. This observation does not establish an outage for other clients. It documents the former target's access issue; Base Sepolia is now the active testnet target.
 
 Never infer that a mainnet address is valid on testnet. If a suitable deployment cannot be independently verified, deploy pinned v4 core on testnet and label it as a team deployment. Confirm sponsor expectations before treating that fallback as accepted prize evidence.
 

@@ -34,7 +34,8 @@ import {
 } from "@boss-pool/chain";
 import {
   assertCancunTransientStorage,
-  assertRobinhoodChain,
+  assertBaseSepoliaChain,
+  BASE_SEPOLIA_CHAIN_ID,
   loadTestnetConfig,
   parseDeploymentSummary,
   sanitizeSecrets,
@@ -181,13 +182,13 @@ async function localRuntime(): Promise<Runtime> {
 async function testnetRuntime(onConfig: (config: ReturnType<typeof loadTestnetConfig>) => void): Promise<Runtime> {
   const config = loadTestnetConfig();
   onConfig(config);
-  await assertRobinhoodChain(config.client);
+  await assertBaseSepoliaChain(config.client);
   await assertCancunTransientStorage(config.client);
-  const manifestPath = path.join(root, "apps/web/public/deployments/robinhood-testnet.json");
+  const manifestPath = path.join(root, "apps/web/public/deployments/base-sepolia.json");
   const raw = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
   if (
-    raw.schemaVersion !== 1 || raw.network !== "robinhood-testnet" ||
-    raw.chainId !== 46_630 || typeof raw.deploymentTxHash !== "string" ||
+    raw.schemaVersion !== 1 || raw.network !== "base-sepolia" ||
+    raw.chainId !== BASE_SEPOLIA_CHAIN_ID || typeof raw.deploymentTxHash !== "string" ||
     typeof raw.deployedAtBlock !== "number" || !Number.isSafeInteger(raw.deployedAtBlock) || raw.deployedAtBlock < 0
   ) throw new Error("The testnet manifest is missing its verified chain and deployment receipt metadata.");
   const summary = parseDeploymentSummary(`BOSS_POOL_DEPLOYMENT_JSON=${JSON.stringify(raw)}`);
@@ -198,13 +199,13 @@ async function testnetRuntime(onConfig: (config: ReturnType<typeof loadTestnetCo
   const deploymentBlockFromManifest = BigInt(raw.deployedAtBlock);
   await verifyDeploymentOnChain(config.client, summary, deploymentTxHash, deploymentBlockFromManifest);
 
-  const chain = robinhoodChain(config.rpcUrl);
+  const chain = baseSepoliaChain(config.rpcUrl);
   const transport = http(config.rpcUrl, { retryCount: 0, timeout: 15_000 });
   const accountA = privateKeyToAccount(config.deployerKey);
   const accountB = privateKeyToAccount(config.playerBKey);
   return {
     network: "testnet",
-    chainId: 46_630,
+    chainId: BASE_SEPOLIA_CHAIN_ID,
     client: config.client,
     wallets: {
       A: makeWallet("A", accountA.address, createWalletClient({ account: accountA, chain, transport })),
@@ -226,10 +227,10 @@ function localChain(rpcUrl: string): Chain {
   });
 }
 
-function robinhoodChain(rpcUrl: string): Chain {
+function baseSepoliaChain(rpcUrl: string): Chain {
   return defineChain({
-    id: 46_630,
-    name: "Robinhood Testnet",
+    id: BASE_SEPOLIA_CHAIN_ID,
+    name: "Base Sepolia",
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: { default: { http: [rpcUrl] } },
   });

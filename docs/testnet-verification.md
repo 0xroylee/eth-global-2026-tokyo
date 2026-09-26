@@ -2,6 +2,8 @@
 
 Verified 26 September 2026 on Robinhood Chain Testnet, chain `46630`. This is a team-deployed, non-production fixture. The PoolManager was deployed from the repository's pinned v4-core source. It is not an official Robinhood PoolManager. The [Robinhood deployment documentation](https://docs.robinhood.com/chain/deploy-smart-contracts/) lists the testnet chain and explorer.
 
+This report documents the historical Robinhood target. Current testnet scripts target Base Sepolia (chain `84532`); these receipts do not verify a Base Sepolia deployment.
+
 ## Deployment and setup
 
 The public source of truth for contract addresses, pool keys, configuration, provenance, and all 18 deployment receipts is [`robinhood-testnet.json`](../apps/web/public/deployments/robinhood-testnet.json). Each deployment and setup receipt was checked against the testnet RPC. Combined deployment and setup gas was `19,595,227`.
@@ -47,14 +49,6 @@ The first exercise attempt stopped before any writes when one RPC backend reject
 
 Exercise source: [`exercise-boss-pool.ts`](../scripts/exercise-boss-pool.ts), commit `7f6fbe4d34ffa757228eac7e21f0a09b473b280c`. Its recorded SHA-256 is `ea250d14446aa4da4d63cf29d41ea939c3a412f82de3fee45d9da87b5852759c`; the runner source file was clean for the run.
 
-## Reproduce
+## Reproduction status
 
-Set `ROBINHOOD_RPC_URL`, `TESTNET_DEPLOYER_PRIVATE_KEY`, and `TESTNET_PLAYER_PRIVATE_KEY` in the ignored `.env.testnet.local` file. The commands use Player A as the deployer and Player B as a separate test wallet. The deployment command creates a new fixture and writes the public manifest only after receipt and code verification. The exercise command consumes the active round and saves checkpoints under ignored `.scratch/boss-pool-exercise/`.
-
-```sh
-bun --env-file=.env.testnet.local run testnet:preflight
-bun --env-file=.env.testnet.local run testnet:deploy
-bun --env-file=.env.testnet.local run testnet:exercise
-```
-
-This verified deployment is now Defeated with all eligible HP redeemed. It cannot run through the full journey again. Deploy a new team fixture before another exercise. Expiry and prize-refund behavior have local Foundry coverage only; they have no Robinhood testnet receipts. The browser remains read-only.
+The verified Robinhood fixture is Defeated with all eligible HP redeemed, so it cannot run through the full journey again. Current `testnet:*` commands target Base Sepolia; see the [current Base Sepolia setup](contract-usage.md#base-sepolia-testnet-target) for new deployments. Expiry and prize-refund behavior have local Foundry coverage only; they have no Robinhood or Base Sepolia testnet receipts. The browser remains read-only.
