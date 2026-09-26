@@ -99,6 +99,8 @@ Use a viem public client with the configured HTTP RPC for reads, simulations, an
 
 The wallet flow requests accounts, detects account and chain changes, offers a chain switch, and clears stale player state and quotes after changes. Each write checks the selected account, chain, deployment, and expected stage. Public round reads and quotes remain available without a wallet. Manual browser-wallet popup acceptance remains open; see the [SDK verification checklist](sdk-verification.md#manual-browser-wallet-checklist). [EIP-1193 provider API](https://eips.ethereum.org/EIPS/eip-1193)
 
+The connection preference stores only the selected provider's stable RDNS and whether to reconnect. Restore the selected provider with silent `eth_accounts` and `eth_chainId` reads when it announces, including after a delayed announcement. Read the current account from the wallet instead of treating a cached address as connected. With no saved preference, silently reconnect only when one wallet is discovered. An explicit disconnect disables automatic restoration. Pending transaction records separately retain their original account for receipt validation.
+
 Preserve the existing approval, simulation, receipt, and stale-stage rules. Attacks approve MockUSD to the selected BossRouter. Standalone redemption approves BossHP to BossHook; Factory claims consume earned credit without a token approval or surrender. Keep optional victory-NFT claims separate. Derive damage and stage transitions from confirmed receipts and refreshed canonical state.
 
 ### Live battle page context

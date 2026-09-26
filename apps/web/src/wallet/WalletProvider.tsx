@@ -22,8 +22,39 @@ declare global {
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
+const WALLET_PREFERENCE_KEY = "boss-pool.wallet-preference";
 
 type ActiveProvider = { detail: DiscoveredWallet; cleanup: () => void };
+type WalletPreference = { kind: "unknown" | "disabled" } | { kind: "selected"; rdns: string };
+
+function readWalletPreference(): WalletPreference {
+  try {
+    const stored = window.localStorage.getItem(WALLET_PREFERENCE_KEY);
+    if (!stored) return { kind: "unknown" };
+    const value: unknown = JSON.parse(stored);
+    if (value && typeof value === "object") {
+      const preference = value as { reconnect?: unknown; rdns?: unknown };
+      if (preference.reconnect === false) return { kind: "disabled" };
+      if (preference.reconnect === true && typeof preference.rdns === "string" && preference.rdns.trim()) {
+        return { kind: "selected", rdns: preference.rdns.trim() };
+      }
+    }
+  } catch {
+    // Storage can be unavailable in restricted browser contexts.
+  }
+  return { kind: "unknown" };
+}
+
+function writeWalletPreference(preference: WalletPreference): void {
+  try {
+    const value = preference.kind === "selected"
+      ? { reconnect: true, rdns: preference.rdns }
+      : { reconnect: false };
+    window.localStorage.setItem(WALLET_PREFERENCE_KEY, JSON.stringify(value));
+  } catch {
+    // Wallet connection remains usable when storage is unavailable.
+  }
+}
 
 function accountState(
   providers: DiscoveredWallet[],
@@ -43,6 +74,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state);
   const activeRef = useRef<ActiveProvider | null>(null);
   const opRef = useRef(0);
+  const preferenceRef = useRef<WalletPreference>({ kind: "unknown" });
+  const manualConnectOpRef = useRef<number | null>(null);
+  const chooserOpRef = useRef<number | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
@@ -60,6 +94,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const onAccountsChanged = (value: unknown) => {
         const accounts = parseWalletAccounts(value);
         if (accounts.length === 0) {
+          opRef.current += 1;
           detach();
           setState((s) => disconnectedState(s.providers));
           return;
@@ -89,6 +124,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         });
       };
       const onDisconnect = () => {
+        opRef.current += 1;
         detach();
         setState((s) => disconnectedState(s.providers));
       };
@@ -109,7 +145,32 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Discovery never prompts; connect() asks permission only after an explicit user action.
   useEffect(() => {
+    let effectActive = true;
     let discovered: DiscoveredWallet[] = [];
+    const restoring = new Set<string>();
+    preferenceRef.current = readWalletPreference();
+    const reconnect = async (detail: DiscoveredWallet) => {
+      if (!effectActive || manualConnectOpRef.current !== null || activeRef.current?.detail.info.rdns === detail.info.rdns || restoring.has(detail.info.rdns)) return;
+      restoring.add(detail.info.rdns);
+      const op = ++opRef.current;
+      try {
+        const accounts = parseWalletAccounts(await detail.provider.request({ method: "eth_accounts" }));
+        if (accounts.length === 0 || !effectActive || op !== opRef.current) return;
+        const chainId = parseWalletChainId(await detail.provider.request({ method: "eth_chainId" }));
+        if (!effectActive || op !== opRef.current) return;
+        attach(detail);
+        setState((s) => accountState(s.providers, detail, accounts[0]!, chainId));
+        if (preferenceRef.current.kind === "unknown") {
+          const preference = { kind: "selected", rdns: detail.info.rdns } as const;
+          preferenceRef.current = preference;
+          writeWalletPreference(preference);
+        }
+      } catch {
+        // A failed silent read leaves the app disconnected; the user can still connect explicitly.
+      } finally {
+        restoring.delete(detail.info.rdns);
+      }
+    };
     const onAnnounce = (event: CustomEvent<unknown>) => {
       const wallet = normalizeProviderDetail(event.detail);
       if (!wallet) return;
@@ -119,23 +180,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           ? disconnectedState(appendProvider(s.providers, wallet))
           : { ...s, providers: appendProvider(s.providers, wallet) },
       );
+      const preference = preferenceRef.current;
+      if (preference.kind === "selected" && preference.rdns === wallet.info.rdns) void reconnect(wallet);
     };
     window.addEventListener("eip6963:announceProvider", onAnnounce);
     window.dispatchEvent(new Event("eip6963:requestProvider"));
-
-    const reconnect = async (detail: DiscoveredWallet) => {
-      const op = ++opRef.current;
-      try {
-        const accounts = parseWalletAccounts(await detail.provider.request({ method: "eth_accounts" }));
-        if (accounts.length === 0 || op !== opRef.current) return;
-        const chainId = parseWalletChainId(await detail.provider.request({ method: "eth_chainId" }));
-        if (op !== opRef.current) return;
-        attach(detail);
-        setState((s) => accountState(s.providers, detail, accounts[0]!, chainId));
-      } catch {
-        // A failed silent read leaves the app disconnected; the user can still connect explicitly.
-      }
-    };
 
     const settle = window.setTimeout(() => {
       if (discovered.length === 0) {
@@ -144,10 +193,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
       const providers = discovered;
       setState((s) => (s.status === "discovering" ? (providers.length ? disconnectedState(providers) : { status: "unavailable", providers }) : s));
-      if (providers.length === 1) void reconnect(providers[0]!);
+      const preference = preferenceRef.current;
+      if (preference.kind === "selected") {
+        const selected = providers.find((provider) => provider.info.rdns === preference.rdns);
+        if (selected) void reconnect(selected);
+      } else if (preference.kind === "unknown" && providers.length === 1) {
+        void reconnect(providers[0]!);
+      }
     }, 0);
 
     return () => {
+      effectActive = false;
+      opRef.current += 1;
       window.removeEventListener("eip6963:announceProvider", onAnnounce);
       window.clearTimeout(settle);
       detach();
@@ -162,11 +219,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return;
       }
       const op = ++opRef.current;
+      chooserOpRef.current = null;
+      manualConnectOpRef.current = op;
       detach();
+      const preference = { kind: "selected", rdns: detail.info.rdns } as const;
+      preferenceRef.current = preference;
+      writeWalletPreference(preference);
       setState((s) => ({ status: "connecting", providers: s.providers, selected: detail }));
       try {
         const accounts = parseWalletAccounts(await detail.provider.request({ method: "eth_requestAccounts" }));
         if (accounts.length === 0) throw new Error("Wallet returned no accounts.");
+        if (op !== opRef.current) return;
         const chainId = parseWalletChainId(await detail.provider.request({ method: "eth_chainId" }));
         if (op !== opRef.current) return;
         attach(detail);
@@ -174,6 +237,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (op !== opRef.current) return;
         setState((s) => ({ status: "error", message: walletErrorMessage(error), providers: s.providers, selected: detail }));
+      } finally {
+        if (manualConnectOpRef.current === op) manualConnectOpRef.current = null;
       }
     },
     [attach, detach],
@@ -185,11 +250,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (current.providers.length === 1) {
       await connect(current.providers[0]!.info.uuid);
     } else if (current.providers.length > 1) {
+      const op = ++opRef.current;
+      chooserOpRef.current = op;
+      manualConnectOpRef.current = op;
       setState({ status: "choosing", providers: current.providers });
     }
   }, [connect]);
 
   const cancelConnect = useCallback(() => {
+    const chooserOp = chooserOpRef.current;
+    chooserOpRef.current = null;
+    if (manualConnectOpRef.current === chooserOp) manualConnectOpRef.current = null;
     setState((s) => s.status === "choosing" ? disconnectedState(s.providers) : s);
   }, []);
 
@@ -253,6 +324,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Local cleanup only. The wallet keeps whatever permission it granted; we do not claim to revoke it.
   const disconnect = useCallback(() => {
     opRef.current += 1;
+    chooserOpRef.current = null;
+    manualConnectOpRef.current = null;
+    preferenceRef.current = { kind: "disabled" };
+    writeWalletPreference(preferenceRef.current);
     detach();
     setState((s) => disconnectedState(s.providers));
   }, [detach]);
