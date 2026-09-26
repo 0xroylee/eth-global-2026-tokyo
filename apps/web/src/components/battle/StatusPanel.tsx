@@ -100,7 +100,8 @@ export function StatusPanel({
         />
       </div>
 
-      <div className="mt-1 flex flex-col gap-1.5 border-t-2 border-[#2b4a8b]/20 pt-1.5" aria-live="polite">
+      {/* 純資訊 chip 列：不掛 live region——ROUND DEADLINE 每秒更新會令 SR 每秒廣播；動態宣告由 DialogWindow 承擔（smith M-1） */}
+      <div className="mt-1 flex flex-col gap-1.5 border-t-2 border-[#2b4a8b]/20 pt-1.5">
         <span className="flex flex-wrap items-center justify-between gap-x-2 rounded-full border border-[#2b4a8b]/40 px-2 py-0.5 text-[10px] tracking-[0.12em] text-[#2b4a8b]">
           <span>STAGE {stage} / 3</span>
           <span className="flex items-center gap-1" aria-hidden>
