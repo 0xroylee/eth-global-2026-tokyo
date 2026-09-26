@@ -247,7 +247,7 @@ contract BossPoolCoreTest is Test {
         assertGe(router.minimumBossHPForVictoryPath(), 1_802e18);
         assertLe(router.minimumBossHPForVictoryPath(), 1_803e18);
         assertEq(bossHP.totalSupply(), BOSS_HP_SUPPLY);
-        assertEq(roy.balanceOf(ALICE), 0, "fresh attacker needs no starter ROY");
+        assertEq(roy.balanceOf(ALICE), 0, "fresh attacker needs no starter Attack Token");
         assertEq(collectibles.balanceOf(ALICE), 0, "fresh attacker needs no entry NFT");
         assertEq(mockUSD.allowance(ALICE, address(hook)), 0, "attack needs no Hook approval");
         uint256 aliceUSD = mockUSD.balanceOf(ALICE);
@@ -503,7 +503,7 @@ contract BossPoolCoreTest is Test {
 
         PoolKey memory bossKey = round.router.bossPoolKey();
         (uint160 startPrice,,,) = round.manager.getSlot0(bossKey.toId());
-        assertEq(startPrice, TickMath.getSqrtPriceAtTick(0), "human ROY/HP starts at 1");
+        assertEq(startPrice, TickMath.getSqrtPriceAtTick(0), "human Attack Token/HP starts at 1");
 
         vm.prank(address(0xCAFE));
         BossRouter.QuoteResult memory initialQuote = round.router.quoteAttackWithMockUSD(1e6, 0);
@@ -524,7 +524,7 @@ contract BossPoolCoreTest is Test {
         assertEq(initialQuote.roySpent, partialAttack.roySpent);
         assertEq(initialQuote.bossHPOut, partialAttack.hpOut);
         (uint160 partialPrice,,,) = round.manager.getSlot0(bossKey.toId());
-        assertLt(partialPrice, startPrice, "human ROY/HP rises as the pool price falls");
+        assertLt(partialPrice, startPrice, "human Attack Token/HP rises as the pool price falls");
 
         BossRouter.QuoteResult memory clearQuote = round.router.quoteAttackWithMockUSD(1_000e6, 0);
         assertTrue(clearQuote.stageCleared);
@@ -538,13 +538,13 @@ contract BossPoolCoreTest is Test {
         assertEq(clearQuote.roySpent, clearAttack.roySpent);
         assertEq(clearQuote.bossHPOut, clearAttack.hpOut);
         assertGt(clearAttack.hpOut, 0);
-        assertGt(clearAttack.royBought, clearAttack.roySpent, "unused supply-pool ROY returns to the player");
+        assertGt(clearAttack.royBought, clearAttack.roySpent, "unused supply-pool Attack Token returns to the player");
         assertEq(round.hook.currentStage(), 1);
         assertEq(round.hook.stageSold(1), 0, "clearing attack cannot spill");
         assertEq(
             round.hook.stageEndSqrtPriceX96(0),
             TickMath.getSqrtPriceAtTick(-1_920),
-            "human ROY/HP ends at the configured upper price"
+            "human Attack Token/HP ends at the configured upper price"
         );
         assertEq(-TickMath.getTickAtSqrtPrice(round.hook.stageEndSqrtPriceX96(0)), 1_920);
         (uint160 resetPrice,,,) = round.manager.getSlot0(bossKey.toId());

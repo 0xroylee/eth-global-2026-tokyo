@@ -62,7 +62,7 @@ export function BattleView({
       </div>
 
       <h1 id="battle-title" className="sr-only">
-        ROY · BOSS BATTLE
+        Attack Token · BOSS BATTLE
       </h1>
 
       {/* STATUS zone — top-left */}

@@ -17,7 +17,7 @@ function pickLines(phase: AttackPhase, state: MockBattleState, stage: number, da
     case "submit":
       return ["SUBMITTED…", "Waiting for the receipt…"];
     default:
-      return ["WILD ROY APPEARED!", "Choose a command."];
+      return ["Attack Token appeared!", "Choose a command."];
   }
 }
 

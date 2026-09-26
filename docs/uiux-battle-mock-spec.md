@@ -7,13 +7,13 @@
 
 - **目的**：把 `BossEntryPanel` 裡 disabled 的「ENTER BATTLE · NEXT STEP」按鈕（`apps/web/src/components/BossEntryPanel.tsx:63`）接成可玩的**無鏈戰鬥 mock**——三階 Boss、踢一下扣血、勝利畫面，全部數字為固定 fixture，供 demo、錄影與 BP05/BP06 排演（`docs/delivery-plan.md` §Frontend build sequence 第 4 項）。
 - **範圍**：mock 戰鬥 overlay 一組新元件 + 一個直接預覽路由 + 唯一修改既有檔 `BossEntryPanel.tsx`。**不接鏈、不做 quote/input、不碰 hub、無音效**（詳 §12）。
-- **換真數據**：狀態形狀對齊 `LocalRoundSnapshot`，替換點清單見 §8；Roy 的鏈端介面就緒即可換。
+- **換真數據**：狀態形狀對齊 `LocalRoundSnapshot`，替換點清單見 §8；共用 SDK 就緒即可換。
 - **Design Pattern 聲明**：本 mock **不引入任何 design pattern**。Signal：單一畫面、單一資料源、固定流程，無 3+ 平行變體、無可替換演算法、無外部整合邊界。Alternative：純 reducer（`useReducer`）+ 計時 hook，即最簡做法。Cost：零額外抽象。母本已有的「receipt 驅動」鐵律（動畫非 authoritative state）在此以「phase 機器驅動」近似，不另建事件匯流排。
 
 ## 2. 進入／離開流程
 
-1. Hub 走近 Roy 門 → `gate:enter`（`apps/web/src/components/GameShell.tsx:20`）→ `BossEntryPanel`（`GameShell.tsx:57`）。
-2. **只有 `cat`（Roy）門可進 mock 戰鬥**。`boss.id !== "cat"` 的門檻已存在於 `BossHealth`（`BossEntryPanel.tsx:84`）；ENTER 按鈕以相同條件 gating：`cat` → 可點、標籤改 `ENTER BATTLE`；`macro-whale` / `locked` → 維持 disabled 現況。
+1. Hub 走近 Attack Token 門 → `gate:enter`（`apps/web/src/components/GameShell.tsx:20`）→ `BossEntryPanel`（`GameShell.tsx:57`）。
+2. **只有 `cat`（Attack Token）門可進 mock 戰鬥**。`boss.id !== "cat"` 的門檻已存在於 `BossHealth`（`BossEntryPanel.tsx:84`）；ENTER 按鈕以相同條件 gating：`cat` → 可點、標籤改 `ENTER BATTLE`；`macro-whale` / `locked` → 維持 disabled 現況。
 3. 點「ENTER BATTLE」→ `BattleView` **全屏 overlay**（`fixed inset-0 z-30`；entry panel 目前是 `absolute inset-0 z-20`，見 `BossEntryPanel.tsx:35`）→ 戰鬥開始。
 4. ESC 關閉 BattleView → 回到 entry panel；焦點回到 ENTER 按鈕（新增 `enterRef`）。再 ESC → 關 panel（現有行為 `BossEntryPanel.tsx:24`）。
 5. **ESC 分派契約（唯一做法，執行者不得另加 window listener）**：
@@ -147,7 +147,7 @@ type MockBattleState = {
 | --- | --- |
 | MockBadge | `MOCK · NO CHAIN` |
 | ENTER 按鈕（cat） | `ENTER BATTLE`（取代 `ENTER BATTLE · NEXT STEP`） |
-| BattleView 標題 | `ROY · BOSS BATTLE` |
+| BattleView 標題 | `Attack Token · BOSS BATTLE` |
 | 離開按鈕 | `EXIT BATTLE · ESC` |
 | AttackPanel 主按鈕 | `MOCK ATTACK` |
 | 相位列 | `SIMULATE` / `SIGN` / `SUBMIT` / `CONFIRM` |
@@ -176,7 +176,9 @@ type MockBattleState = {
 
 ## 8. 換真數據路徑（swap path）
 
-| 替換點 | mock 現況 | 真鏈做法（Roy 介面就緒後） |
+Historical note: this section describes the SDK before its write methods and deadline reads existed. The current [live battle page context](technical-spec.md#live-battle-page-context) replaces this integration plan. The mock-only timers, fixed damage, and claim placeholders elsewhere in this document describe the old preview rather than the planned live page.
+
+| 替換點 | mock 現況 | 真鏈做法（共用 SDK 就緒後） |
 | --- | --- | --- |
 | 資料源 hook | `useMockBattle`（`useReducer`＋timers） | 改以 `useLocalRound()`（`apps/web/src/lib/useLocalRound.ts:22`）＋未來 write path 實作同形 hook |
 | state 形狀 | `MockBattleState` | 直接映射 `LocalRoundSnapshot`：`status/currentStage/stageSold/stageCapacity/originalPrize/finalEligibleHP`（`packages/chain/src/index.ts:46-73`）欄位同名 |
@@ -221,7 +223,7 @@ type MockBattleState = {
 
 1. `bun run typecheck` clean（root，`package.json` scripts）。
 2. `bun run web:build` clean。
-3. 瀏覽器 smoke A：`/` → WASD 走向 Roy 門 → `E` → panel → `ENTER BATTLE` → 每階 5 下 `MOCK ATTACK`（共 15 下）→ 兩次 `STAGE CLEARED` 過場 → 第三階清空 → `BOSS DEFEATED`＋VictoryCard（`1,000` MockUSD 預期份額）。
+3. 瀏覽器 smoke A：`/` → WASD 走向 Attack Token 門 → `E` → panel → `ENTER BATTLE` → 每階 5 下 `MOCK ATTACK`（共 15 下）→ 兩次 `STAGE CLEARED` 過場 → 第三階清空 → `BOSS DEFEATED`＋VictoryCard（`1,000` MockUSD 預期份額）。
 4. 瀏覽器 smoke B：`/mock-battle` 直接 render BattleView，不依賴 hub、無 console error。
 5. **無假鏈上數據**：全頁（含勝利）恆見 `MOCK · NO CHAIN`；不出現任何地址、假 tx hash、`LIVE` 徽章。
 6. reduced-motion：`STAGE CLEARED` 過場 ≤100ms；位移/縮放動畫消失（opacity 留存）。

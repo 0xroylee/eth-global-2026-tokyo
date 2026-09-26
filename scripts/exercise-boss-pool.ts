@@ -334,7 +334,7 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
   assert(initial.bossHPTotalSupply === 2_000n * 10n ** 18n, "BossHP fixture supply must be 2,000 tokens");
   assert(initial.mockUSDDecimals === 6 && initial.royDecimals === 18 && initial.bossHPDecimals === 18, "token decimals changed");
   assert(initial.bossHPCustody === initial.bossHPTotalSupply, "BossHP supply must be in protocol or player custody");
-  assert(initial.royA === 0n && initial.royB === 0n, "fresh attackers need no starter ROY");
+  assert(initial.royA === 0n && initial.royB === 0n, "fresh attackers need no starter Attack Token");
   assert(initial.victoryNftBalanceA === 0n && initial.victoryNftBalanceB === 0n, "fresh attackers need no entry NFT");
   assert(initial.mockUSDHookAllowanceA === 0n && initial.mockUSDHookAllowanceB === 0n, "fresh attackers need no Hook approval");
   assert(initial.nextCollectibleTokenId === 1n, "optional victory collection starts at token id one");
@@ -676,11 +676,11 @@ async function runSdkAttack(
   const actual = confirmed.result;
   assert(actual.stage === attack.stage, `${attack.label}: typed receipt stage mismatch`);
   assert(actual.mockUSDSpent === quote.mockUSDSpent, `${attack.label}: public pre-approval quote MockUSD spend did not match execution without a pool mutation`);
-  assert(actual.royBought === quote.royBought && actual.roySpent === quote.roySpent, `${attack.label}: public ROY quote did not match execution without a pool mutation`);
+  assert(actual.royBought === quote.royBought && actual.roySpent === quote.roySpent, `${attack.label}: public Attack Token quote did not match execution without a pool mutation`);
   assert(actual.bossHPOut === quote.bossHPOut, `${attack.label}: public BossHP quote did not match execution without a pool mutation`);
   assert(actual.mockUSDRefunded === quote.mockUSDRefunded && actual.royRefunded === quote.royRefunded, `${attack.label}: quote refunds do not match actual settlement`);
   assert(actual.mockUSDSpent > 0n && actual.mockUSDSpent <= attack.maxUSD, `${attack.label}: MockUSD spend is outside its cap`);
-  assert(actual.royBought > 0n && actual.roySpent > 0n && actual.roySpent <= actual.royBought, `${attack.label}: two-hop ROY accounting is invalid`);
+  assert(actual.royBought > 0n && actual.roySpent > 0n && actual.roySpent <= actual.royBought, `${attack.label}: two-hop Attack Token accounting is invalid`);
   assert(actual.bossHPOut >= quote.minBossHPOut && actual.bossHPOut > 0n, `${attack.label}: output missed the floor the player accepted`);
   assert(actual.events.some((event) => event.eventName === "AttackExecuted" && event.transactionHash === confirmed.hash), `${attack.label}: SDK omitted its typed Router event`);
   assert(actual.events.some((event) => event.eventName === "AttackRecorded"), `${attack.label}: SDK omitted its typed Hook damage event`);
@@ -690,10 +690,10 @@ async function runSdkAttack(
   const playerAfterHP = attack.player.address === runtime.wallets.A.address ? after.bossHPA : after.bossHPB;
   const playerAfterROY = attack.player.address === runtime.wallets.A.address ? after.royA : after.royB;
   assert(playerBeforeUSD - playerAfterUSD === actual.mockUSDSpent, `${attack.label}: actual MockUSD balance delta mismatch`);
-  assert(playerAfterROY - playerBeforeROY === actual.royRefunded, `${attack.label}: actual player ROY refund delta mismatch`);
+  assert(playerAfterROY - playerBeforeROY === actual.royRefunded, `${attack.label}: actual player Attack Token refund delta mismatch`);
   assert(playerAfterHP - playerBeforeHP === actual.bossHPOut, `${attack.label}: player did not receive the full BossHP output`);
   assert(after.bossHPTotalSupply === initial.bossHPTotalSupply, `${attack.label}: BossHP was minted or burned`);
-  assert(after.royTotalSupply === initial.royTotalSupply, `${attack.label}: ROY was minted or burned`);
+  assert(after.royTotalSupply === initial.royTotalSupply, `${attack.label}: Attack Token was minted or burned`);
   assert(after.bossHPCustody === after.bossHPTotalSupply, `${attack.label}: BossHP custody failed to reconcile`);
 
   const updatedStageSold = [...expectedStageSold];
@@ -861,7 +861,7 @@ function assertSnapshotUnchanged(
   assert(before.finalEligibleHP === after.finalEligibleHP && before.redeemedHP === after.redeemedHP && before.paidPrize === after.paidPrize, `${label}: reward accounting changed`);
   assert(before.mockUSDInHook === after.mockUSDInHook && before.bossHPCustody === after.bossHPCustody, `${label}: contract token balances changed`);
   assert(before.mockUSDA === after.mockUSDA && before.mockUSDB === after.mockUSDB, `${label}: player MockUSD changed`);
-  assert(before.royA === after.royA && before.royB === after.royB, `${label}: player ROY changed`);
+  assert(before.royA === after.royA && before.royB === after.royB, `${label}: player Attack Token changed`);
   assert(before.bossHPA === after.bossHPA && before.bossHPB === after.bossHPB, `${label}: player BossHP changed`);
   assert(before.nextCollectibleTokenId === after.nextCollectibleTokenId, `${label}: NFT supply changed`);
   assert(before.victoryNftBalanceA === after.victoryNftBalanceA && before.victoryNftBalanceB === after.victoryNftBalanceB, `${label}: NFT balances changed`);

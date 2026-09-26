@@ -322,9 +322,9 @@ export function BossActions({
               <QuoteMetric label="BOSShp ESTIMATE" amount={quoteState.quote.bossHPOut} decimals={BOSS_HP_DECIMALS} unit="HP" />
               <QuoteMetric label="MOCKUSD SPENT" amount={quoteState.quote.mockUSDSpent} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
               <QuoteMetric label="MOCKUSD REFUND" amount={quoteState.quote.mockUSDRefunded} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
-              <QuoteMetric label="ROY BOUGHT" amount={quoteState.quote.royBought} decimals={BOSS_HP_DECIMALS} unit="ROY" />
-              <QuoteMetric label="ROY SPENT" amount={quoteState.quote.roySpent} decimals={BOSS_HP_DECIMALS} unit="ROY" />
-              <QuoteMetric label="ROY REFUND" amount={quoteState.quote.royRefunded} decimals={BOSS_HP_DECIMALS} unit="ROY" />
+              <QuoteMetric label="ATTACK TOKEN BOUGHT" amount={quoteState.quote.royBought} decimals={BOSS_HP_DECIMALS} unit="Attack Token" />
+              <QuoteMetric label="ATTACK TOKEN SPENT" amount={quoteState.quote.roySpent} decimals={BOSS_HP_DECIMALS} unit="Attack Token" />
+              <QuoteMetric label="ATTACK TOKEN REFUND" amount={quoteState.quote.royRefunded} decimals={BOSS_HP_DECIMALS} unit="Attack Token" />
             </div>
             <div className="mt-2 text-xs text-muted">
               {quoteState.quote.bossDefeated
@@ -334,9 +334,9 @@ export function BossActions({
                   : `Stage ${quoteState.quote.stage + 1} remains active.`}
               <span
                 className="ml-2 text-faint"
-                title={`Exact floors: ${displayAmount(quoteState.quote.minRoyOut, BOSS_HP_DECIMALS)} ROY and ${displayAmount(quoteState.quote.minBossHPOut, BOSS_HP_DECIMALS)} HP`}
+                title={`Exact floors: ${displayAmount(quoteState.quote.minRoyOut, BOSS_HP_DECIMALS)} Attack Token and ${displayAmount(quoteState.quote.minBossHPOut, BOSS_HP_DECIMALS)} HP`}
               >
-                Min ≈ {displayEstimate(quoteState.quote.minRoyOut, BOSS_HP_DECIMALS)} ROY + {displayEstimate(quoteState.quote.minBossHPOut, BOSS_HP_DECIMALS)} HP · block {quoteState.quote.quotedBlock.toString()}
+                Min ≈ {displayEstimate(quoteState.quote.minRoyOut, BOSS_HP_DECIMALS)} Attack Token + {displayEstimate(quoteState.quote.minBossHPOut, BOSS_HP_DECIMALS)} HP · block {quoteState.quote.quotedBlock.toString()}
               </span>
             </div>
             <details className="mt-2 text-[10px] text-faint">
@@ -345,10 +345,10 @@ export function BossActions({
                 <ExactValue label="BossHP output" amount={quoteState.quote.bossHPOut} decimals={BOSS_HP_DECIMALS} unit="HP" />
                 <ExactValue label="MockUSD spent" amount={quoteState.quote.mockUSDSpent} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
                 <ExactValue label="MockUSD refund" amount={quoteState.quote.mockUSDRefunded} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
-                <ExactValue label="ROY bought" amount={quoteState.quote.royBought} decimals={BOSS_HP_DECIMALS} unit="ROY" />
-                <ExactValue label="ROY spent" amount={quoteState.quote.roySpent} decimals={BOSS_HP_DECIMALS} unit="ROY" />
-                <ExactValue label="ROY refund" amount={quoteState.quote.royRefunded} decimals={BOSS_HP_DECIMALS} unit="ROY" />
-                <ExactValue label="Minimum ROY output" amount={quoteState.quote.minRoyOut} decimals={BOSS_HP_DECIMALS} unit="ROY" />
+                <ExactValue label="Attack Token bought" amount={quoteState.quote.royBought} decimals={BOSS_HP_DECIMALS} unit="Attack Token" />
+                <ExactValue label="Attack Token spent" amount={quoteState.quote.roySpent} decimals={BOSS_HP_DECIMALS} unit="Attack Token" />
+                <ExactValue label="Attack Token refund" amount={quoteState.quote.royRefunded} decimals={BOSS_HP_DECIMALS} unit="Attack Token" />
+                <ExactValue label="Minimum Attack Token output" amount={quoteState.quote.minRoyOut} decimals={BOSS_HP_DECIMALS} unit="Attack Token" />
                 <ExactValue label="Minimum BossHP output" amount={quoteState.quote.minBossHPOut} decimals={BOSS_HP_DECIMALS} unit="HP" />
               </dl>
             </details>
@@ -371,7 +371,7 @@ export function BossActions({
         ) : (
           <div className="mt-3 space-y-3">
             <p className="break-words text-[11px] leading-relaxed text-faint">
-              {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD · {displayAmount(player.royBalance, BOSS_HP_DECIMALS)} ROY · {displayAmount(player.bossHPBalance, BOSS_HP_DECIMALS)} BossHP · {displayAmount(player.nativeBalance, BOSS_HP_DECIMALS)} ETH gas
+              {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD · {displayAmount(player.royBalance, BOSS_HP_DECIMALS)} Attack Token · {displayAmount(player.bossHPBalance, BOSS_HP_DECIMALS)} BossHP · {displayAmount(player.nativeBalance, BOSS_HP_DECIMALS)} ETH gas
               <span className="ml-2">{player.hasAttacked ? "ATTACKED" : "NO ATTACK YET"}</span>
             </p>
             <ReadinessRow step="A" title="MockUSD faucet" state={needsFaucet ? "needed" : "ready"}>
@@ -571,7 +571,7 @@ function ConfirmedResult({ result }: { result: ActionResult }) {
       text = `Unlimited allowance set · ${shortAddress(result.token)} → ${shortAddress(result.spender)}`;
       break;
     case "attack":
-      text = `Confirmed ${displayAmount(result.result.bossHPOut, BOSS_HP_DECIMALS)} HP output · ${displayAmount(result.result.mockUSDSpent, MOCK_USD_DECIMALS)} mUSD spent · ${displayAmount(result.result.royRefunded, BOSS_HP_DECIMALS)} ROY returned`;
+      text = `Confirmed ${displayAmount(result.result.bossHPOut, BOSS_HP_DECIMALS)} HP output · ${displayAmount(result.result.mockUSDSpent, MOCK_USD_DECIMALS)} mUSD spent · ${displayAmount(result.result.royRefunded, BOSS_HP_DECIMALS)} Attack Token returned`;
       break;
     case "reward":
       text = `Surrendered ${displayAmount(result.hpAmount, BOSS_HP_DECIMALS)} HP · received ${displayAmount(result.payout, MOCK_USD_DECIMALS)} mUSD`;

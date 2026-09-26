@@ -6,9 +6,9 @@
 
 ```mermaid
 flowchart TD
-    Entry["連接錢包，需要時授權 MockUSD"] --> Attack["按 Attack，一筆交易自動買 ROY 並攻擊"]
-    Attack --> Hop1["MockUSD 換 ROY"]
-    Hop1 --> Hop2["ROY 換當前 stage 的 BossHP"]
+    Entry["連接錢包，需要時授權 MockUSD"] --> Attack["按 Attack，一筆交易自動買 Attack Token 並攻擊"]
+    Attack --> Hop1["MockUSD 換 Attack Token"]
+    Hop1 --> Hop2["Attack Token 換當前 stage 的 BossHP"]
     Hop2 --> Count["afterSwap 累計 stageSold"]
     Count --> Receive["玩家收到 BossHP，供應量不變"]
     Receive --> Check{"當前可售 HP 已售完？"}
@@ -28,8 +28,8 @@ flowchart TD
 flowchart LR
     W["玩家"] -->|Attack| R["BossRouter：路由、reserve、LP custody"]
     R -->|unlock / swap / modifyLiquidity| PM["Uniswap v4 PoolManager"]
-    PM --> S["MockUSD / ROY supply pool"]
-    PM --> B["ROY / BossHP boss pool"]
+    PM --> S["MockUSD / Attack Token supply pool"]
+    PM --> B["Attack Token / BossHP boss pool"]
     PM -->|Boss pool callbacks| H["BossHook：stage、獎池、兌獎"]
     R -->|受限 transition 操作| H
     W -->|claim| H
@@ -49,8 +49,8 @@ sequenceDiagram
     W->>R: Attack：付款上限、minOut、expectedStage、deadline
     R->>PM: unlock
     PM->>R: unlockCallback
-    R->>PM: swap MockUSD → ROY
-    R->>PM: swap ROY → BossHP，限制當前 stage 邊界
+    R->>PM: swap MockUSD → Attack Token
+    R->>PM: swap Attack Token → BossHP，限制當前 stage 邊界
     PM->>H: beforeSwap：核對 caller、pool、玩家、stage、方向
     PM->>H: afterSwap：讀實際 output，累計 stageSold
     H->>H: 無可售 HP 且完整性檢查通過 → StageCleared
@@ -58,9 +58,9 @@ sequenceDiagram
     PM-->>R: 玩家 swap delta
     R->>PM: 結算玩家付款，take HP 交玩家，退未用輸入
     R->>H: 開始受限 Transition
-    R->>PM: reserve HP → ROY refill swap
+    R->>PM: reserve HP → Attack Token refill swap
     PM->>H: 驗證 maintenance；不增加 stageSold
-    R->>PM: 結算 refill；取回 ROY 到 reserve
+    R->>PM: 結算 refill；取回 Attack Token 到 reserve
     R->>PM: modifyLiquidity：只加入下一階段增量
     PM->>H: beforeAddLiquidity：核對授權及固定 LP 計劃
     R->>H: 驗證新 LP／價格後完成 stage 更新
