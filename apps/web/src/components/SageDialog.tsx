@@ -76,10 +76,13 @@ export function SageDialog({ lines, onClose }: { lines: string[]; onClose: () =>
       }
       if (event.key !== "e" && event.key !== "E" && event.key !== "Enter" && event.key !== " ") return;
       const target = event.target;
-      // A focused control owns these keys: let the browser activate it (its onClick runs the
-      // same action) instead of advancing the line on top of it.
-      if (target instanceof HTMLElement && target.closest("button, a, input, textarea, select, [contenteditable]")) {
-        return;
+      if (target instanceof HTMLElement) {
+        // Text entry owns every key, so a keystroke is never stolen from an input or textarea.
+        if (target.closest("input, textarea, select, [contenteditable]")) return;
+        // A focused button or link owns its activation keys: let the browser activate it (its
+        // onClick runs the same action) instead of advancing the line on top of it. "E" is not
+        // an activation key, so the sage shortcut keeps working while a footer button has focus.
+        if ((event.key === "Enter" || event.key === " ") && target.closest("button, a")) return;
       }
       event.preventDefault();
       advance();
