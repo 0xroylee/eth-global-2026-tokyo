@@ -20,11 +20,11 @@ describe("sageLines", () => {
     expect(lines.join("")).toContain("Roy");
   });
 
-  test("a repeat visit sends the player after ROO", () => {
+  test("a repeat visit sends the player after SOL", () => {
     const lines = sageLines({ firstVisit: false, defeated: false });
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain(`${CHALLENGERS}`);
-    expect(lines[0]).toContain("ROO");
+    expect(lines[0]).toContain("SOL");
   });
 
   test("a defeated cat leaves eleven gates waiting", () => {
