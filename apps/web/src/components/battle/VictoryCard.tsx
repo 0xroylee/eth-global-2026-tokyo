@@ -11,10 +11,11 @@ export function VictoryCard({ round, player, onClaim, onClose }: {
   const factory = round.encounterMode === "factory";
   const claimAmount = player ? factory ? player.rewardCredit : player.bossHPBalance : 0n;
   const claimToken = factory ? round.rewardToken : round.hpToken;
-  const reward = player && round.finalEligibleHP > 0n ? round.originalPrize * claimAmount / round.finalEligibleHP : null;
+  const claimReady = Boolean(player && claimAmount > 0n && round.finalEligibleHP > 0n);
+  const reward = claimReady && player ? round.originalPrize * claimAmount / round.finalEligibleHP : null;
   return (
     <BattleFrame className="panel-enter w-full font-pixel">
-      <div role="status" className="bg-[#092B61] px-4 py-3 text-white"><h2 className="text-lg sm:text-xl">BOSS DEFEATED</h2></div>
+      <div role="status" className="bg-[#092B61] px-4 py-3 text-white"><h2 className="text-lg sm:text-xl">{claimReady ? "Victory — prize claim available" : "BOSS DEFEATED"}</h2></div>
       <div className="space-y-3 p-4 text-xs leading-relaxed sm:text-sm">
         <p>{factory ? "YOUR REWARD CREDIT" : "YOUR REWARD RIGHTS"}</p>
         <p className="break-words">{player ? `${displayAmount(claimAmount, claimToken.decimals)} ${claimToken.symbol} ${factory ? "credit" : "held"}` : "Connect a wallet to see your reward rights."}</p>
