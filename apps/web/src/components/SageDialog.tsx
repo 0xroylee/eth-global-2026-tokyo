@@ -109,7 +109,7 @@ export function SageDialog({ lines, onClose }: { lines: string[]; onClose: () =>
           ))}
           <p aria-hidden="true" className="text-sm leading-relaxed text-fog">
             {shown}
-            {!done && <span className="ml-0.5 inline-block h-3 w-[2px] translate-y-[1px] bg-accent-soft" />}
+            {!done && <span className="ml-0.5 inline-block h-3 w-0.5 translate-y-px bg-accent-soft" />}
           </p>
           <p aria-live="polite" className="sr-only">
             {done ? line : ""}
