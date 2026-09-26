@@ -277,6 +277,7 @@ export class HubScene extends Phaser.Scene {
 
       const boss = findBoss(bossId);
       const color = accentColor(boss.accent);
+      const locked = boss.status === "locked";
       const cx = obj.x + GATE.width / 2;
       const base = obj.y + GATE.height;
 
@@ -289,10 +290,10 @@ export class HubScene extends Phaser.Scene {
       this.add.rectangle(cx, base - 32, GATE.width + 4, 5, 0x4a4e60).setDepth(base);
 
       // Portal glow behind the portrait.
-      const glow = this.add.circle(cx, base - 18, 16, color, boss.locked ? 0.18 : 0.32).setDepth(base - 1);
+      const glow = this.add.circle(cx, base - 18, 16, color, locked ? 0.18 : 0.32).setDepth(base - 1);
       this.add.circle(cx, base - 18, 13, 0x0b0e18, 0.85).setDepth(base - 1);
 
-      if (boss.locked) {
+      if (locked) {
         this.add.rectangle(cx, base - 16, 10, 8, 0x8a8fa3).setDepth(base + 1);
         this.add.circle(cx, base - 22, 4, 0x000000, 0).setStrokeStyle(2, 0x8a8fa3).setDepth(base + 1);
         this.add.rectangle(cx, base - 16, 2, 3, 0x2a2d38).setDepth(base + 2);
@@ -302,20 +303,26 @@ export class HubScene extends Phaser.Scene {
 
       // Name plate. Rendered at 3x resolution so the zoomed camera keeps it crisp.
       const label = this.add
-        .text(cx, base + 6, boss.locked ? "LOCKED" : boss.name.toUpperCase(), {
+        .text(cx, base + 6, boss.ticker.toUpperCase(), {
           fontFamily: "var(--font-dm-mono), monospace",
           fontSize: "6px",
-          color: boss.locked ? "#9aa0b4" : "#f3f3f8",
+          color: locked ? "#9aa0b4" : "#f3f3f8",
           letterSpacing: 1,
           resolution: ZOOM,
         })
         .setOrigin(0.5, 0)
         .setDepth(LABEL_DEPTH + 1);
       this.crispLabels.push(label);
-      const caption = boss.locked
+      // Roster gates name their Launch Boost rank; the playable gates share the pool caption.
+      const captionText = locked
+        ? null
+        : boss.rosterMeta
+          ? `LB #${boss.rosterMeta.rank} · ${boss.rosterMeta.chain.toUpperCase()}`
+          : "BOSS POOL";
+      const caption = captionText === null
         ? null
         : this.add
-            .text(cx, label.y + label.height, "BOSS POOL", {
+            .text(cx, label.y + label.height, captionText, {
               fontFamily: "var(--font-dm-mono), monospace",
               fontSize: "4px",
               color: boss.accent,
@@ -337,6 +344,21 @@ export class HubScene extends Phaser.Scene {
         )
         .setDepth(LABEL_DEPTH);
       plate.setStrokeStyle(1, color, 0.6);
+      // Availability marker. Gates without a contract say so instead of implying a live round.
+      const chipText = locked ? "LOCKED" : boss.status === "no-contract" ? "NO CONTRACT" : null;
+      const chip = chipText === null
+        ? null
+        : this.add
+            .text(cx, label.y + blockHeight + 3, chipText, {
+              fontFamily: "var(--font-dm-mono), monospace",
+              fontSize: "4px",
+              color: "#9aa0b4",
+              letterSpacing: 0.5,
+              resolution: ZOOM,
+            })
+            .setOrigin(0.5, 0)
+            .setDepth(LABEL_DEPTH + 1);
+      if (chip) this.crispLabels.push(chip);
       const stageLabel = boss.id === "cat"
         ? this.add.text(cx, base + 18, "CHECKING ROUND", {
             fontFamily: "var(--font-dm-mono), monospace",
@@ -466,8 +488,8 @@ export class HubScene extends Phaser.Scene {
   private startGatePulse(gate: Gate) {
     gate.pulse?.stop();
     gate.glow.setScale(1);
-    const lo = gate.boss.locked ? 0.25 : 0.45;
-    const hi = gate.boss.locked ? 0.35 : 0.7;
+    const lo = gate.boss.status === "locked" ? 0.25 : 0.45;
+    const hi = gate.boss.status === "locked" ? 0.35 : 0.7;
     gate.pulse = this.tweens.add({
       targets: gate.glow,
       // Reduced motion keeps the alpha cue and drops the scale movement.
@@ -633,7 +655,7 @@ export class HubScene extends Phaser.Scene {
 
   /** Nearest unlocked gate, keeping the current target until another is clearly closer. */
   private chooseHintGate(): Gate | null {
-    const unlocked = this.gates.filter((gate) => !gate.boss.locked);
+    const unlocked = this.gates.filter((gate) => gate.boss.status !== "locked");
     if (unlocked.length === 0) return null;
     const distance = (gate: Gate) => {
       const centerX = gate.zone.x + gate.zone.width / 2;
@@ -716,7 +738,7 @@ export class HubScene extends Phaser.Scene {
     if (this.nearGate) {
       this.nearGate.pulse?.stop();
       this.nearGate.pulse = undefined;
-      this.nearGate.glow.setScale(1).setAlpha(this.nearGate.boss.locked ? 0.18 : 0.32);
+      this.nearGate.glow.setScale(1).setAlpha(this.nearGate.boss.status === "locked" ? 0.18 : 0.32);
     }
     this.nearGate = hit;
     if (hit) this.startGatePulse(hit);
