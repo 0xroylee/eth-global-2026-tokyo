@@ -149,7 +149,7 @@ describe("buildPoolStat", () => {
 
   test("reports Factory volume in MockUSD and the stage liquidity", () => {
     const stat = buildPoolStat(
-      round({ encounterMode: "factory", rewardToken: token("BHP", 18), totalVolume: 1234n * 10n ** 18n }),
+      round({ encounterMode: "factory", rewardToken: token("BHP", 18), totalVolume: 1234n * 10n ** 6n }),
       5n * 10n ** 18n,
       token("ROY", 18),
     );
@@ -158,7 +158,7 @@ describe("buildPoolStat", () => {
   });
 
   test("falls back to the MockUSD-in-pool proxy when stage liquidity is unavailable", () => {
-    const stat = buildPoolStat(round({ mockUSDInHook: 100n * 10n ** 18n }), null);
+    const stat = buildPoolStat(round({ mockUSDInHook: 100n * 10n ** 6n }), null);
     expect(stat.liquidity).toBe("100 mUSD");
   });
 

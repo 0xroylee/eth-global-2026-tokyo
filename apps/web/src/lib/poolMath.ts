@@ -108,13 +108,13 @@ export function buildPoolStat(
   // totalVolume is denominated in MockUSD (BossHook.totalVolume), independent of the pair.
   const volume =
     round.encounterMode === "factory" && round.totalVolume > 0n
-      ? `${displayEstimate(round.totalVolume, 18, 2)} mUSD`
+      ? `${displayEstimate(round.totalVolume, 6, 2)} mUSD`
       : "—";
   const liquidity =
     stageLiquidity !== null
       ? `${displayEstimate(stageLiquidity, 18, 2)} L`
       : round.mockUSDInHook > 0n
-        ? `${displayEstimate(round.mockUSDInHook, 18, 2)} mUSD`
+        ? `${displayEstimate(round.mockUSDInHook, 6, 2)} mUSD`
         : "—";
   return {
     poolLabel: quote ? `${base.symbol} / ${quote.symbol}` : `${bhp.symbol} pool`,
