@@ -36,6 +36,10 @@ export function GameShell() {
   const overlayOpen = gameDialogOpen || Boolean(arena.wallet.busy);
 
   useEffect(() => {
+    arena.selectDefaultEncounter(arena.network);
+  }, [arena.network, arena.selectDefaultEncounter]); // Returning from a direct battle restores the hub's registered demo Hook.
+
+  useEffect(() => {
     const offNear = bridge.on("gate:near", ({ bossId }) => setNearBoss(bossId));
     const offEnter = bridge.on("gate:enter", ({ bossId }) => setOpenBoss(bossId));
     const offRouteNear = bridge.on("region:near", ({ exitId }) => setNearRoute(exitId !== null));
@@ -84,7 +88,11 @@ export function GameShell() {
   }, [guide.panelOpened, openBoss]);
 
   useEffect(() => {
-    if (deployment.kind === "live") {
+    if (openBoss === "cat") arena.selectDefaultEncounter(arena.network);
+  }, [arena.network, arena.selectDefaultEncounter, openBoss]);
+
+  useEffect(() => {
+    if (isHubEncounter(deployment)) {
       bridge.send("round:state", {
         status: deployment.round.status,
         currentStage: deployment.round.currentStage,
@@ -102,13 +110,13 @@ export function GameShell() {
   }, [bridge, deployment]);
 
   useEffect(() => {
-    const live = deployment.kind === "live" ? deployment : null;
+    const live = isHubEncounter(deployment) ? deployment : null;
     const origin = attackOrigin(writeState);
     const originMatchesSelected = Boolean(origin && live && matchesSelectedDeployment(origin, arena.network, arena.selectedChainId, live.manifest));
     const writingAttack = originMatchesSelected && (
       writeState.status === "prompting" || writeState.status === "pending" || writeState.status === "unresolved"
     );
-    const confirmedAttack = confirmedBattleAttack(writeState, arena.network, live?.manifest, arena.wallet.account);
+    const confirmedAttack = confirmedBattleAttack(writeState, arena.network, live?.manifest, live?.hookAddress, arena.wallet.account);
     bridge.send("attack:pending", {
       active: Boolean(writingAttack),
       stage: live?.round.currentStage,
@@ -155,7 +163,7 @@ export function GameShell() {
   const guideInspect = showHint && hintStep === "inspect";
   const showBossPrompt = nearBoss !== null && !overlayOpen && !guideInspect;
   const showRoutePrompt = nearRoute && !showBossPrompt && !overlayOpen && !guideInspect;
-  const live = deployment.kind === "live";
+  const live = isHubEncounter(deployment);
   const chainLabel =
     deployment.kind === "loading" ? "CHECKING" : live ? "LIVE" : deployment.kind === "error" ? "RPC ERROR" : "NOT DEPLOYED";
 
@@ -178,7 +186,7 @@ export function GameShell() {
             <button
               type="button"
               disabled={overlayOpen || canvasPhase === "error"}
-              onClick={() => setOpenBoss("cat")}
+              onClick={() => { arena.selectDefaultEncounter(arena.network); setOpenBoss("cat"); }}
               aria-label="Open Pool Unis boss actions"
               className="rounded-lg border border-[#f5b04a]/35 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-[#ffd28a] disabled:opacity-40"
             >
@@ -197,7 +205,7 @@ export function GameShell() {
                 value={arena.network}
                 disabled={overlayOpen}
                 onChange={(event) => {
-                  arena.selectNetwork(event.target.value as NetworkKey);
+                  arena.selectDefaultEncounter(event.target.value as NetworkKey);
                   focusHubCanvas();
                 }}
                 onBlur={(event) => {
@@ -395,16 +403,26 @@ function RoutePrompt({ hidden }: { hidden: boolean }) {
   );
 }
 
-type AttackOrigin = { network: NetworkKey; manifest: DeploymentManifest; target: string };
+function isHubEncounter(state: ReturnType<typeof useBossPool>["deployment"]): state is Extract<ReturnType<typeof useBossPool>["deployment"], { kind: "live" }> {
+  return state.kind === "live" && state.hookAddress.toLowerCase() === state.context.baseManifest.addresses.hook.toLowerCase() &&
+    state.context.deployment.encounterMode === "standalone";
+}
+
+type AttackOrigin = { network: NetworkKey; hookAddress: Address; manifest: DeploymentManifest; target: string };
 
 function attackOrigin(state: ReturnType<typeof useBossPool>["writeState"]): AttackOrigin | null {
   if (state.status === "prompting") {
     if (state.action.toLowerCase() !== "attack") return null;
-    return { network: state.network, manifest: state.manifest, target: state.manifest.addresses.router };
+    return { network: state.network, hookAddress: state.hookAddress, manifest: state.manifest, target: state.manifest.addresses.router };
   }
   if (state.status === "pending" || state.status === "unresolved" || state.status === "confirmed") {
     if (state.record.request.kind !== "attack") return null;
-    return { network: state.record.network, manifest: state.record.manifest, target: state.record.request.target };
+    return {
+      network: state.record.network,
+      hookAddress: state.record.hookAddress ?? state.record.manifest.addresses.hook,
+      manifest: state.record.manifest,
+      target: state.record.request.target,
+    };
   }
   return null;
 }
@@ -416,9 +434,9 @@ function matchesSelectedDeployment(
   selected: DeploymentManifest,
 ): boolean {
   return origin.network === network &&
+    origin.hookAddress.toLowerCase() === selected.addresses.hook.toLowerCase() &&
     origin.manifest.chainId === chainId &&
     origin.manifest.deploymentTxHash.toLowerCase() === selected.deploymentTxHash.toLowerCase() &&
     origin.manifest.addresses.router.toLowerCase() === selected.addresses.router.toLowerCase() &&
-    origin.manifest.addresses.hook.toLowerCase() === selected.addresses.hook.toLowerCase() &&
     origin.target.toLowerCase() === selected.addresses.router.toLowerCase();
 }

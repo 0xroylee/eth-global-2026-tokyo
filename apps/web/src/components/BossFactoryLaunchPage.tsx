@@ -22,9 +22,9 @@ import {
   type FactoryLaunchQuote,
   type FactoryLaunchResult,
 } from "@boss-pool/chain";
-import { WalletControl } from "./WalletControl";
-import { useFactoryOperation } from "./FactoryOperationProvider";
 import { isCurrentQuoteResponse, isCurrentTokenResponse, parseStrictUnits, sameAddressText } from "@/lib/factory-form";
+import { useFactoryOperation } from "./FactoryOperationProvider";
+import { WalletControl } from "./WalletControl";
 import { useWallet } from "@/wallet/WalletProvider";
 
 const BASE_SEPOLIA_RPC_URL =
@@ -594,6 +594,9 @@ function LaunchForm() {
                 <p className="mt-2 break-all">Boss ID · {result.bossId}</p>
                 <p className="mt-1 break-all">Hook · {result.hook}</p>
                 <p className="mt-1 break-all">Router · {result.router}</p>
+                <Link className="mt-3 inline-flex rounded-lg border border-live/30 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-live-soft" href={`/battle/${result.hook}?network=base-sepolia`}>
+                  ENTER BATTLE
+                </Link>
                 <a className="mt-3 inline-flex underline underline-offset-4" href={`https://sepolia.basescan.org/tx/${result.hash}`} target="_blank" rel="noreferrer">
                   View transaction ↗
                 </a>

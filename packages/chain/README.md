@@ -1,6 +1,6 @@
 # Boss Pool chain SDK
 
-`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses generated Foundry ABIs and pinned Router/Hook creation bytecode. Standalone round deployment and maker administration remain CLI operations. The Base Sepolia deployment manifest includes the original Boss Factory address. That deployment predates the review fixes and is incompatible with the corrected bundled build; deploy and configure a matching Factory to enable new launches.
+`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses generated Foundry ABIs and pinned Router/Hook creation bytecode. Standalone round deployment and maker administration remain CLI operations. The Base Sepolia deployment manifest selects the corrected Boss Factory and its discovery block. The original Factory remains historical and incompatible with the current bundled build.
 
 The attack currency is named **Attack Token** in the UI and documentation. SDK fields such as `royBought`, `roySpent`, `royRefunded`, `minRoyOut`, and `royBalance`, plus the manifest key `roy` and contract `RoyToken`, retain their existing names for deployment compatibility. All refer to Attack Token. See [domain language](../../CONTEXT.md).
 
@@ -22,9 +22,9 @@ The SDK wraps the agreed player journey. It does not provide a helper for every 
 | `approve(action)` | Request unlimited allowance when the existing allowance is insufficient |
 | `prepareAttack(quote)` | Validate and simulate the accepted quote without submitting |
 | `attack(quote)` | Revalidate, simulate and submit the two-hop attack |
-| `previewReward(hpAmount, account?)` | Calculate the post-defeat MockUSD payout |
-| `claimReward(hpAmount)` | Surrender BossHP and claim the payout |
-| `transferBossHP(recipient, amount)` | Transfer held reward rights |
+| `previewReward(hpAmount, account?)` | Calculate the post-defeat payout from held BossHP or Factory reward credit |
+| `claimReward(hpAmount)` | Redeem standalone BossHP or consume Factory reward credit for the payout |
+| `transferBossHP(recipient, amount)` | Transfer purchased tokens; only standalone BossHP transfers carry reward rights |
 | `claimVictoryNFT()` | Claim the separate participation NFT after defeat |
 | `faucetMockUSD(amount)` | Mint test MockUSD to the connected account |
 | `resumePending(request)` | Recover a receipt without resubmitting a transaction |
@@ -68,7 +68,7 @@ Before quotes, approvals, or launches, the Factory SDK checks that its generated
 
 The web app's root `FactoryOperationProvider` holds the lock through preparation and navigation, including zero-reset approval followed by the selected allowance. Recovery becomes available after the original caller releases ownership. Submitted requests and confirmed launch results survive a reload. A browser refresh before the wallet returns a transaction hash cannot be reconciled by hash.
 
-Amounts use token base units as `bigint`: MockUSD has 6 decimals; Attack Token and BossHP have 18. Stage indices are zero-based. There is no enrollment or entry-NFT action in the current contracts.
+Amounts use token base units as `bigint`: MockUSD has 6 decimals; Attack Token and standalone BossHP have 18. Factory MEME uses its actual ERC-20 decimals. Stage indices are zero-based. There is no enrollment or entry-NFT action in the current contracts.
 
 
 ## Verify a deployment and read state
@@ -93,6 +93,24 @@ console.log(round.status, round.currentStage, round.bossCurrentSqrtPriceX96, pla
 ```
 
 `verifyDeployment` checks the chain, successful Router creation receipt and block, contract code, and Router/Hook/token/PoolManager wiring. It does not require an Active, untouched, or unexpired encounter, so it can verify completed and expired rounds. The resulting verified object snapshots and freezes the manifest addresses.
+
+### Select a boss by Hook address
+
+`resolveBossDeployment(publicClient, baseManifest, hookAddress)` resolves either the configured standalone demo or a boss launched by the configured Factory. Factory discovery starts at `bossFactoryDeployedAtBlock`, which must accompany `bossFactory` in the base manifest. It verifies launch provenance and contract wiring before returning a deployment usable by `createBossPoolSdk`.
+
+```ts
+import { createBossPoolSdk, resolveBossDeployment } from "@boss-pool/chain";
+
+const deployment = await resolveBossDeployment(publicClient, baseManifest, hookAddress);
+const sdk = createBossPoolSdk({ publicClient, deployment });
+const { round, player } = await sdk.readState(account);
+```
+
+Use chain ID and Hook address as the encounter identity. A quote, approval spender, or recovered transaction from one boss cannot be used for another boss, including when both sell the same MEME token.
+
+Round state exposes the encounter mode and HP/reward-token metadata. Factory state also exposes stage volume and volume targets; player state includes `rewardCredit`. A Factory claim consumes that credit and pays the configured reward token without surrendering MEME or requiring a claim-token approval. Standalone redemption keeps its BossHP allowance and custody requirements.
+
+Skip `getApproval({ kind: "claimReward", ... })` for Factory encounters; it throws `APPROVAL_NOT_REQUIRED`. Preview the amount against the connected account's credit, then call `claimReward` directly.
 
 `readRound`, `readPlayer`, and `readState` pin their contract reads to one block and retry a reproduced unsupported-block response at that same block a bounded number of times. Amounts are `bigint`; stages remain zero-based. `bossCurrentSqrtPriceX96` reads the current Hook price. The deprecated `bossInitialSqrtPriceX96` field is retained only as a compatibility alias for that mutable value.
 

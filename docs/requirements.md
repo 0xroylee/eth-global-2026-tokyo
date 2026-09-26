@@ -26,7 +26,7 @@ Status: attacks count purchases without burns, and reward shares follow eligible
 - The target defines three minimum additional volumes in a 1:2:3 ratio: `floor(V / 6)`, `floor(V / 3)`, and the remainder. The caller's input cap and current-stage terminal price bound purchases. Actual eligible volume may exceed a minimum, preventing impossible rounding tails; extra volume stays in the starting stage. A clearing attack settles the purchase and performs its refill and next-stage LP addition atomically. A failed transition reverts the purchase and volume credit.
 - The accepted attack-token rate is frozen before mining the Hook address. Launching separately checks that the live supply spot remains inside that rate, so an ordinary within-bound price change does not invalidate the mined address.
 - Each Factory boss records untransferable prize credit from actual MEME output. Claims consume that credit after victory while players keep their purchased tokens. Existing balances and transfers do not grant credit. The allocation, funding, and recovery rules are defined in [Boss Factory](boss-factory.md).
-- The creator form is at `/launch`. It uses a pasted token address because ERC-20 does not enumerate wallet holdings. It reads the Factory address from the Base Sepolia manifest. The configured Base Sepolia Factory matches the current bundled Router/Hook build and has created a funded demo boss. Quotes, approvals, and launches check that build compatibility. The player fight/claim UI for Factory rounds remains outstanding.
+- The creator form is at `/launch`. It uses a pasted token address because ERC-20 does not enumerate wallet holdings. It reads the Factory address from the Base Sepolia manifest. The configured Base Sepolia Factory matches the current bundled Router/Hook build and has created a funded demo boss. Quotes, approvals, and launches check that build compatibility. Confirmed launches link to `/battle/<hook-address>`, where the player can inspect, attack, and claim for that encounter.
 
 ### Standalone BossHP demo
 
@@ -103,11 +103,13 @@ Keep the shared E2E and focused accounting checks. Optional held-Attack Token at
 
 ## Live battle page
 
-`/battle` is the live battle page using `@boss-pool/chain`. Existing `/mock-battle` links permanently redirect to `/battle` with the selected supported network. The pixel arena presents the verified shared round. The boss is named **Pool Unis**, and the command label is **SWAP ATTACK**, consistent with the purchase-based attack rules above. Attack Token remains the currency paid into the Boss pool.
+`/battle/<hook-address>?network=base-sepolia` opens one verified Boss encounter using `@boss-pool/chain`; `network=local` selects the local chain. The path contains the Boss Hook address, not a Uniswap pool ID or Factory boss ID. Bare `/battle` and old `/mock-battle` links lead to the selected network's standalone demo. Explicit addresses never fall back to a different Boss.
+
+Boss names and stage artwork are configured in code by network and Hook address. The existing Base Sepolia demo and configured local demo use **Pool Unis**. Other addresses need an explicit presentation mapping. A verified Factory boss without a mapping shows **Boss appearance not configured**, while its real token data and actions remain available. The mapping does not authorize an unverified contract. **SWAP ATTACK** remains the attack command.
 
 The desktop visual baseline is John Ku's Pool Unis design in commit `c5b11b3`: lake background, upper-left HUD, upper-right nameplate, large boss on the right, lower-left command menu, and lower-right dialogue. SDK integration must preserve this composition, pixel typography, and cream/navy windows. Shorter desktop windows may reduce spacing and sprite size to prevent overlap.
 
-Players can inspect the shared boss without connecting a wallet. A wallet is required for approvals, attacks, and claims. Boss HP, stage, deadline, and rewards come from the selected verified deployment. An unavailable deployment shows an unavailable state. Entering or refreshing the page does not start a new round.
+Players can inspect a boss without connecting a wallet. A wallet is required for approvals, attacks, and claims. Boss progress, stage, deadline, and rewards come from the selected verified Hook and its contracts. An unavailable deployment shows an unavailable state. Entering or refreshing the page does not start a new round. Switching bosses clears the previous quote and displayed state; pending transactions remain bound to their originating boss.
 
 The hub boss gate shows boss health and **ENTER BATTLE**. Quotes, token approvals, attacks, and claims are available inside the battle. The player UI has no faucet; players need an existing MockUSD balance to attack.
 
@@ -119,11 +121,13 @@ Each attack uses a fixed input cap of **1 MockUSD**. The player does not enter a
 
 **RUN**, **EXIT BATTLE**, and Escape close the battle view. Escape closes the quote or claim dialog first when it is open. Leaving does not refund purchases or cancel a submitted transaction. The saved transaction remains recoverable on return through **CHECK TRANSACTION**. **MAGIC** and **ITEM** retain their original disabled menu slots and do not trigger transactions.
 
-Reward rights follow the connected wallet's eligible BossHP. The HUD shows **YOUR HP** during the fight and **YOUR SHARE** after defeat, when the denominator is frozen. Historical damage remains separate from current token holdings; the victory card does not invent a contribution total from the wallet balance.
+For the standalone demo, reward rights follow the connected wallet's eligible BossHP. The HUD shows **YOUR HP** during the fight and **YOUR SHARE** after defeat, when the denominator is frozen. Historical damage remains separate from current token holdings; the victory card does not invent a contribution total from the wallet balance.
 
 Buying this round's BossHP from another holder or an external market transfers its reward rights to the buyer. That purchase adds no damage and does not increase the prize denominator. The current holder can redeem after victory, including when the transfer happened after defeat. Buying Attack Token alone gives no prize entitlement. The page refreshes wallet holdings independently of the player's attack history.
 
-After victory, the page supports reward preview, any required BossHP approval, and reward claiming. Optional victory-NFT claiming remains separate. After expiry, attacks close and the page explains that attack purchases are nonrefundable. The existing [core acceptance](#core-acceptance) still applies.
+Factory battles use eligible MockUSD volume to advance stages. Purchased MEME, its actual decimals, and reward credit remain separate from stage progress. After victory, Factory claims consume the connected wallet's earned credit and pay MEME while the player keeps purchased tokens. They require no MEME approval to the Hook. Transfers and existing MEME balances do not grant credit.
+
+After victory, the page supports reward preview and reward claiming according to the selected encounter's mode. Standalone redemption still requires BossHP approval when needed. Optional victory-NFT claiming remains separate. After expiry, attacks close and the page explains that attack purchases are nonrefundable. The existing [core acceptance](#core-acceptance) still applies.
 
 The [battle page integration context](technical-spec.md#live-battle-page-context) maps these behaviors to current code and SDK operations. **BATTLE DETAILS** opens the shared quote and claim controls, network selector, and wallet controls.
 
