@@ -1,5 +1,6 @@
 {
   "reviewedCodeCommit": "93ae695a24e57fca5b3c083bf80c82d9eae878d9",
+  "finalSdkAndWebCodeCommit": "c64bcb5d8a020c5f074c8917813faa89f6fda369",
   "reviewModel": "gpt-6-sol high",
   "implementationModel": "gpt-6-luna xhigh",
   "solidityTests": {
@@ -7,7 +8,7 @@
     "passed": 12
   },
   "typescriptTests": {
-    "passed": 16,
+    "passed": 17,
     "scope": "Factory SDK, form guards, operation ownership, and battle receipt helpers"
   },
   "runtimeBytes": {
@@ -15,6 +16,20 @@
     "BossHook": 21404,
     "BossRouter": 24307,
     "routerLimit": 24576
+  },
+  "finalBuildChecks": {
+    "typecheck": "passed",
+    "webBuild": "passed"
+  },
+  "publishedFactoryReadOnlyCheck": {
+    "chainId": 84532,
+    "factory": "0x77794cD6099e9d676bd1DC378308d86344A66962",
+    "status": "incompatible",
+    "routerCodeHash": "0x6e9fff0011912d8f33a941acc53cf8ddf2d5074158a02f873774093adc013d00",
+    "hookCodeHash": "0x574675c8b95dc0d60eac5efff7ec128d1cece2127ca46391c42d733ed729ec48",
+    "expectedRouterCodeHash": "0x02091b890ff922b5f2493012b76a2993e6dd33a1aa7cdccd5da4e2545a67157c",
+    "expectedHookCodeHash": "0xb26ab06541a7d6b2c04a84f01e865a2244fea4f031b87f4c453af475a76e92b5",
+    "requiresNewDeployment": true
   },
   "factorySdkSmoke": {
     "status": "passed",
@@ -77,10 +92,12 @@
     ],
     "noFactoryConfiguredState": true,
     "invalidTokenAddressRejected": true,
-    "scrollingActionsReachable": true
+    "scrollingActionsReachable": true,
+    "publishedFactoryMismatchDisplayed": true,
+    "incompatibleFactoryLaunchControlsDisabled": true
   },
   "limits": [
-    "No public-network deployment or transaction was performed.",
+    "No public-network deployment or transaction was performed by this review task; the original Factory deployment was published separately.",
     "Injected-wallet popup confirmation remains a manual check."
   ]
 }
