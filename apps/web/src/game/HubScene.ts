@@ -66,6 +66,13 @@ export class HubScene extends Phaser.Scene {
   private facing: Facing = "down";
   private lastX = 0;
   private lastY = 0;
+  private guideStep: "off" | "move" | "find" | "inspect" = "off";
+  private guideDistance = 0;
+  private guideMoved = false;
+  private guideAnchorX = 0;
+  private guideAnchorY = 0;
+  private hintTarget: Gate | null = null;
+  private hintArrow: Phaser.GameObjects.Triangle | null = null;
   private unsubscribe: (() => void)[] = [];
   private atmosphere!: HubAtmosphere;
 
@@ -133,6 +140,17 @@ export class HubScene extends Phaser.Scene {
     this.watchReducedMotion();
 
     this.unsubscribe.push(
+      this.bridge.onCommand("guide:step", ({ step }) => {
+        const enteringMove = step === "move" && this.guideStep !== "move";
+        this.guideStep = step;
+        if (enteringMove) {
+          this.guideDistance = 0;
+          this.guideMoved = false;
+          this.guideAnchorX = this.player.x;
+          this.guideAnchorY = this.player.y;
+        }
+        if (step !== "find") this.hintArrow?.setVisible(false);
+      }),
       this.bridge.onCommand("ui:modal", ({ open }) => {
         this.modalOpen = open;
         this.player.setVelocity(0, 0);
@@ -144,6 +162,8 @@ export class HubScene extends Phaser.Scene {
       }),
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.hintArrow?.destroy();
+      this.hintArrow = null;
       this.unsubscribe.forEach((u) => u());
       this.unsubscribe = [];
     });
@@ -166,6 +186,9 @@ export class HubScene extends Phaser.Scene {
       glowScale: this.nearGate?.glow.scaleX ?? null,
       glowAlpha: this.nearGate?.glow.alpha ?? null,
       reduceMotion: this.reduceMotion,
+      guideStep: this.guideStep,
+      guideDistance: this.guideDistance,
+      hintVisible: this.hintArrow?.visible ?? false,
       gates: this.gates.map((g) => ({ id: g.boss.id, zone: { x: g.zone.x, y: g.zone.y, w: g.zone.width, h: g.zone.height } })),
     });
     (window as unknown as { __bpHub?: () => ReturnType<typeof probe> }).__bpHub = probe;
@@ -178,6 +201,7 @@ export class HubScene extends Phaser.Scene {
     this.atmosphere.update(time, this.reduceMotion);
     this.updateMovement();
     this.updateGateProximity();
+    this.updateGuideHint(time);
   }
 
   /** Gates come from the Tiled `markers` layer; returns their blocking bodies. */
@@ -288,19 +312,20 @@ export class HubScene extends Phaser.Scene {
     // Phaser calls preventDefault on every captured key page-wide, which
     // swallows Space on focused React buttons. Read keys without capturing.
     keyboard.clearCaptures();
-    // Event-driven so a quick tap registers regardless of frame timing.
+    // Listen on the window, not Phaser. A focused music or sound button otherwise
+    // keeps the key event off the canvas, so E never reaches the gate.
     const interact = (event: KeyboardEvent) => {
-      if (event.repeat || isPageControlTarget(event) || this.modalOpen || !this.nearGate) return;
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || this.modalOpen || !this.nearGate) return;
+      const inspect = event.key === "e" || event.key === "E";
+      const activatesFocusedControl = event.key === " " || event.key === "Enter";
+      if (!inspect && !activatesFocusedControl) return;
+      if (activatesFocusedControl && isPageControlTarget(event)) return;
+      const target = event.target;
+      if (inspect && target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       this.bridge.emit("gate:enter", { bossId: this.nearGate.boss.id });
     };
-    keyboard.on("keydown-E", interact);
-    keyboard.on("keydown-ENTER", interact);
-    keyboard.on("keydown-SPACE", interact);
-    this.unsubscribe.push(() => {
-      keyboard.off("keydown-E", interact);
-      keyboard.off("keydown-ENTER", interact);
-      keyboard.off("keydown-SPACE", interact);
-    });
+    window.addEventListener("keydown", interact, true);
+    this.unsubscribe.push(() => window.removeEventListener("keydown", interact, true));
   }
 
   /** Mirror prefers-reduced-motion inside the canvas; CSS cannot reach Phaser tweens. */
@@ -367,6 +392,8 @@ export class HubScene extends Phaser.Scene {
     if (this.modalOpen || !this.cursors) {
       body.setVelocity(0, 0);
       this.showIdle();
+      this.guideAnchorX = this.player.x;
+      this.guideAnchorY = this.player.y;
       return;
     }
 
@@ -390,6 +417,7 @@ export class HubScene extends Phaser.Scene {
     this.lastX = this.player.x;
     this.lastY = this.player.y;
     const pushing = vx !== 0 || vy !== 0;
+    this.trackGuideTravel(pushing);
     if (this.reduceMotion || !pushing || !moved) this.showIdle();
     else {
       const key = `player-walk-${this.facing}`;
@@ -399,6 +427,64 @@ export class HubScene extends Phaser.Scene {
     this.player.setScale(1).setFlipX(false).setDepth(this.player.y);
     const shadow = this.children.getByName("player-shadow") as Phaser.GameObjects.Ellipse | null;
     shadow?.setPosition(this.player.x, this.player.y - 1);
+  }
+
+  /** Counts resolved travel during the move step. Walls, pauses, and idle frames do not add distance. */
+  private trackGuideTravel(pushing: boolean) {
+    if (this.guideStep !== "move" || this.guideMoved) return;
+    const travel = Math.hypot(this.player.x - this.guideAnchorX, this.player.y - this.guideAnchorY);
+    if (!this.modalOpen && pushing && travel > 0.2) {
+      this.guideDistance += travel;
+      if (this.guideDistance >= 24) {
+        this.guideMoved = true;
+        this.bridge.emit("guide:moved", {});
+      }
+    }
+    this.guideAnchorX = this.player.x;
+    this.guideAnchorY = this.player.y;
+  }
+
+  private updateGuideHint(time: number) {
+    const show = this.guideStep === "find" && !this.modalOpen;
+    if (!show) {
+      this.hintArrow?.setVisible(false);
+      return;
+    }
+    const target = this.chooseHintGate();
+    if (!target) {
+      this.hintArrow?.setVisible(false);
+      return;
+    }
+    if (!this.hintArrow) {
+      this.hintArrow = this.add.triangle(0, 0, 0, 5, 4, -3, -4, -3, 0xf5b04a).setDepth(LABEL_DEPTH - 1);
+    }
+    const centerX = target.zone.x + target.zone.width / 2;
+    const centerY = target.zone.y + target.zone.height / 2;
+    const angle = Math.atan2(centerY - this.player.y, centerX - this.player.x);
+    this.hintArrow
+      .setPosition(this.player.x + Math.cos(angle) * 16, this.player.y - 14 + Math.sin(angle) * 16)
+      .setRotation(angle - Math.PI / 2)
+      .setVisible(true)
+      .setAlpha(this.reduceMotion ? 0.9 : 0.65 + Math.sin(time / 420) * 0.2);
+  }
+
+  /** Nearest unlocked gate, keeping the current target until another is clearly closer. */
+  private chooseHintGate(): Gate | null {
+    const unlocked = this.gates.filter((gate) => !gate.boss.locked);
+    if (unlocked.length === 0) return null;
+    const distance = (gate: Gate) => {
+      const centerX = gate.zone.x + gate.zone.width / 2;
+      const centerY = gate.zone.y + gate.zone.height / 2;
+      return Math.hypot(centerX - this.player.x, centerY - this.player.y);
+    };
+    const nearest = [...unlocked].sort(
+      (a, b) => distance(a) - distance(b) || a.boss.id.localeCompare(b.boss.id),
+    )[0]!;
+    if (this.hintTarget && unlocked.includes(this.hintTarget) && distance(this.hintTarget) <= distance(nearest) + 24) {
+      return this.hintTarget;
+    }
+    this.hintTarget = nearest;
+    return nearest;
   }
 
   private updateGateProximity() {

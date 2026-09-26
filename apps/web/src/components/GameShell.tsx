@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { findBoss, type BossId } from "@/game/bosses";
 import { GameBridge } from "@/game/bridge";
 import { useLocalRound, type DeploymentState } from "@/lib/useLocalRound";
+import { useHubGuide } from "@/lib/useHubGuide";
 import { BossEntryPanel } from "./BossEntryPanel";
 import { GameCanvas } from "./GameCanvas";
+import { HubGuide, ReplayGuide } from "./HubGuide";
 import { RoundStatePanel } from "./RoundStatePanel";
 import { HubSoundControl } from "./HubSoundControl";
 
@@ -15,6 +17,9 @@ export function GameShell() {
   const [nearBoss, setNearBoss] = useState<BossId | null>(null);
   const [openBoss, setOpenBoss] = useState<BossId | null>(null);
   const [showChain, setShowChain] = useState(false);
+  const guide = useHubGuide(bridge, nearBoss);
+  const welcomeOpen = guide.hydrated && guide.state.step === "welcome";
+  const overlayOpen = openBoss !== null || showChain || welcomeOpen;
 
   useEffect(() => {
     const offNear = bridge.on("gate:near", ({ bossId }) => setNearBoss(bossId));
@@ -26,10 +31,17 @@ export function GameShell() {
   }, [bridge]);
 
   useEffect(() => {
-    bridge.send("ui:modal", { open: openBoss !== null || showChain });
-  }, [bridge, openBoss, showChain]);
+    guide.syncModal(overlayOpen);
+    bridge.send("ui:modal", { open: overlayOpen });
+  }, [bridge, guide.syncModal, overlayOpen]);
+
+  useEffect(() => {
+    if (openBoss) guide.panelOpened(openBoss);
+  }, [guide.panelOpened, openBoss]);
 
   const closeBoss = useCallback(() => setOpenBoss(null), []);
+  const hintStep = guide.state.step;
+  const showHint = guide.hydrated && !overlayOpen && (hintStep === "move" || hintStep === "find" || hintStep === "inspect" || hintStep === "done");
 
   return (
     <main className="mx-auto flex min-h-screen max-w-[1180px] flex-col px-4 md:px-[38px]">
@@ -45,11 +57,19 @@ export function GameShell() {
           <HubSoundControl bridge={bridge} />
         </div>
 
+        <HubGuide
+          step={guide.hydrated ? guide.state.step : "hidden"}
+          showHint={showHint}
+          onStart={guide.start}
+          onSkip={guide.skip}
+          onDismiss={guide.dismiss}
+        />
+
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between p-3">
           <span className="rounded-md bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.14em] text-dim">
             WASD / ARROWS · MOVE
           </span>
-          <GatePrompt bossId={nearBoss} hidden={openBoss !== null || showChain} />
+          <GatePrompt bossId={nearBoss} hidden={overlayOpen || (showHint && hintStep === "inspect")} />
         </div>
 
         {openBoss && <BossEntryPanel boss={findBoss(openBoss)} deployment={deployment} onClose={closeBoss} />}
@@ -59,6 +79,10 @@ export function GameShell() {
         <div className="mt-4">
           <RoundStatePanel />
         </div>
+      )}
+
+      {guide.hydrated && guide.state.step !== "welcome" && (
+        <ReplayGuide disabled={overlayOpen} onReplay={guide.replay} />
       )}
 
       <footer className="mt-auto flex flex-col justify-between gap-2 py-5 font-mono text-[9px] tracking-[0.12em] text-faint md:flex-row">
