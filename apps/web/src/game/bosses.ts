@@ -34,7 +34,8 @@ export type BossDefinition = {
   status: BossStatus;
   /**
    * @deprecated Kept so the partner-owned `BossEntryPanel` eyebrow reads the same value as
-   * before. Derived from `status`; delete once that panel reads `status`.
+   * before. Must mirror `status`; guarded by `bosses.test.ts`. Delete once that panel
+   * reads `status`.
    */
   locked: boolean;
   /** Gate glow and name plate stroke colour, as a hex string. */
