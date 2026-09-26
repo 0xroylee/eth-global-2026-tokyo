@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { GameBridge } from "@/game/bridge";
 import { HubMusic } from "@/game/HubMusic";
 
@@ -12,15 +12,13 @@ const DISCOVERY_COOLDOWN_MS = 600;
 
 type Voice = { stop: () => void };
 
-/** Hand the keyboard back to the map after a sound or music click. */
-function focusMap(control: HTMLElement) {
-  const canvas = control.closest("section")?.querySelector("canvas");
-  if (!(canvas instanceof HTMLCanvasElement)) {
-    control.blur();
-    return;
-  }
-  canvas.tabIndex = -1;
-  canvas.focus();
+/**
+ * Hand the keyboard back to the map after a click on a sound control, so the focused button
+ * does not swallow the next Enter. Blur only for real pointer clicks: a keyboard user keeps
+ * the focus ring they tabbed to.
+ */
+function blurOnMouseClick(event: ReactMouseEvent<HTMLButtonElement>) {
+  if (event.detail > 0) event.currentTarget.blur();
 }
 
 /** Quiet synthesized cues. Playback starts only after the sound button's click. */
@@ -188,7 +186,7 @@ export function HubSoundControl({ bridge }: { bridge: GameBridge }) {
         aria-pressed={on}
         onClick={(event) => {
           void toggle();
-          focusMap(event.currentTarget);
+          blurOnMouseClick(event);
         }}
         className="inline-flex min-h-9 items-center rounded-md border border-white/20 bg-ink/85 px-2.5 font-mono text-[9px] tracking-[0.12em] text-fog transition-colors hover:bg-panel focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
@@ -209,7 +207,7 @@ export function HubSoundControl({ bridge }: { bridge: GameBridge }) {
             music.current.start();
             setMusicOn(true);
           }
-          focusMap(event.currentTarget);
+          blurOnMouseClick(event);
         }}
         className="inline-flex min-h-9 items-center rounded-md border border-white/20 bg-ink/85 px-2.5 font-mono text-[9px] tracking-[0.12em] text-fog disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >

@@ -45,7 +45,11 @@ export function FullscreenControl({ target }: { target: RefObject<HTMLElement | 
   return (
     <button
       type="button"
-      onClick={() => void toggle()}
+      onClick={(event) => {
+        // Blur so the focused button does not swallow the next Enter (see GameShell).
+        if (event.detail > 0) event.currentTarget.blur();
+        void toggle();
+      }}
       aria-pressed={active}
       aria-label={active ? "Exit fullscreen" : "Enter fullscreen"}
       className="rounded-md border border-white/12 px-2 py-1 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 hover:text-fog motion-reduce:transition-none"
