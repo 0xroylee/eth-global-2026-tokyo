@@ -1,0 +1,96 @@
+{
+  "snapshotDate": "2026-09-26",
+  "source": "GeckoTerminal /networks/robinhood/trending_pools",
+  "bosses": [
+    {
+      "id": "talis",
+      "ticker": "TALIS",
+      "name": "Talis",
+      "tagline": "Tokenized stock market on Uniswap.",
+      "rank": 1,
+      "category": "DeFi",
+      "accent": "#c8a1ff"
+    },
+    {
+      "id": "roo",
+      "ticker": "ROO",
+      "name": "Roo",
+      "tagline": "No one knows what it is. It does not stay put.",
+      "rank": 2,
+      "category": "Meme",
+      "accent": "#87e8d8"
+    },
+    {
+      "id": "robinpepe",
+      "ticker": "ROBINPEPE",
+      "name": "Robinpepe",
+      "tagline": "Pepe crossed with Robin Hood.",
+      "rank": 3,
+      "category": "Meme",
+      "accent": "#73e561"
+    },
+    {
+      "id": "hoodcats",
+      "ticker": "HOODCATS",
+      "name": "Hoodcats",
+      "tagline": "Three cats in hooded cloaks.",
+      "rank": 4,
+      "category": "Meme",
+      "accent": "#ef9fb3"
+    },
+    {
+      "id": "ad",
+      "ticker": "AD",
+      "name": "Artificial Doge",
+      "tagline": "Doge, assembled by a model.",
+      "rank": 5,
+      "category": "Meme / AI",
+      "accent": "#3939d0"
+    },
+    {
+      "id": "pons",
+      "ticker": "PONS",
+      "name": "Pons",
+      "tagline": "Launchpad token Uniswap called out.",
+      "rank": 6,
+      "category": "Launchpad",
+      "accent": "#dc6adc"
+    },
+    {
+      "id": "robin",
+      "ticker": "ROBIN",
+      "name": "Robin the Frog",
+      "tagline": "A frog in a feathered cap.",
+      "rank": 7,
+      "category": "Meme",
+      "accent": "#32bd71"
+    },
+    {
+      "id": "agrippa",
+      "ticker": "AGRIPPA",
+      "name": "Agrippa",
+      "tagline": "Launched on Bankr, very online.",
+      "rank": 8,
+      "category": "Meme / Bankr",
+      "accent": "#e9499e"
+    },
+    {
+      "id": "musebook",
+      "ticker": "MUSEBOOK",
+      "name": "musebook",
+      "tagline": "Content and social, on chain.",
+      "rank": 9,
+      "category": "Content / Social",
+      "accent": "#d0e6b3"
+    },
+    {
+      "id": "aeva",
+      "ticker": "AEVA",
+      "name": "Aeva",
+      "tagline": "An asset-native L1.",
+      "rank": 10,
+      "category": "L1",
+      "accent": "#e2e25a"
+    }
+  ]
+}
