@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { attackPlaybackChoice, attackWaitPhase, confirmedBattleAttack, roundSecondsLeft, writeStateMatchesEncounter, type ConfirmedBattleAttack, type SeenAttackMemory } from "@/lib/battle";
-import { attackCapAmount, type AttackCap } from "@/lib/attackCommand";
+import { quoteMatchesAttackCap, attackCapAmount, type AttackCap } from "@/lib/attackCommand";
 import { displayAmount } from "@/lib/format";
 import { findBossPresentation, POOL_UNIS_PRESENTATION } from "@/game/bosses";
 import type { useBossPool, NetworkKey } from "@/lib/useBossPool";
@@ -247,7 +247,9 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
   const defeated = round?.status === 3;
   const expired = Boolean(round && !defeated && (round.status === 4 || secondsLeft === 0));
   const busy = arena.writeState.status === "prompting" || arena.writeState.status === "pending" || arena.writeState.status === "unresolved" || Boolean(arena.pendingRecord);
-  const canAttack = round?.status === 1 && (secondsLeft === null || secondsLeft > 0) && !busy;
+  const observedTimestamp = live ? live.round.blockTimestamp + BigInt(Math.max(0, Math.floor((now - live.readAt) / 1_000))) : 0n;
+  const cooldownSeconds = round?.continuousLiquidity ? Math.max(0, Number(round.continuousLiquidity.nextAttackAt - observedTimestamp)) : 0;
+  const canAttack = round?.status === 1 && cooldownSeconds === 0 && (secondsLeft === null || secondsLeft > 0) && !busy;
   const stage = round ? STAGES[round.currentStage] : undefined;
   const holdOldForm = Boolean(sequence?.animate && sequence.phase !== "result" && visibleEffect);
   const visualStage = holdOldForm && visibleEffect ? STAGES[visibleEffect.stage] : stage;
@@ -281,7 +283,7 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
   const action = visibleEffect ? "HIT CONFIRMED" : busy ? writeMatches ? arena.writeState.status === "prompting" ? "PREPARING" : "PENDING" : "OTHER TRANSACTION" : defeated ? "DEFEATED" : expired ? "ROUND ENDED" : canAttack ? "SWAP ATTACK" : "WAITING";
   const commandChecking = Boolean(account && live && (!attackPreview.playerReady || (!attackPreview.allowanceReady && attackPreview.allowanceLoading)));
   const allowanceUnavailable = Boolean(account && live && attackPreview.playerReady && !attackPreview.allowanceReady && !attackPreview.allowanceLoading);
-  const capMatchesPreview = attackPreview.quote?.maxMockUSD === attackCapAmount(selectedCap);
+  const capMatchesPreview = quoteMatchesAttackCap(attackPreview.quote, selectedCap);
   const commandWaitingForQuote = Boolean(account && !arena.networkMismatch && round?.status === 1 &&
     (!capMatchesPreview || !attackPreview.fresh));
   const commandStatus = !account
@@ -291,7 +293,7 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
         : commandChecking ? "CHECKING WALLET"
           : allowanceUnavailable ? "ALLOWANCE UNAVAILABLE"
           : commandWaitingForQuote ? "LOADING QUOTE…"
-            : !attackPreview.hasInputBalance ? `NEED ${selectedCap} MockUSD`
+            : !attackPreview.hasInputBalance ? `NEED ${displayAmount(attackPreview.quote?.maxMockUSD ?? attackCapAmount(selectedCap), 6)} MockUSD`
               : attackPreview.allowanceMissing ? "APPROVAL NEEDED" : "READY";
   const commandDisabled = !canAttack;
 
@@ -367,6 +369,9 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
   } else if (expired) {
     title = "ROUND ENDED";
     detail = "Attacks are closed. Previous attack purchases are nonrefundable.";
+  } else if (cooldownSeconds > 0) {
+    title = `STAGE ${round.currentStage + 1} · COOLDOWN`;
+    detail = `Next attack in ${cooldownSeconds}s. Pool liquidity remains active.`;
   } else if (round.status !== 1) {
     title = "BATTLE NOT ACTIVE";
     detail = "Waiting for the round to become active on chain.";
@@ -446,7 +451,7 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
             walletConnected={Boolean(account)}
             networkMismatch={arena.networkMismatch}
             writeBusy={busy}
-            showMessage={!round || !presentation || Boolean(visibleEffect) || busy || round.status !== 1 ||
+            showMessage={!round || !presentation || Boolean(visibleEffect) || busy || cooldownSeconds > 0 || round.status !== 1 ||
               (writeMatches && arena.writeState.status !== "idle" && arena.writeState.status !== "confirmed")}
           >
             {live && <BattleActivityLog key={`${arena.network}:${live.hookAddress}:${live.manifest.deploymentTxHash}:${live.rpcUrl}`} live={live} />}

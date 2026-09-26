@@ -1,6 +1,7 @@
 import { BlockNotFoundError, type Address, type PublicClient } from "viem";
 import {
   bossHpAbi,
+  mockBossPriceSourceAbi,
   bossPoolHookAbi,
   bossRouterAbi,
   mockUsdAbi,
@@ -14,6 +15,12 @@ export type RoundSnapshot = {
   blockNumber: bigint;
   blockTimestamp: bigint;
   encounterMode: EncounterMode;
+  liquidityMode?: "staged" | "continuous";
+  mockOracle?: { controller: Address; source: Address; owner?: Address; initialPriceX128?: bigint; maxFee: number; maxAge: bigint; priceX128?: bigint; updatedAt?: bigint; status: "valid" | "stale" | "invalid" | "unavailable" };
+  continuousLiquidity?: {
+    owner: Address; initialSaleBudget: bigint; nextAttackAt: bigint;
+    minimumLiquidity: bigint; ownerLiquidity: bigint; poolLiquidity: bigint;
+  };
   hpToken: TokenMetadata;
   rewardToken: TokenMetadata;
   deadline: bigint;
@@ -28,7 +35,7 @@ export type RoundSnapshot = {
   stageEndSqrtPriceX96: readonly [bigint, bigint, bigint];
   remainingSellableHP: bigint;
   supplyPoolFee: number;
-  bossPoolFee: number;
+  bossPoolFee: number | null;
   bossHPCurrency0: boolean;
   bossTickLower: number;
   bossTickUpper: number;
@@ -169,10 +176,35 @@ export async function readState(
           client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "volumeTargetMockUSD", blockNumber }),
         ])
       : [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n] as const;
+    const continuous = deployment.liquidityMode === "continuous"
+      ? await Promise.all([
+          client.readContract({ address: router, abi: bossRouterAbi, functionName: "owner", blockNumber }),
+          client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "saleHPBudget", blockNumber }),
+          client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "nextAttackAt", blockNumber }),
+          client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageLiquidity", args: [0], blockNumber }),
+          client.readContract({ address: router, abi: bossRouterAbi, functionName: "ownerLiquidity", blockNumber }),
+          client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "poolLiquidity", blockNumber }),
+        ]) : undefined;
+    let mockOracle: RoundSnapshot["mockOracle"];
+    if (deployment.mockOracle) {
+      const binding = deployment.mockOracle;
+      try {
+        const [[priceX128, updatedAt], owner, initialPriceX128] = await Promise.all([
+          client.readContract({ address: binding.source, abi: mockBossPriceSourceAbi, functionName: "readPrice", blockNumber }),
+          client.readContract({ address: binding.source, abi: mockBossPriceSourceAbi, functionName: "owner", blockNumber }),
+          client.readContract({ address: binding.source, abi: mockBossPriceSourceAbi, functionName: "initialPriceX128", blockNumber }),
+        ]);
+        const status = priceX128 <= 0n || updatedAt === 0n || updatedAt > blockTimestamp ? "invalid" : blockTimestamp - updatedAt > binding.maxAge ? "stale" : "valid";
+        mockOracle = { ...binding, owner, initialPriceX128, priceX128, updatedAt, status };
+      } catch { mockOracle = { ...binding, status: "unavailable" }; }
+    }
     const round: RoundSnapshot = {
       blockNumber,
       blockTimestamp,
       encounterMode,
+      liquidityMode: deployment.liquidityMode ?? "staged",
+      mockOracle,
+      continuousLiquidity: continuous ? { owner: continuous[0], initialSaleBudget: continuous[1], nextAttackAt: continuous[2], minimumLiquidity: continuous[3], ownerLiquidity: continuous[4], poolLiquidity: continuous[5] } : undefined,
       hpToken,
       rewardToken,
       deadline,
@@ -187,7 +219,7 @@ export async function readState(
       stageEndSqrtPriceX96: [endPrice0, endPrice1, endPrice2],
       remainingSellableHP,
       supplyPoolFee: supplyPoolKey.fee,
-      bossPoolFee: bossPoolKey.fee,
+      bossPoolFee: mockOracle ? null : bossPoolKey.fee,
       bossHPCurrency0,
       bossTickLower,
       bossTickUpper,

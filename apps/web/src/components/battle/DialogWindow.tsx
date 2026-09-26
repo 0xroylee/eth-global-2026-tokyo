@@ -1,6 +1,6 @@
 import { displayAmount, displayEstimate } from "@/lib/format";
 import type { ReactNode } from "react";
-import { attackCapAmount, type AttackCap } from "@/lib/attackCommand";
+import { quoteMatchesAttackCap, attackCapAmount, type AttackCap } from "@/lib/attackCommand";
 import type { AttackQuotePreview } from "../BossActions";
 
 export function DialogWindow({
@@ -27,7 +27,7 @@ export function DialogWindow({
   showMessage?: boolean;
 }) {
   const selectedMaxMockUSD = attackCapAmount(selectedCap);
-  const quote = preview.quote?.maxMockUSD === selectedMaxMockUSD ? preview.quote : null;
+  const quote = quoteMatchesAttackCap(preview.quote, selectedCap) ? preview.quote : null;
   const outputUnit = preview.outputSymbol;
   const status = !walletConnected
     ? "Connect a wallet to attack. The public quote works without one."
@@ -42,7 +42,7 @@ export function DialogWindow({
             : !preview.playerReady || !preview.allowanceReady
               ? preview.allowanceLoading ? "Checking wallet balance and allowance…" : "Allowance read unavailable · retrying."
               : !preview.hasInputBalance
-                ? `At least ${selectedCap} MockUSD is needed for this maximum input cap.`
+                ? `Up to ${displayAmount(quote?.maxMockUSD ?? selectedMaxMockUSD, 6)} MockUSD is needed for this quoted input cap.`
                 : preview.allowanceMissing
                   ? "Approval needed · choose this attack again to continue."
                   : "Ready · choose this attack to submit.";

@@ -17,7 +17,7 @@ import {
   type FactoryPendingOperation,
 } from "./factory-sdk";
 import { bossFactoryAbi } from "./generated/abi";
-import { bossHookCreationCode, bossRouterCreationCode } from "./generated/bytecode";
+import { bossFactoryRuntimeCode, bossHookCreationCode, bossRouterCreationCode } from "./generated/bytecode";
 
 const factory = "0x0000000000000000000000000000000000000010" as Address;
 const token = "0x0000000000000000000000000000000000000020" as Address;
@@ -274,6 +274,7 @@ describe("factory SDK pending operations", () => {
         readContract: async ({ functionName }: { functionName: string }) => {
           if (functionName === "routerCodeHash") return keccak256(bossRouterCreationCode);
           if (functionName === "hookCodeHash") return keccak256(bossHookCreationCode);
+          if (functionName == "feeController") return "0x0000000000000000000000000000000000000000";
           return 0n;
         },
         simulateContract: async ({ account }: { account: Address }) => {
@@ -303,6 +304,7 @@ describe("factory SDK pending operations", () => {
           calls.push(functionName);
           if (functionName === "routerCodeHash") return `0x${"ff".repeat(32)}`;
           if (functionName === "hookCodeHash") return `0x${"ee".repeat(32)}`;
+          if (functionName == "feeController") return "0x0000000000000000000000000000000000000000";
           return 0n;
         },
         simulateContract: async () => { simulated++; throw new Error("should not simulate"); },
@@ -342,11 +344,12 @@ describe("factory SDK pending operations", () => {
 function sdkPublicClient() {
   return {
     chain: { id: 84532 },
-    getCode: async () => "0x01",
+    getCode: async () => bossFactoryRuntimeCode,
     getChainId: async () => 84532,
     readContract: async ({ functionName }: { functionName: string }) => {
       if (functionName === "routerCodeHash") return keccak256(bossRouterCreationCode);
       if (functionName === "hookCodeHash") return keccak256(bossHookCreationCode);
+      if (functionName == "feeController") return "0x0000000000000000000000000000000000000000";
       return 0n;
     },
   };

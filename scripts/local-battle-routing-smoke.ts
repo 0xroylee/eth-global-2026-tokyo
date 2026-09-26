@@ -44,6 +44,7 @@ type VolumeRound = {
   stageVolumeTarget: readonly bigint[];
   totalVolume: bigint;
   volumeTargetMockUSD: bigint;
+  continuousLiquidity?: { nextAttackAt: bigint };
   finalEligibleHP: bigint;
   redeemedHP: bigint;
 };
@@ -85,19 +86,16 @@ async function main() {
     const fighterAWallet = createWalletClient({ account: fighterA, chain, transport });
     const fighterBWallet = createWalletClient({ account: fighterB, chain, transport });
 
-    const factoryArtifact = await readArtifact("contracts/out/BossFactory.sol/BossFactory.json");
-    const factoryDeployment = await deployArtifact(factoryArtifact, [
-      standalone.addresses.poolManager,
-      standalone.addresses.mockUSD,
-      standalone.addresses.roy,
-      keccak256(bossRouterCreationCode),
-      keccak256(bossHookCreationCode),
-    ], makerWallet, client);
-    const factory = factoryDeployment.address;
-    assert(same(standalone.deployer, maker.address), "fixture signer must match the seeded local manifest deployer");
-
     const sixDecimalArtifact = await readArtifact("contracts/out/BossPoolCore.t.sol/SixDecimalMeme.json");
     const sixDecimalToken = await deployArtifact(sixDecimalArtifact, [maker.address, 10_000n * 10n ** 6n], makerWallet, client);
+    const sourceArtifact = await readArtifact("contracts/out/MockBossPriceSource.sol/MockBossPriceSource.json");
+    const sourceDeployment = await deployArtifact(sourceArtifact, [sixDecimalToken.address, standalone.addresses.mockUSD, maker.address], makerWallet, client);
+    const controllerArtifact = await readArtifact("contracts/out/BossFeeController.sol/BossFeeController.json");
+    const controllerDeployment = await deployArtifact(controllerArtifact, [sixDecimalToken.address, standalone.addresses.mockUSD, standalone.addresses.roy, sourceDeployment.address, 600n, 900_000], makerWallet, client);
+    const factoryArtifact = await readArtifact("contracts/out/BossFactory.sol/BossFactory.json");
+    const factoryDeployment = await deployArtifact(factoryArtifact, [standalone.addresses.poolManager, standalone.addresses.mockUSD, standalone.addresses.roy, keccak256(bossRouterCreationCode), keccak256(bossHookCreationCode), controllerDeployment.address], makerWallet, client);
+    const factory = factoryDeployment.address;
+    assert(same(standalone.deployer, maker.address), "fixture signer must match the seeded local manifest deployer");
     const factorySdk = createBossFactorySdk({ publicClient: client, factory, walletClient: makerWallet });
     const build = await factorySdk.checkFactoryBuild();
     assert(build.status === "compatible", "deployed Factory bytecode must match the SDK build");
@@ -143,7 +141,7 @@ async function main() {
     assertResolved(deploymentB, launchB.hook, launchB.router, launchB.bossId, factory);
     const replacement = await deployArtifact(factoryArtifact, [
       standalone.addresses.poolManager, standalone.addresses.mockUSD, standalone.addresses.roy,
-      keccak256(bossRouterCreationCode), keccak256(bossHookCreationCode),
+      keccak256(bossRouterCreationCode), keccak256(bossHookCreationCode), controllerDeployment.address,
     ], makerWallet, client);
     const replacementReceipt = await client.getTransactionReceipt({ hash: replacement.hash });
     const upgradedManifest = {
@@ -167,6 +165,32 @@ async function main() {
     assert(unknownHookError.code === "BOSS_NOT_FOUND", "an unrelated deployed token contract must be rejected as an unknown Hook");
 
     const publicSdkA = createBossPoolSdk({ publicClient: client, deployment: deploymentA });
+    const makerSdk = createBossPoolSdk({ publicClient: client, deployment: deploymentB, walletClient: makerWallet });
+    const startingRound = await makerSdk.readRound();
+    assert(startingRound.mockOracle?.status === "invalid", "fresh demo source is deliberately uninitialized");
+    const initialPriceQuote = await makerSdk.quoteMockInitialPrice();
+    const initialPrice = initialPriceQuote.priceX128;
+    const prepared = execFileSync("rtk", ["proxy", "env", `BOSS_DEMO_DEPLOYMENT_PATH=${routingManifestPath}`, `BOSS_DEMO_HOOK=${launchB.hook}`, `BOSS_DEMO_RPC_URL=${rpcUrl}`, "bun", "scripts/prepare-mock-price.ts"], { cwd: root, encoding: "utf8" });
+    assert(JSON.parse(prepared).priceX128 === initialPrice.toString(), "read-only preparation works before the first source update");
+    await confirmed(await makerSdk.setMockPrice(initialPrice, true));
+    assert(Math.abs((await makerSdk.quoteAttack({ maxMockUSD: attackCap })).bossPoolFee - 3_000) < 100, "initial demo reference follows verified pool spot prices, before finite-swap impact");
+    const lpQuote = await makerSdk.quoteOwnerLiquidity(startingRound.continuousLiquidity!.minimumLiquidity / 10n);
+    for (const [token, amount] of [["BossHP", lpQuote.maxBossHPIn], ["ROY", lpQuote.maxRoyIn]] as const) {
+      const approval = await makerSdk.approve({ kind: "ownerLiquidity", token, amount });
+      if ("wait" in approval) await confirmed(approval);
+    }
+    const added = await makerSdk.modifyOwnerLiquidity(lpQuote);
+    await confirmed(added);
+    await confirmed(makerSdk.resumePending(freezeRequest(added.request)));
+    await confirmed(await makerSdk.modifyOwnerLiquidity(await makerSdk.quoteOwnerLiquidity(-lpQuote.delta)));
+    assert((await makerSdk.readRound()).continuousLiquidity!.ownerLiquidity === 0n, "owner SDK removes only its added liquidity");
+    const priceWrite = await makerSdk.setMockPrice(initialPrice * 4n);
+    await confirmed(priceWrite); await confirmed(makerSdk.resumePending(freezeRequest(priceWrite.request)));
+    assert((await makerSdk.quoteAttack({ maxMockUSD: attackCap })).bossPoolFee > 3_000, "owner mock preset increases the actual fee");
+    await confirmed(await makerSdk.setMockPrice(initialPrice / 4n));
+    assert((await makerSdk.quoteAttack({ maxMockUSD: attackCap })).bossPoolFee === 0, "owner mock preset can select an explicit zero fee");
+    await confirmed(await makerSdk.setMockPrice(initialPrice));
+
     const publicSdkB = createBossPoolSdk({ publicClient: client, deployment: deploymentB });
     const sdkA = publicSdkA.withWallet(fighterAWallet);
     const sdkB = publicSdkB.withWallet(fighterBWallet);
@@ -181,7 +205,8 @@ async function main() {
     assert(roundA0.status === 1 && roundB0.status === 1, "both Factory encounters must start active");
     assert(roundA0.totalVolume === 0n && roundB0.totalVolume === 0n, "new encounters must have independent zero volume");
 
-    const quoteA = await publicSdkA.quoteAttack({ maxMockUSD: attackCap, stage: 0 });
+    const quoteA = await publicSdkA.quoteAttack({ maxMockUSD: 5n * attackCap, stage: 0 });
+    assert(quoteA.requestedMaxMockUSD === 5n * attackCap && quoteA.maxMockUSD === attackCap + 1n, "fixed button cap retains authorization while signing only the stage cap");
     const quoteB = await publicSdkB.quoteAttack({ maxMockUSD: attackCap, stage: 0 });
     assert(same(quoteA.hook, launchA.hook) && same(quoteA.router, launchA.router), "A's direct-link quote must target A's Hook and Router");
     assert(same(quoteB.hook, launchB.hook) && same(quoteB.router, launchB.router), "B's direct-link quote must target B's Hook and Router");
@@ -221,6 +246,10 @@ async function main() {
         const before = await publicSdkA.readRound() as VolumeRound;
         if (before.status === 3) break;
         assert(before.currentStage === stage, `encounter A moved to unexpected stage ${before.currentStage}`);
+        if (before.continuousLiquidity && before.continuousLiquidity.nextAttackAt > (await client.getBlock()).timestamp) {
+          await client.request({ method: "evm_setNextBlockTimestamp" as never, params: [Number(before.continuousLiquidity.nextAttackAt)] as never });
+          await client.request({ method: "evm_mine" as never });
+        }
         const quote = retries === 0 && stage === 0
           ? quoteA
           : await publicSdkA.quoteAttack({ maxMockUSD: attackCap, stage });
@@ -316,6 +345,23 @@ async function main() {
     assert(same(recovery.hash, String(attackReceipts[0].hash)), "receipt recovery must return the original attack receipt");
     assert(blockAfterRecovery === blockBeforeRecovery && nonceAfterRecovery === nonceBeforeRecovery, "receipt recovery must send no transaction");
 
+    const coarseConfig = { ...launchBase, tokenAllocation: 120n, volumeTargetMockUSD: 24_000_000n };
+    const coarseLaunchQuote = await factorySdk.quoteLaunch(coarseConfig);
+    await factorySdk.approveToken(sixDecimalToken.address, 120n);
+    const coarseLaunch = await factorySdk.launchBoss({ ...coarseConfig, maxAttackTokenPerMockUSDX128: coarseLaunchQuote.maxRoyPerMockUSDX128 });
+    const coarseDeployment = await resolveBossDeployment(client, routingManifest, coarseLaunch.hook);
+    const coarseSdk = createBossPoolSdk({ publicClient: client, deployment: coarseDeployment, walletClient: fighterBWallet });
+    await confirmed(await coarseSdk.faucetMockUSD(5_000_000n));
+    const coarseApproval = await coarseSdk.approve({ kind: "attack", maxMockUSD: 4_000_000n });
+    if ("wait" in coarseApproval) await confirmed(coarseApproval);
+    await confirmed(await coarseSdk.attack(await coarseSdk.quoteAttack({ maxMockUSD: 3_999_999n })));
+    assert((await coarseSdk.readRound()).stageVolume[0] === 3_999_999n, "coarse six-decimal token deliberately has a one-USD-unit tail");
+    const coarseTail = await coarseSdk.quoteAttack({ maxMockUSD: attackCap });
+    assert(coarseTail.bossHPOut === 1n && coarseTail.maxMockUSD > 2n && coarseTail.requestedMaxMockUSD === attackCap, "SDK finds the caller-authorized indivisible token purchase");
+    await confirmed(await coarseSdk.attack(coarseTail));
+    const coarseAfter = await coarseSdk.readRound();
+    assert(coarseAfter.currentStage === 1 && coarseAfter.stageVolume[1] === 0n && coarseAfter.stageVolume[2] === 0n, "SDK terminal overfill advances only its starting stage");
+    await confirmed(await makerSdk.setMockPrice(initialPrice));
     const finalB = await publicSdkB.readRound() as VolumeRound;
     const playerB = await sdkB.readPlayer(fighterB.address) as { rewardCredit: bigint };
     assert(finalB.status === 1 && finalB.currentStage === 0 && finalB.totalVolume === 0n, "second boss must remain untouched and active for browser checks");
@@ -388,6 +434,9 @@ async function main() {
         totalVolume: reloadedRoundA.totalVolume.toString(),
         manifestReverified: true,
       },
+      signedStageCap: { selected: quoteA.requestedMaxMockUSD!.toString(), signed: quoteA.maxMockUSD.toString() },
+      coarseTokenTail: { hook: coarseLaunch.hook, signed: coarseTail.maxMockUSD.toString(), output: coarseTail.bossHPOut.toString(), nextStage: coarseAfter.currentStage, futureVolume: coarseAfter.stageVolume[1].toString() },
+      mockOracle: { source: sourceDeployment.address, controller: controllerDeployment.address, initialPrice: initialPrice.toString(), ownerSdkRoundTrip: true },
       browserBoss: {
         hook: launchB.hook,
         router: launchB.router,
