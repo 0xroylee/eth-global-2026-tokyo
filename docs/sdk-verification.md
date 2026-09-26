@@ -8,12 +8,12 @@ The quote contract changes came from `b98b685fadd5`. The SDK implementation is `
 
 ## Local and browser checks
 
-The local suite and SDK journey passed these checks:
+The final post-merge verification at commit `ebb9b87` passed these checks:
 
-- `bun run contracts:test` passed five focused Foundry cases for the HP0 round, HP1 normalized pricing and refill, public quote non-persistence, setup deadlines, and expiry.
-- `bun run typecheck` and `bun run web:build` passed.
-- The isolated local Anvil SDK journey recorded 18 successful transactions. It compared a public quote made before approval with actual execution, then exercised two wallets through all three stages, both refills, HP transfer and redemption, and both victory NFTs. Its ignored journal is `.scratch/boss-pool-exercise/local-20260926T073451640Z-45689.json`.
-- Browser checks showed an active local round and a public attack quote without a connected wallet. Base Sepolia showed not deployed with no quote because its manifest is absent. The header selector changed from Local to Base Sepolia with ArrowDown and Enter. The amount field kept native caret movement after End and ArrowLeft.
+- The frozen Bun install, Solidity build and size report passed. `bun run contracts:test` passed five focused Foundry cases, including quote non-persistence.
+- `bun run abi:check`, `bun run typecheck`, `bun run web:build`, `bun run local:smoke`, and `bun run --cwd apps/web map:check` passed.
+- The isolated local SDK journey recorded 18 successful transactions on chain `31337` and ended at block `36`. It compared a quote made before approval with execution, then exercised two wallets through all stages, refills, HP transfer and redemption, and both victory NFTs. Its ignored journal is `.scratch/boss-pool-exercise/local-20260926T090227138Z-79386.json`.
+- Browser checks showed an active local round and a public attack quote without a connected wallet. Base Sepolia showed Not Deployed with no quote because its manifest is absent. The header selector changed from Local to Base Sepolia with ArrowDown and Enter, and the amount field kept native caret movement after End and ArrowLeft. The historical Robinhood deployment rendered as Defeated with its verified state.
 
 The browser checks did not automate an injected wallet's popup. Use the [manual wallet checklist](#manual-browser-wallet-checklist) to verify connect, network switch, approval, rejection, signing, and receipt recovery.
 
@@ -36,7 +36,7 @@ The testnet fixture is Defeated and cannot run another fight. Expiry and prize-r
 
 ## Manual browser-wallet checklist
 
-Use a fresh local round for writes. The current testnet round is already Defeated. Keep any test wallet separate from personal funds, and never use an Anvil development key on Robinhood testnet.
+Use a fresh local round for writes. The historical Robinhood fixture is Defeated; Base Sepolia has no Boss Pool deployment yet. Keep any test wallet separate from personal funds, and never use an Anvil development key on a public network.
 
 1. Open the app with a fresh local deployment and no wallet connected. Confirm that round state and an attack quote load without a wallet prompt.
 2. Connect a dedicated test wallet. Confirm that the app shows the selected account and that the active chain matches the selected deployment.
