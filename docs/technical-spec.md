@@ -1,6 +1,6 @@
 # Boss Pool technical specification
 
-Status: BP01 implements local no-burn contracts, transferable HP redemption and the shared real-v4 fixture. Four focused cases pass: the full HP0 round/claims path, an HP1 normalized-price/refill regression, deadline setup rejection and expiry. The workspace/local read shell is separate from the still-unimplemented full game UI. Robinhood target-chain deployment remains unverified.
+Status (26 September 2026): The no-burn contracts, transferable HP redemption, and public real-v4 fixture are implemented. Five focused Foundry cases pass. The browser uses the Next.js player UI and the shared viem SDK for public quotes, reads, and wallet actions. A local 18-transaction journey passed. On Robinhood testnet, the initial SDK run confirmed 16 player transactions through reward redemption, then stopped before NFT writes on a pinned-block RPC read error. A separate completion run confirmed both NFT claims. See the [SDK verification record](sdk-verification.md); the older [foundation report](testnet-verification.md) remains a historical report for its original deployment.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ BossHook is attached to the ROY/BossHP pool. The MockUSD/ROY supply pool can use
 
 ### Proposed contract boundaries
 
-These boundaries guide the implementation. Actual BP01 source uses `BossHP`, `RoyToken`, `MockUSD` and `BossCollectibles` under `contracts/src`; generated ABI is authoritative. There is no LP/treasury/fee recovery path in this foundation, so those assets remain locked. Recovery, complete game UI and production NFT metadata remain downstream work.
+Actual source uses `BossHP`, `RoyToken`, `MockUSD`, and `BossCollectibles` under `contracts/src`; the generated ABI is authoritative. There is no LP, treasury, or fee recovery path, so those assets remain locked. Production NFT metadata remains unimplemented.
 
 | Contract | Responsibilities and custody | Main interface |
 | --- | --- | --- |
@@ -71,7 +71,7 @@ The root package now exposes contract build/test, ABI export/check, web dev/buil
 
 Start with direct viem reads/writes. A's backend work is contracts, deployment, scripts, and shared integration. Add a read-only service under `apps/` only when BP09 demonstrates an RPC or shared-activity need. No Turbo, Nx, database, queue, shared UI library, or extra package split is required for the core demo. [Bun workspaces](https://bun.com/docs/pm/workspaces)
 
-The selected stack is Solidity with Foundry and Next.js App Router with React, TypeScript, Tailwind CSS, and direct viem wallet/contract access. The user selected Next.js, viem, and Tailwind CSS on 26 September 2026. The current BP01 web shell still uses Vite; its migration remains implementation work. Pin compatible versions under the [implementation rules](agents/implementation.md).
+The implemented stack is Solidity with Foundry and Next.js App Router with React, TypeScript, Tailwind CSS, Phaser, and direct viem wallet/contract access. The app reads without a wallet and offers a public attack quote before enrollment or approval. It requests signatures from the selected injected wallet for player actions. Pin dependency versions under the [implementation rules](agents/implementation.md).
 
 ### Frontend architecture
 
@@ -81,13 +81,13 @@ Use Tailwind CSS through `@tailwindcss/postcss`, with the Tailwind import and sh
 
 Use a viem public client with the configured HTTP RPC for reads, simulations, and receipts. Use a viem wallet client with `custom(provider)` for the selected injected EIP-1193 provider. The browser wallet holds keys and approves requests. Keep generated ABIs, chain configuration, and reusable viem operations in `packages/chain`; keep wallet discovery, React state, and UI in `apps/web`. Start with direct viem and React state; wagmi, RainbowKit, and TanStack Query are not baseline dependencies. [Viem wallet client](https://viem.sh/docs/clients/wallet), [custom transport](https://viem.sh/docs/clients/transports/custom)
 
-The wallet flow must handle account permission, network switching, rejection, `accountsChanged`, `chainChanged`, and disconnect events. Remove provider listeners on cleanup and discard stale player reads and quotes after an account or chain change. Recheck the selected account, chain, and expected stage before a write. Keep public round reads available without a connected wallet. [EIP-1193 provider API](https://eips.ethereum.org/EIPS/eip-1193)
+The wallet flow requests accounts, detects account and chain changes, offers a chain switch, and clears stale player state and quotes after changes. Each write checks the selected account, chain, deployment, and expected stage. Public round reads and quotes remain available without a wallet. Manual browser-wallet popup acceptance remains open; see the [SDK verification checklist](sdk-verification.md#manual-browser-wallet-checklist). [EIP-1193 provider API](https://eips.ethereum.org/EIPS/eip-1193)
 
 Preserve the existing approval, simulation, receipt, and stale-stage rules. Enrollment approves MockUSD to BossHook; attacks approve MockUSD to BossRouter; redemption approves BossHP to BossHook. Keep victory-NFT claims separate. Derive damage and stage transitions from confirmed receipts and refreshed canonical state.
 
 ## Deployment and proof gate
 
-Target Robinhood testnet chain ID 46630. The documented RPC previously returned HTTP 403 from this environment. Verify RPC access, manager/periphery provenance, selected EVM/compiler compatibility, and actual bytecode. A local proof is not testnet evidence.
+The target is Robinhood testnet chain ID `46630`. The repository's Bun/viem client reaches the documented RPC and verifies the chain. The current deployment is a team fixture with its own PoolManager built from the pinned v4-core source. It is not an official Robinhood deployment. Local proof and testnet receipts remain separate evidence.
 
 BP01 adapts the existing compact real-v4 scenario: both swaps, ordinary BossHP delivery, cumulative purchase accounting, current-stage completion, and the reserve-funded refill/LP addition with all deltas settled. Reuse existing upstream fixtures and settlement helpers. Then verify the real target-chain route after deployment.
 
@@ -197,7 +197,7 @@ Proposed actions are activate, enroll, attackWithMockUSD, activatePendingStage f
 
 Publish views for stage HP/status, `stageSold`, frozen eligible supply, redeemed HP, NFT eligibility/claim flags, pending/released stage allocations, reserve balances, LP positions, and deployment configuration. Derive token reward previews from holder balance and the frozen rate after victory; use attack events for historical damage. Emit AttackApplied with both hop amounts and actual BossHP output, followed by StageCleared and then StageLiquidityActivated/StageStarted only when the actual addition succeeds.
 
-Use the shared chain package for all consumers. Ordinary quote and actual authenticated-attack simulation are different operations. The Boss pool cannot accept a fake quoter as BossRouter. BP01 must choose a supported route preview/full-router eth_call method that preserves authentication, then re-simulate after approval when state changed. Treat no-liquidity, out-of-range, stage-changed, and reserve errors as failures rather than fake damage.
+Use the shared chain package for all consumers. `BossRouter.quoteAttackWithMockUSD(uint256 maxMockUSD,uint8 attackStage)` runs the two-hop route and any required refill inside an always-reverting frame. Its `eth_call` result supplies a public quote without enrollment, allowance, player balance, or state mutation. `sdk.quoteAttack` exposes this quote before wallet connection or approval. After approval, the SDK simulates the authenticated `attackWithMockUSD` call with the player's accepted output floors. A changed stage, account, deployment, expiry, or insufficient output requires a fresh quote. Treat no-liquidity, out-of-range, and reserve errors as failures rather than fake damage.
 
 No backend service has authority over game state. Start with direct views, receipts, and bounded event replay. The optional activity service remains outside the critical path.
 
@@ -207,4 +207,4 @@ Use one reusable two-wallet core/E2E fixture with real v4 core. Adapt the existi
 
 Assert unchanged BossHP supply, output delivery equal to eligible issuance, transfers moving reward rights without new damage, one-time surrender of each redeemed token amount, locked protocol HP including after the deadline, rejection of player sell-backs, no premature future liquidity, no same-attack stage spill, reserve/player fund separation, single release per stage, and zero unsettled deltas. Extend the shared claim journey with a token transfer and redemption rather than adding a separate suite. Keep the failed-release rollback and focused access-control/expiry checks where the browser cannot reliably exercise them.
 
-Do not add a separate simulator, exhaustive test matrix, or broad fuzz suite. Reuse focused evidence until relevant code changes. The current `BossPoolCoreTest` fixture exercises the local no-burn path; it does not establish production audit coverage or Robinhood deployment.
+Do not add a separate simulator, exhaustive test matrix, or broad fuzz suite. Reuse focused evidence until relevant code changes. The `BossPoolCoreTest` fixture exercises the local no-burn path. Neither local nor team testnet evidence establishes production audit coverage or an official Robinhood PoolManager integration.

@@ -1,6 +1,6 @@
 # Use the Boss Pool contracts
 
-This guide covers the contracts that exist in `contracts/src`. The local deployment script creates an active round on Anvil. The Foundry fixture exercises a separate two-wallet round through all three stages and claims. The browser app reads state. It does not send transactions.
+This guide covers the contracts in `contracts/src` and the player operations in `@boss-pool/chain`. The local deployment script creates an active round on Anvil. The Foundry fixture exercises a separate two-wallet round through all three stages and claims. The browser app reads public state and quotes without a wallet, then sends player transactions only through the selected wallet.
 
 ## Run the local deployment
 
@@ -55,7 +55,7 @@ Run the reusable two-wallet journey against that local round with:
 bun run local:exercise
 ```
 
-It uses unlocked Anvil accounts 0 and 1, only after confirming chain `31337`. The exercise does not seed or reset Anvil and does not write the deployment manifest. It enrolls both players, makes one partial attack and three stage-clearing attacks, checks the two refills and actual refunds, transfers eligible HP, makes partial and final claims, then claims both victory NFTs. Receipt checkpoints go to `.scratch/boss-pool-exercise/`. A completed or partly used round cannot be restarted. Seed a fresh local deployment to run another full journey. For an isolated local node, set `LOCAL_RPC_URL` and `LOCAL_DEPLOYMENT_PATH`; an override manifest must stay under `.scratch/`:
+After it confirms chain `31337` and a loopback RPC, the exercise derives local Accounts 0 and 1 from Anvil's standard development keys. It does not ask the RPC to impersonate unlocked accounts. The exercise does not seed or reset Anvil and does not write the deployment manifest. It enrolls both players, makes one partial attack and three stage-clearing attacks, checks the two refills and actual refunds, transfers eligible HP, makes partial and final claims, then claims both victory NFTs. Receipt checkpoints go to `.scratch/boss-pool-exercise/`. A completed or partly used round cannot be restarted. Seed a fresh local deployment to run another full journey. For an isolated local node, set `LOCAL_RPC_URL` and `LOCAL_DEPLOYMENT_PATH`; an override manifest must stay under `.scratch/`:
 
 ```sh
 LOCAL_RPC_URL=http://127.0.0.1:8548 \
@@ -71,7 +71,7 @@ bun run contracts:test
 
 That Foundry suite uses its own ephemeral contracts. One HP0 case covers the full two-wallet round, all three stages, claims, and NFTs. A separate HP1 case covers normalized pricing and the first stage refill. Other cases check deadline setup rejection and expiry. Passing the suite does not create transactions in the Anvil node.
 
-Run the read-only browser with `bun run web:dev`. It loads the checked-in local manifest and reads that chain. It has no wallet connection or transaction controls.
+Run the browser app with `bun run web:dev`. Select Local or Robinhood Testnet in the header. Public round reads and attack quotes work without a connected wallet. Connect a wallet to enroll, attack, redeem BossHP, or claim a victory NFT. Each write asks the wallet to sign and waits for a checked receipt before the app shows its result. The SDK also exposes BossHP transfer, but the current browser UI has no transfer form. See the [chain SDK guide](../packages/chain/README.md) for the public API.
 
 ## Know the tokens and amounts
 
@@ -165,13 +165,14 @@ The following ABI signatures use the actual caller and argument types. ERC20 `ap
 | `BossHook.fundPrize()` | Immutable maker | Approve MockUSD to Hook first, then call before activation |
 | `BossRouter.activate()` | Router owner | Before the deadline, after pool seed and all custody checks pass |
 | `BossHook.enroll()` | Player | Approve 10 MockUSD to Hook. Round must be Active and before deadline. One enrollment per wallet. |
+| `BossRouter.quoteAttackWithMockUSD(uint256 maxMockUSD, uint8 attackStage)` | Anyone through `eth_call` | Round must be Active before the deadline. Does not require enrollment, allowance, a player account, or player balances. The route runs inside a reverting frame, so a transaction call cannot persist the simulated effects. |
 | `BossRouter.attackWithMockUSD(uint256 maxMockUSD, uint256 minRoyOut, uint256 minBossHPOut, uint8 attackStage, uint256 callDeadline) returns (uint256 mockUSDSpent, uint256 royBought, uint256 roySpent, uint256 bossHPOut)` | Enrolled player | Approve MockUSD to Router. Round must be Active. Use a fresh stage and set both deadlines. |
 | `BossHook.claimReward(uint256 hpAmount) returns (uint256 payout)` | Any eligible HP holder | Round must be Defeated. Approve BossHP to Hook and request a positive payout. |
 | `BossHook.claimVictoryNFT() returns (uint256 tokenId)` | Wallet with `hasAttacked == true` | Round must be Defeated. One claim per wallet. |
 | `BossHook.expire()` | Anyone | At or after the deadline while Active |
 | `BossHook.refundExpiredPrize()` | Immutable maker | Round must be Expired. One claim. |
 
-The next examples assume `walletClient` is configured with the player's explicit Account and the connected chain, for example `createWalletClient({ account: playerAccount, chain, transport })`. This lets the authenticated Router simulation use `walletClient.account`. `publicClient` reads the manifest RPC, and `manifest` came from the local read example. `writeContract` returns a transaction hash. Wait for a successful receipt before sending a dependent transaction.
+The raw enrollment example assumes `walletClient` has the player's explicit Account and chain. New player code should use the package SDK. The [chain SDK guide](../packages/chain/README.md) shows how to verify either deployment, create the SDK, bind an injected wallet, and recover pending receipts. In the quote example below, `sdk` is that verified instance and `walletClient` uses the selected player account.
 
 ```ts
 import { parseUnits } from "viem";
@@ -194,64 +195,29 @@ const enrollReceipt = await publicClient.waitForTransactionReceipt({ hash: enrol
 if (enrollReceipt.status !== "success") throw new Error("Enrollment failed");
 ```
 
-For an attack, approve the Router for the MockUSD input cap. Read `currentStage()` again immediately before sending. Pass that zero-based value as `expectedStage`. The Router derives the player from `msg.sender`. The call does not accept a player address argument.
+For application code, use `sdk.quoteAttack` before prompting for attack approval. It calls the router quote through a public simulation, then returns the input spent and refunded, ROY bought and spent, BossHP output, stage result, deployment identity, source block, expiry, and accepted output floors.
 
 ```ts
 import { parseUnits } from "viem";
-import { bossPoolHookAbi, bossRouterAbi, mockUsdAbi } from "@boss-pool/chain";
 
-const maxMockUSD = parseUnits("50", 6);
-const hook = manifest.addresses.hook;
-const router = manifest.addresses.router;
-const mockUSD = manifest.addresses.mockUSD;
+const quote = await sdk.quoteAttack({ maxMockUSD: parseUnits("50", 6) });
+const playerSdk = sdk.withWallet(walletClient);
 
-const approvalHash = await walletClient.writeContract({
-  address: mockUSD,
-  abi: mockUsdAbi,
-  functionName: "approve",
-  args: [router, maxMockUSD],
-});
-const approvalReceipt = await publicClient.waitForTransactionReceipt({ hash: approvalHash });
-if (approvalReceipt.status !== "success") throw new Error("Router allowance failed");
+const approval = await playerSdk.approve({ kind: "attack", maxMockUSD: quote.maxMockUSD });
+if ("request" in approval) {
+  savePendingRequest(approval.request);
+  const approvalResult = await approval.wait();
+  if (approvalResult.status === "unresolved") return;
+}
 
-const [status, expectedStage, roundDeadline, latestBlock] = await Promise.all([
-  publicClient.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "status" }),
-  publicClient.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "currentStage" }),
-  publicClient.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "deadline" }),
-  publicClient.getBlock(),
-]);
-if (status !== 1) throw new Error("The round is not active");
-const candidateDeadline = latestBlock.timestamp + 60n;
-const callDeadline = candidateDeadline < roundDeadline ? candidateDeadline : roundDeadline - 1n;
-if (callDeadline <= latestBlock.timestamp) throw new Error("The round deadline is too close");
-
-// A no-state-change call quotes the two-hop output for this player and stage.
-const quote = await publicClient.simulateContract({
-  address: router,
-  abi: bossRouterAbi,
-  functionName: "attackWithMockUSD",
-  account: walletClient.account,
-  args: [maxMockUSD, 0n, 1n, expectedStage, callDeadline],
-});
-const [, quotedRoyOut, , quotedBossHPOut] = quote.result;
-if (quotedBossHPOut === 0n) throw new Error("The quote produces no BossHP");
-const minRoyOut = quotedRoyOut * 99n / 100n;
-const minBossHPOut = quotedBossHPOut * 99n / 100n || 1n;
-
-// Check the chosen 1% output tolerance, then send the same arguments.
-const checkedAttack = await publicClient.simulateContract({
-  address: router,
-  abi: bossRouterAbi,
-  functionName: "attackWithMockUSD",
-  account: walletClient.account,
-  args: [maxMockUSD, minRoyOut, minBossHPOut, expectedStage, callDeadline],
-});
-const attackHash = await walletClient.writeContract(checkedAttack.request);
-const attackReceipt = await publicClient.waitForTransactionReceipt({ hash: attackHash });
-if (attackReceipt.status !== "success") throw new Error("Attack failed");
+const attack = await playerSdk.attack(quote);
+savePendingRequest(attack.request);
+const attackResult = await attack.wait();
+if (attackResult.status === "unresolved") return;
+refreshRoundAndPlayer();
 ```
 
-The current web app and chain package have no separate quote function. The first `simulateContract` call above quotes the current route through the real pools and Hook context without changing state. The second simulation checks the 1% output tolerance. Set `callDeadline` from the chain's latest block time and keep it before the round deadline. The Router returns unused MockUSD and intermediate ROY. `AttackExecuted` records actual spend and output amounts in the mined receipt. The return tuple is available from simulation, not from the transaction receipt.
+The SDK's `attack` runs the authenticated Router simulation after approval, with the same minimum outputs the player accepted in the quote. If the stage, account, deployment, expiry, or quoted floors changed, it requires a fresh quote. It never lowers the accepted minimums. Persist each pending operation's `request` before waiting so `resumePending(request)` can check its receipt after a refresh. The Router returns unused MockUSD and intermediate ROY. `AttackExecuted` records actual spends, refunds, and BossHP output in the confirmed receipt.
 
 If another player changes the stage first, the old `expectedStage` reverts. Read the stage and quote again. Each attack affects its starting stage only. On a clear, the Router settles the player trade and delivers BossHP before it performs the reserve-funded reverse swap and adds the next stage's incremental liquidity. If any transition step fails, the attack and its accounting revert together.
 
@@ -325,11 +291,11 @@ The Hook enum values are 0 for Setup, 1 for Active, 2 for StageCleared, 3 for De
 
 The contracts have no public BossHP sell-back route, held-ROY attack route, LP removal method, fee collection method, treasury withdrawal, or generic token recovery. `beforeRemoveLiquidity` always reverts. Router-held reserves and LP assets remain locked, including after all HP rewards are redeemed. The expired-round path refunds only the original MockUSD prize. `BossCollectibles` has no configured metadata URI.
 
-The local Foundry suite runs the full two-wallet HP0 flow against a pinned real PoolManager, including three stages, claims, and NFTs. A focused HP1 test covers normalized price and the first stage refill. The local Anvil exercise completes the full two-wallet flow with BossHP as currency1, including both refills and reward claims. `local:seed` and `local:exercise` send transactions only to loopback Anvil; `local:smoke` is read-only. The browser app remains read-only.
+The local Foundry suite runs the full two-wallet HP0 flow against a pinned real PoolManager, including three stages, claims, and NFTs. A focused HP1 test covers normalized price and the first stage refill. The local Anvil SDK exercise completed both wallets through all stages, rewards, and victory NFTs in 18 successful transactions. `local:seed` and `local:exercise` send transactions only to loopback Anvil; `local:smoke` is read-only. The browser uses the same SDK operations with an injected wallet.
 
 ## Robinhood testnet status
 
-The official endpoint `https://rpc.testnet.chain.robinhood.com/rpc` returns chain ID `46630` through the repository's Bun/viem client. A team-deployed, non-production fixture is live there. Its 18 deployment and setup receipts were verified. The [Router creation](https://explorer.testnet.chain.robinhood.com/tx/0xa4e3f50b1f819d6a6244f486ac421417a4bf0d1d4358c78212ec05c39307226e) is at block `124390450`; the [activation](https://explorer.testnet.chain.robinhood.com/tx/0x8b7566fe18842e56d042f3dc7a7f962ac14d1e8b9077796c9571bb61f9d27f54) is at block `124390616`. The public deployment manifest is `apps/web/public/deployments/robinhood-testnet.json`. The [verification report](testnet-verification.md) records deployment provenance and the completed player exercise. The deployed PoolManager comes from the pinned v4-core source. It is not an official Robinhood manager. Never use an Anvil development key on Robinhood testnet.
+The repository's Bun/viem client reaches Robinhood testnet at chain `46630`. The current manifest points to a team-deployed, non-production fixture. The team deployed its own PoolManager from pinned v4-core source. It is not an official Robinhood manager. The older [foundation report](testnet-verification.md) preserves the first fixture's addresses and receipts; it does not describe the current SDK fixture. Never use an Anvil development key on Robinhood testnet.
 
 The root `package.json` provides all three testnet commands. `testnet:preflight` checks chain ID, Cancun transient-storage support, signer balances, and a Forge deployment dry run. It sends no transaction. `testnet:deploy` repeats those checks, broadcasts a team deployment, verifies contract code and receipts, then writes `apps/web/public/deployments/robinhood-testnet.json`. A deployment needs enough testETH for both deployment and the two-wallet exercise.
 
@@ -347,6 +313,6 @@ bun --env-file=.env.testnet.local run testnet:deploy
 bun --env-file=.env.testnet.local run testnet:exercise
 ```
 
-The exercise confirms Player A matches the manifest deployer, verifies deployment receipts and code, checks chain `46630`, and uses each signer only inside the Bun process. Do not put key values or the RPC URL in command arguments, manifests, logs, or the web bundle.
+The exercise confirms Player A matches the manifest deployer, verifies deployment receipts and code, checks chain `46630`, and uses each signer only inside the Bun process. Do not put key values or the RPC URL in command arguments, manifests, logs, or the web bundle. The current defeated fixture cannot run this journey again. Deploy a fresh team fixture before using `testnet:exercise`.
 
-The current testnet round is Defeated with all eligible HP redeemed. It is a one-use fixture. A failed partial run leaves receipt checkpoints for review but does not reset the round. Deploy a new team fixture to run another full journey. The successful two-wallet transaction and state evidence is in [`docs/evidence/robinhood-testnet.json`](evidence/robinhood-testnet.json). Expiry and prize-refund behavior are covered by local Foundry checks only; neither has a Robinhood testnet receipt.
+The latest SDK exercise recorded 16 successful player transactions through both prize claims. The process stopped before either NFT write when an RPC returned a block-not-found error for the pinned read. A separate completion run then sent and verified the two NFT claims. The two phases total 18 successful transactions, not one uninterrupted run. The [SDK verification report](sdk-verification.md) links the separate [gameplay evidence](evidence/robinhood-sdk-gameplay.json) and [NFT completion evidence](evidence/robinhood-sdk-nft-completion.json). Expiry and prize-refund behavior are covered by local Foundry checks only; neither has a Robinhood testnet receipt.
