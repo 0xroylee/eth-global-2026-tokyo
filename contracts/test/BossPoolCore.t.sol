@@ -160,6 +160,70 @@ contract BossPoolCoreTest is Test {
         _claimVictoryNFTs();
     }
 
+    function test_PublicQuoteNeedsNoEnrollmentOrAllowanceAndMatchesAttackWithoutEffects() public {
+        _seedSupplyPool();
+        router.activate();
+
+        address unreadyPlayer = address(0xCAFE);
+        address quoteSink = address(0x000000000000000000000000000000000000dEaD);
+        PoolKey memory supplyKey = router.supplyPoolKey();
+        PoolKey memory bossKey = router.bossPoolKey();
+        (uint160 supplyPriceBefore,,,) = manager.getSlot0(supplyKey.toId());
+        (uint160 bossPriceBefore,,,) = manager.getSlot0(bossKey.toId());
+        uint256 routerUSDBefore = mockUSD.balanceOf(address(router));
+        uint256 routerRoyBefore = roy.balanceOf(address(router));
+        uint256 routerHPBefore = bossHP.balanceOf(address(router));
+
+        vm.prank(unreadyPlayer);
+        BossRouter.QuoteResult memory quote = router.quoteAttackWithMockUSD(1e6, 0);
+
+        assertGt(quote.mockUSDSpent, 0);
+        assertGt(quote.royBought, 0);
+        assertGt(quote.roySpent, 0);
+        assertGt(quote.bossHPOut, 0);
+        assertFalse(quote.stageCleared);
+        assertFalse(quote.bossDefeated);
+        assertEq(quote.nextStage, 0);
+        assertFalse(hook.enrolled(unreadyPlayer));
+        assertFalse(hook.hasAttacked(unreadyPlayer));
+        assertEq(mockUSD.balanceOf(unreadyPlayer), 0);
+        assertEq(mockUSD.allowance(unreadyPlayer, address(router)), 0);
+        assertEq(mockUSD.balanceOf(quoteSink), 0);
+        assertEq(roy.balanceOf(quoteSink), 0);
+        assertEq(bossHP.balanceOf(quoteSink), 0);
+        assertEq(uint8(router.mode()), uint8(BossRouter.Operation.Idle));
+        assertEq(router.activePlayer(), address(0));
+        assertEq(router.expectedStage(), 0);
+        assertEq(router.pendingStage(), 0);
+        assertEq(hook.stageSold(0), 0);
+        assertEq(hook.stageAttackCount(0), 0);
+        assertEq(uint8(hook.status()), uint8(BossHook.RoundStatus.Active));
+        assertEq(hook.currentStage(), 0);
+        assertEq(mockUSD.balanceOf(address(router)), routerUSDBefore);
+        assertEq(roy.balanceOf(address(router)), routerRoyBefore);
+        assertEq(bossHP.balanceOf(address(router)), routerHPBefore);
+        (uint160 supplyPriceAfter,,,) = manager.getSlot0(supplyKey.toId());
+        (uint160 bossPriceAfter,,,) = manager.getSlot0(bossKey.toId());
+        assertEq(supplyPriceAfter, supplyPriceBefore);
+        assertEq(bossPriceAfter, bossPriceBefore);
+        assertEq(manager.getNonzeroDeltaCount(), 0);
+
+        mockUSD.faucet(unreadyPlayer, 1_010e6);
+        vm.startPrank(unreadyPlayer);
+        mockUSD.approve(address(hook), type(uint256).max);
+        hook.enroll();
+        mockUSD.approve(address(router), type(uint256).max);
+        (uint256 spent, uint256 royBought, uint256 roySpent, uint256 hpOut) = router.attackWithMockUSD(
+            1e6, 1, 1, 0, block.timestamp + 1 hours
+        );
+        vm.stopPrank();
+
+        assertEq(quote.mockUSDSpent, spent);
+        assertEq(quote.royBought, royBought);
+        assertEq(quote.roySpent, roySpent);
+        assertEq(quote.bossHPOut, hpOut);
+    }
+
     function _assertGatesAndRejectUnauthorizedSwap() private {
         assertEq(hook.LOWER_TICK(), 0);
         assertEq(hook.UPPER_TICK(), 1_920);
@@ -216,6 +280,10 @@ contract BossPoolCoreTest is Test {
         uint256 bobUSDBeforeFailure = mockUSD.balanceOf(BOB);
         uint256 bobHPBeforeFailure = bossHP.balanceOf(BOB);
         (uint160 priceBeforeFailure,,,) = manager.getSlot0(bossKey.toId());
+        vm.expectRevert();
+        router.quoteAttackWithMockUSD(1_000e6, 0);
+        assertEq(hook.stageSold(0), soldBeforeFailure, "unexpected quote failure bubbles and rolls back damage");
+        assertEq(uint8(router.mode()), uint8(BossRouter.Operation.Idle), "failed quote leaves context idle");
         vm.prank(BOB);
         mockUSD.approve(address(router), type(uint256).max);
         vm.expectRevert();
@@ -254,8 +322,7 @@ contract BossPoolCoreTest is Test {
         _assertBossPriceAtReset();
         assertEq(manager.getNonzeroDeltaCount(), 0, "stage two reset deltas settled");
 
-        uint256 finalSupplyBefore = bossHP.totalSupply();
-        _attack(BOB, 1_000e6, 2);
+        _quoteFinalDefeatAndMatchAttack();
         assertEq(uint8(hook.status()), uint8(BossHook.RoundStatus.Defeated));
         assertEq(hook.currentStage(), 2, "final ABI stage remains zero-based 2");
         assertGt(hook.finalEligibleHP(), 0);
@@ -275,7 +342,7 @@ contract BossPoolCoreTest is Test {
             : stageOneQuote - stageOneRoyalSpent;
         assertLe(stageOneQuoteDifference, 2 * hook.stageAttackCount(0) + 2);
         assertApproxEqAbs(stageOneQuote, 331_219_793_595_396_366_740, 1e12);
-        assertEq(bossHP.totalSupply(), finalSupplyBefore, "total supply unchanged through defeat");
+        assertEq(bossHP.totalSupply(), BOSS_HP_SUPPLY, "total supply unchanged through defeat");
         assertEq(manager.getNonzeroDeltaCount(), 0, "all final attack deltas settled");
         assertEq(hook.redeemedHP(), 0);
 
@@ -287,6 +354,40 @@ contract BossPoolCoreTest is Test {
             }
         }
         assertEq(refillEvents, 2, "exactly two reserve refills");
+    }
+
+    function _quoteFinalDefeatAndMatchAttack() private {
+        uint256 finalEligibleBefore = hook.finalEligibleHP();
+        uint256 redeemedBefore = hook.redeemedHP();
+        uint256 paidPrizeBefore = hook.paidPrize();
+        uint256 escrowBefore = mockUSD.balanceOf(address(hook));
+        uint256 soldBefore = hook.stageSold(2);
+        uint256 supplyBefore = bossHP.totalSupply();
+        address quoteSink = address(0x000000000000000000000000000000000000dEaD);
+        uint256 sinkHPBefore = bossHP.balanceOf(quoteSink);
+
+        BossRouter.QuoteResult memory quote = router.quoteAttackWithMockUSD(1_000e6, 2);
+        assertTrue(quote.stageCleared);
+        assertTrue(quote.bossDefeated);
+        assertEq(quote.nextStage, 2);
+        assertEq(hook.finalEligibleHP(), finalEligibleBefore, "final quote does not freeze eligible supply");
+        assertEq(hook.redeemedHP(), redeemedBefore);
+        assertEq(hook.paidPrize(), paidPrizeBefore);
+        assertEq(mockUSD.balanceOf(address(hook)), escrowBefore, "final quote leaves prize escrow untouched");
+        assertEq(hook.stageSold(2), soldBefore, "final quote rolls back stage sales");
+        assertEq(bossHP.balanceOf(quoteSink), sinkHPBefore);
+        assertEq(bossHP.totalSupply(), supplyBefore);
+        assertEq(uint8(hook.status()), uint8(BossHook.RoundStatus.Active));
+        assertEq(hook.currentStage(), 2);
+        assertEq(uint8(router.mode()), uint8(BossRouter.Operation.Idle));
+        assertEq(manager.getNonzeroDeltaCount(), 0);
+
+        (uint256 spent, uint256 royBought, uint256 roySpent, uint256 hpOut) = _attack(BOB, 1_000e6, 2);
+        assertEq(quote.mockUSDSpent, spent);
+        assertEq(quote.royBought, royBought);
+        assertEq(quote.roySpent, roySpent);
+        assertEq(quote.bossHPOut, hpOut);
+        assertEq(bossHP.totalSupply(), supplyBefore);
     }
 
     function _transferAndRedeemEligibleHP() private {
@@ -383,6 +484,15 @@ contract BossPoolCoreTest is Test {
         PoolKey memory bossKey = round.router.bossPoolKey();
         (uint160 startPrice,,,) = round.manager.getSlot0(bossKey.toId());
         assertEq(startPrice, TickMath.getSqrtPriceAtTick(0), "human ROY/HP starts at 1");
+
+        vm.prank(address(0xCAFE));
+        BossRouter.QuoteResult memory initialQuote = round.router.quoteAttackWithMockUSD(1e6, 0);
+        assertGt(initialQuote.bossHPOut, 0, "currency1 pool quote works before enrollment");
+        assertFalse(round.hook.enrolled(address(0xCAFE)));
+        assertEq(round.mockUSD.balanceOf(address(0xCAFE)), 0);
+        assertEq(round.hook.stageSold(0), 0, "currency1 quote rolls back contribution");
+        assertEq(round.manager.getNonzeroDeltaCount(), 0);
+
         _enrollForRound(round, ALICE);
         _enrollForRound(round, BOB);
 
@@ -390,10 +500,24 @@ contract BossPoolCoreTest is Test {
         AttackAmounts memory partialAttack = _attackForRound(round, ALICE, 1e6, 0);
         assertGt(partialAttack.hpOut, 0);
         assertEq(round.bossHP.balanceOf(ALICE), partialAttack.hpOut);
+        assertEq(initialQuote.mockUSDSpent, partialAttack.usdSpent);
+        assertEq(initialQuote.royBought, partialAttack.royBought);
+        assertEq(initialQuote.roySpent, partialAttack.roySpent);
+        assertEq(initialQuote.bossHPOut, partialAttack.hpOut);
         (uint160 partialPrice,,,) = round.manager.getSlot0(bossKey.toId());
         assertLt(partialPrice, startPrice, "human ROY/HP rises as the pool price falls");
 
+        BossRouter.QuoteResult memory clearQuote = round.router.quoteAttackWithMockUSD(1_000e6, 0);
+        assertTrue(clearQuote.stageCleared);
+        assertFalse(clearQuote.bossDefeated);
+        assertEq(clearQuote.nextStage, 1);
+        assertEq(round.hook.currentStage(), 0, "currency1 clear preview leaves the live stage unchanged");
+        assertEq(round.manager.getNonzeroDeltaCount(), 0);
         AttackAmounts memory clearAttack = _attackForRound(round, BOB, 1_000e6, 0);
+        assertEq(clearQuote.mockUSDSpent, clearAttack.usdSpent);
+        assertEq(clearQuote.royBought, clearAttack.royBought);
+        assertEq(clearQuote.roySpent, clearAttack.roySpent);
+        assertEq(clearQuote.bossHPOut, clearAttack.hpOut);
         assertGt(clearAttack.hpOut, 0);
         assertGt(clearAttack.royBought, clearAttack.roySpent, "unused supply-pool ROY returns to the player");
         assertEq(round.hook.currentStage(), 1);
