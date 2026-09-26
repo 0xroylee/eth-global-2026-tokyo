@@ -255,6 +255,7 @@ export class HubScene extends Phaser.Scene {
 
     this.exposeDevProbe();
     this.bridge.emit("region:near", { exitId: null });
+    this.bridge.emit("npc:near", { npcId: null });
     this.bridge.emit("scene:ready", {});
   }
 
@@ -558,6 +559,10 @@ export class HubScene extends Phaser.Scene {
       if (target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       if (this.nearGate) {
         this.bridge.emit("gate:enter", { bossId: this.nearGate.boss.id });
+        return;
+      }
+      if (this.nearSage) {
+        this.bridge.emit("npc:talk", { npcId: "sage" });
         return;
       }
       if (this.nearRegion) this.bridge.emit("region:inspect", { exitId: "east-route" });
