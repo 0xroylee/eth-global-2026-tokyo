@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import roster from "./boss-roster.json";
-import { BOSSES, findBoss } from "./bosses";
+import { BOSSES, findBoss, HIDDEN_BOSS_PORTRAIT } from "./bosses";
 
 /** The curated Launch Boost snapshot and the hub's total gate count. */
 const ROSTER_SIZE = 10;
@@ -11,6 +11,18 @@ describe("boss table", () => {
   // Exactly one gate owns contract semantics, and it is the playable cat.
   test("carries contract semantics on the cat gate alone", () => {
     expect(BOSSES.filter((boss) => boss.source === "chain").map((boss) => boss.id)).toEqual(["cat"]);
+  });
+
+  test("gives every gate without a contract the hidden boss face", () => {
+    const hidden = BOSSES.filter((boss) => boss.source !== "chain");
+    expect(hidden.length).toBeGreaterThan(0);
+    for (const boss of hidden) {
+      expect(boss.name).toBe("Hidden Boss");
+      expect(boss.ticker).toBe("HIDDEN");
+      expect(boss.portrait).toBe(HIDDEN_BOSS_PORTRAIT);
+      expect(boss.crop).not.toBeNull();
+    }
+    expect(findBoss("cat").portrait).not.toBe(HIDDEN_BOSS_PORTRAIT);
   });
 
   test("derives every curated roster entry as a venue showcase", () => {

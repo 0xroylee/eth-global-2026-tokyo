@@ -38,6 +38,6 @@ export function sageLines(state: SageState): string[] {
     ];
   }
   return [
-    `Still those ${challengers} names. The roster shifts like rumours in town. Watch for SOL, the only one that will not behave. It wanders the road.`,
+    `Still those ${challengers} shadows. They share one face until a real pool arrives.`,
   ];
 }

@@ -432,26 +432,20 @@ export class HubScene extends Phaser.Scene {
       const boss = findBoss(bossId);
       const color = accentColor(boss.accent);
       const locked = boss.status === "locked";
+      const live = boss.source === "chain";
       const cx = obj.x + GATE.width / 2;
       const base = obj.y + GATE.height;
-
-      // Stone base and pillars, sized to the 16px tile grid.
-      this.add.ellipse(cx, base + 2, GATE.width + 6, 8, 0x000000, 0.25).setDepth(1);
-      this.add.rectangle(cx, base - 4, GATE.width, 8, 0x3a3d4a).setDepth(base);
-      this.add.rectangle(cx, base - 8, GATE.width, 2, 0x50546a).setOrigin(0.5, 1).setDepth(base);
-      this.add.rectangle(cx - 20, base - 18, 6, 28, 0x4a4e60).setDepth(base);
-      this.add.rectangle(cx + 20, base - 18, 6, 28, 0x4a4e60).setDepth(base);
-      this.add.rectangle(cx, base - 32, GATE.width + 4, 5, 0x4a4e60).setDepth(base);
+      const house = this.drawGateHouse(cx, base, live);
 
       // Portal glow behind the portrait.
-      const glow = this.add.circle(cx, base - 18, 16, color, locked ? 0.18 : 0.32).setDepth(base - 1);
-      this.add.circle(cx, base - 18, 13, 0x0b0e18, 0.85).setDepth(base - 1);
+      const glow = this.add.circle(cx, house.openingY, house.glowRadius, color, locked ? 0.18 : 0.32).setDepth(base - 1);
+      this.add.circle(cx, house.openingY, house.glowRadius - 3, 0x0b0e18, 0.85).setDepth(base - 1);
 
       const portraitKey = `portrait-${boss.id}`;
       if (this.textures.exists(portraitKey)) {
-        this.add.image(cx, base - 19, portraitKey).setDepth(base + 1);
+        this.add.image(cx, house.openingY, portraitKey).setScale(house.portraitScale).setDepth(base + 1);
       } else {
-        this.drawTickerShield(cx, base - 18, color, boss.ticker, base + 1);
+        this.drawTickerShield(cx, house.openingY, color, boss.ticker, base + 1);
       }
 
       // Name plate. Rendered at 3x resolution so the zoomed camera keeps it crisp.
@@ -466,12 +460,8 @@ export class HubScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
         .setDepth(LABEL_DEPTH + 1);
       this.crispLabels.push(label);
-      // Roster gates name their Launch Boost rank; the playable gates share the pool caption.
-      const captionText = locked
-        ? null
-        : boss.rosterMeta
-          ? `LB #${boss.rosterMeta.rank} · ${boss.rosterMeta.chain.toUpperCase()}`
-          : "BOSS POOL";
+      // Only the live contract gate claims a pool. Hardcoded gates are Hidden Boss.
+      const captionText = boss.status === "active" ? "BOSS POOL" : null;
       const caption = captionText === null
         ? null
         : this.add
@@ -521,7 +511,7 @@ export class HubScene extends Phaser.Scene {
           }).setOrigin(0.5, 0).setDepth(LABEL_DEPTH + 1)
         : undefined;
 
-      bodies.add(this.add.rectangle(cx, obj.y + GATE.height / 2, GATE.width, GATE.height).setVisible(false));
+      bodies.add(this.add.rectangle(cx, base - house.bodyHeight / 2, house.bodyWidth, house.bodyHeight).setVisible(false));
 
       this.gates.push({
         boss,
@@ -533,6 +523,48 @@ export class HubScene extends Phaser.Scene {
     }
 
     return bodies;
+  }
+
+  /**
+   * The live contract gate is a taller house. Every other gate keeps the small shrine.
+   * Both sit on the same ground line so the extra size grows upward, between the neighbours.
+   */
+  private drawGateHouse(cx: number, base: number, live: boolean) {
+    if (!live) {
+      this.add.ellipse(cx, base + 2, GATE.width + 6, 8, 0x000000, 0.25).setDepth(1);
+      this.add.rectangle(cx, base - 4, GATE.width, 8, 0x3a3d4a).setDepth(base);
+      this.add.rectangle(cx, base - 8, GATE.width, 2, 0x50546a).setOrigin(0.5, 1).setDepth(base);
+      this.add.rectangle(cx - 20, base - 18, 6, 28, 0x4a4e60).setDepth(base);
+      this.add.rectangle(cx + 20, base - 18, 6, 28, 0x4a4e60).setDepth(base);
+      this.add.rectangle(cx, base - 32, GATE.width + 4, 5, 0x4a4e60).setDepth(base);
+      return { openingY: base - 18, glowRadius: 16, portraitScale: 1, bodyWidth: GATE.width, bodyHeight: GATE.height };
+    }
+
+    const width = 68;
+    const pillarH = 32;
+    const step = 8;
+    this.add.ellipse(cx, base + 3, width + 12, 12, 0x000000, 0.28).setDepth(1);
+    this.add.rectangle(cx, base - 2, width + 10, 6, 0x2e313c).setDepth(base);
+    this.add.rectangle(cx, base - 7, width, 8, 0x3a3d4a).setDepth(base);
+    this.add.rectangle(cx, base - step, width, 2, 0x50546a).setOrigin(0.5, 1).setDepth(base);
+    this.add.rectangle(cx - 26, base - step - pillarH / 2, 8, pillarH, 0x4a4e60).setDepth(base);
+    this.add.rectangle(cx + 26, base - step - pillarH / 2, 8, pillarH, 0x4a4e60).setDepth(base);
+    const lintelY = base - step - pillarH;
+    this.add.rectangle(cx, lintelY, width + 4, 6, 0x4a4e60).setDepth(base);
+    const roof = this.add.polygon(cx, lintelY, [
+      { x: -36, y: 2 },
+      { x: 0, y: -10 },
+      { x: 36, y: 2 },
+    ], 0x6b4a32);
+    roof.setDepth(base + 1);
+    this.add.rectangle(cx, lintelY - 6, 10, 3, 0xc4a574).setDepth(base + 1);
+    return {
+      openingY: base - step - pillarH / 2,
+      glowRadius: 22,
+      portraitScale: 1.45,
+      bodyWidth: width,
+      bodyHeight: step + pillarH + 10,
+    };
   }
 
   /**
