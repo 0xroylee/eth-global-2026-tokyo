@@ -91,7 +91,7 @@ Keep the shared E2E and focused accounting checks. Optional held-Attack Token at
 
 ## Live battle page
 
-`/mock-battle` is the live battle page using `@boss-pool/chain`; its URL is retained for existing links. The pixel arena presents the verified shared round. The boss is named **Pool Unis**, and the command label is **SWAP ATTACK**, consistent with the purchase-based attack rules above. Attack Token remains the currency paid into the Boss pool.
+`/battle` is the live battle page using `@boss-pool/chain`. Existing `/mock-battle` links permanently redirect to `/battle` with the selected supported network. The pixel arena presents the verified shared round. The boss is named **Pool Unis**, and the command label is **SWAP ATTACK**, consistent with the purchase-based attack rules above. Attack Token remains the currency paid into the Boss pool.
 
 Players can inspect the shared boss without connecting a wallet. A wallet is required for approvals, attacks, and claims. Boss HP, stage, deadline, and rewards come from the selected verified deployment. An unavailable deployment shows an unavailable state. Entering or refreshing the page does not start a new round.
 
