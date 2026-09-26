@@ -147,3 +147,130 @@ gate 矩形維持 3×2 tile（GATE 48×32，`HubScene.ts:17`）。頂列 9 門�
 - **markers 規格**：`sage` point object `{name:"sage", point:true, x, y}`；gate object 維持 `{name:"gate", properties:[{name:"bossId", value}]}` 對位（現行格式，`hub.json` 實讀確認）。
 - 執行：`bun run map:build` → `bun run map:check`（`apps/web/package.json:8-9`）。
 
+## 5. 資料模型設計
+
+### 5.1 `BossDefinition` 擴充（`apps/web/src/game/bosses.ts`）
+
+```ts
+export type BossId = string;                    // 放寬自 "cat" | "macro-whale" | "locked"（bosses.ts:2）
+export type BossStatus = "active" | "no-contract" | "locked";
+
+export type BossDefinition = {
+  id: string;
+  name: string;
+  ticker: string;                              // 新增：名牌第一行（D8）
+  tagline: string;
+  /** Portrait image under /public/images. Empty when there is no portrait. */
+  portrait: string;
+  /** 新增：crop 規格移出 HubScene 硬編碼；null 表示無 portrait 可裁（畫字首盾牌）。 */
+  crop: { x: number; y: number; w: number; h: number; targetHeight: number } | null;
+  /** 取代 locked: boolean（研究 §4.6 第 4 條：三態需求）。 */
+  status: BossStatus;
+  /** 新增：gate glow / plate 描邊色，取代 GATE_COLORS 窮舉。 */
+  accent: string;                              // hex，如 "#f5b04a"
+  /** 新增：資料源區分。source:"chain"=有合約語義（僅 cat）；"venue"=展示型。 */
+  source: "chain" | "venue";
+  /** 新增：僅 roster 門有。 */
+  rosterMeta?: {
+    rank: number;        // Launch Boost 榜名次（研究 §2.2）
+    chain: string;       // "Robinhood"
+    category: string;    // 敘事一句話（如 "Meme / Pepe × Robin Hood"）
+    snapshot: string;    // "GeckoTerminal trending · 2026-09-26"
+  };
+};
+```
+
+- `locked` → `status` 遷移觸點：`hubGuide.ts:22` `isUnlocked` 改判 `status !== "locked"`；`HubScene.ts` gate 渲染 `boss.locked` 三處（:293、:299、:303-304）與 `chooseHintGate`（:633）；`BossEntryPanel.tsx:88` eyebrow 的 `boss.locked` 分支（該檔仍不編輯——cat/macro-whale 的 status 值設定需保持 `BossEntryPanel` 現有分支不變，即 cat=`active`、macro-whale=`no-contract`，eyebrow 邏輯由 partner 後續自行對齊）。
+- `BossId` 放寬為 `string` 的影響：`isBossId`（`bosses.ts:38-40`）改為 string 驗證；bridge payloads（`bridge.ts:17-21`）、`GameShell` state、`hubGuide` 型別隨之；`GATE_COLORS: Record<BossId, number>`（`HubScene.ts:24-28`）**刪除**，改讀 `boss.accent`。
+
+### 5.2 Roster 資料檔規格（`apps/web/src/game/boss-roster.json`，新檔）
+
+curated snapshot（D5）：10 筆、頂層附 `snapshotDate` 與 `source` 註記；欄位是 `BossDefinition.rosterMeta` 的子集 + 顯示欄位：
+
+```json
+{
+  "snapshotDate": "2026-09-26",
+  "source": "GeckoTerminal /networks/robinhood/trending_pools",
+  "bosses": [
+    { "id": "talis", "ticker": "TALIS", "name": "Talis",
+      "tagline": "Tokenized stock market on Uniswap.", "rank": 1, "category": "DeFi",
+      "accent": "#c8a1ff" },
+    { "id": "roo", "ticker": "ROO", "name": "Roo",
+      "tagline": "No one knows what it is. It does not stay put.", "rank": 2, "category": "Meme",
+      "accent": "#ff9d6b" }
+  ]
+}
+```
+
+- `bosses.ts` 組合成 `BOSSES = [...CORE_BOSSES(cat, macro-whale), ...ROSTER.map(toDefinition)]`；`toDefinition` 補 `crop: null`、`portrait: ""`、`status: "no-contract"`、`source: "venue"`、`rosterMeta`。
+- 換榜＝換 JSON（整批替換成本，研究 §2.3 第 4 點）；TS import JSON 由 Next.js/tsconfig 原生支援。
+
+### 5.3 hub.json markers 的 gate 物件規格
+
+- gate object 維持 `{name:"gate", properties:[{name:"bossId", type:"string", value}]}`（現行格式實讀確認）；**bossId 必須與 `BOSSES` 一一對位**，由 `check-hub-map.ts` 集合相等斷言把關（§4.3）。
+- 新增 `sage` point object（§4.3）。
+- 位置不寫 TS 是既定決策（art-direction spec:34；研究 §4.4）。
+
+### 5.4 解鎖狀態儲存與 demo fixture 策略
+
+| key | 用途 | 寫入時機 | 預設 |
+|---|---|---|---|
+| `boss-pool:sage-talked:v1` | sage 首訪/回訪台詞切換 | 第一次關閉 SageDialog | 空＝首訪 |
+| `boss-pool:defeated:v1` | cat 真實擊敗標記（Phase 2 台詞） | 收 `round:state` 且 `status===3`（DEFEATED，`HubScene.ts:554` 既有語義） | 空 |
+
+- demo fixture 策略：**不預設任何假進度**；台詞的「擊敗」分支只由 cat 真實狀態驅動。
+- 既有 `boss-pool:hub-guide:v1`（`hubGuide.ts:4`）不動；guide 在 12 門全 unlocked 下行為需回歸（§11）。
+
+## 6. 老智者 NPC 與對話系統技術設計
+
+### 6.1 HubScene 新增 NPC entity（對照 gate zone 模式）
+
+- 讀 marker：`create()` 內 `map.findObject(HUB_LAYERS.markers, o => o.name === "sage")`（同 `spawn` 讀法，`HubScene.ts:143-146`）。
+- sprite：`makeCroppedTexture(this, "npc-sage", "portrait-master-sage", crop, 30)`（§7.1）+ `this.add.image(x, y, "npc-sage")`；`setDepth(y)` y-sort（同 player/atmosphere 慣例）。
+- **靜態 body**：`this.physics.add.existing(sage, true)` 的 body 讓玩家不能穿過（NPC 擋路＝引導，Pokemon 關都老人先例）；body 尺寸 12×8 對齊玩家 collider 語彙（`HubScene.ts:389`）。
+- **idle bob**：`this.tweens.add({targets: sage, y: y ± 2, duration: 900, yoyo: true, repeat: -1, ease: "Sine.easeInOut"})`；`reduceMotion` 時不啟動（§3.3）。
+- **zone**：`new Phaser.Geom.Rectangle(x - 10, y - 8, 28, 28)` 包住 NPC 下半；`updateSageProximity()` 併入 `update()`（`HubScene.ts:252-256`），進出變化時 emit `npc:near`——完整複製 `updateGateProximity` 的 Contains 模式（`HubScene.ts:707-719`）。
+- **E 攔截第三分支**：`setupInput()`（`HubScene.ts:394-420`）優先序 `nearGate → nearSage → nearRegion`，sage 在 spawn 北側、zone 不與任何 gate zone 重疊（座標 §4.2 保證）。
+
+### 6.2 新 bridge event pair（`apps/web/src/game/bridge.ts`）
+
+```ts
+export type GameEvents = {
+  // ...既有事件不變
+  /** Player walked into / out of the sage's talk zone. */
+  "npc:near": { npcId: "sage" | null };
+  /** Player pressed interact while inside the sage's zone. */
+  "npc:talk": { npcId: "sage" };
+};
+```
+
+- 命名對齊 `gate:near` / `gate:enter` 慣例（`bridge.ts:15-19`）；不新增 command（`ui:modal` 既有，`bridge.ts:27-29`）。
+
+### 6.3 對話 UI 元件
+
+- 新檔 `apps/web/src/components/SageDialog.tsx`：結構複製 `WelcomeDialog`（§3.4）；props `{ lines: string[]; onClose: () => void }`；關閉回呼負責 `setSageOpen(false)`。
+- 新檔 `apps/web/src/lib/useTypewriter.ts`：`useTypewriter(text: string)` 回 `{ shown, done }`；§3.4 的速度/句讀/兩段式跳過規格；`matchMedia("(prefers-reduced-motion: reduce)")` 直接 `done=true`。
+- GameShell 接線：state `nearSage` / `sageOpen`；`bridge.on("npc:near")` → `setNearSage`；`bridge.on("npc:talk")` → `setSageOpen(true)`（同 `gate:enter` 接法 `GameShell.tsx:36`）；`overlayOpen` 加入 `sageOpen`（`GameShell.tsx:42`）；`SagePrompt` 顯示條件接在 `showBossPrompt` 之後（`GameShell.tsx:139-141` 同款優先序）。
+
+### 6.4 台詞資料結構與示例
+
+- 新檔 `apps/web/src/lib/sageLines.ts`：`type SageState = { firstVisit: boolean; defeated: boolean }`；`function sageLines(state: SageState): string[]`（純函式，同 `transitionGuide` 純 reducer 慣例）。台詞長度 ≤ 3 句/輪，每句 ≤ 60 字。
+- 3 段示例（首訪 / 回訪未擊敗 / cat 已擊敗）：
+
+> 首訪：「年輕人，歡迎來到 Boss Pool 花園。前方有 **10 位**從 Robinhood 來的挑戰者，他們會奪走每個人的好夢。」
+> 「沿著石路向上，一座神社就是一位 Boss。只有 Roy 已經甦醒——先去找祂練手吧。」
+
+> 回訪（未擊敗）：「還是那 10 位。名單會變，就像城裡的流言。記住那隻叫 ROO 的——只有牠不守規矩，會在路上遊蕩。」
+
+> cat 已擊敗（DEFEATED）：「你擊敗了 Roy。剩下的 9 位還在等他們的合約降臨。名單之後還會換，改天再來看看吧。」
+
+- 首訪/回訪由 `boss-pool:sage-talked:v1`（§5.4）判定；「已擊敗」由 `useBossPool` 的 `round.status` 真實值判定——**不寫死**。
+
+### 6.5 LLM 雙軌（Phase 3 可選，只寫設計不實作）
+
+- calling pattern：Next.js route handler 代理（`apps/web/src/app/api/sage/route.ts`），API key 只在 server 端；前端 `fetch("/api/sage", {method:"POST", body:{history, defeated}})`。
+- system prompt 注入 hard-code 事實：10 位 Boss 的 ticker/名次/來源鏈/snapshot 日期（研究 §3.5 可信度陷阱）；temperature 低；max tokens ≤ 120。
+- **fallback**：`AbortSignal.timeout(4s)` 或非 200 → 回傳 `sageLines(state)` 腳本（D3 的雙軌核心）；UI 不顯示「AI 中」字樣，只顯示台詞。
+- 明確不做：其餘 10 隻 Boss 不接 LLM（研究 §3.5 結論）。
+
+
