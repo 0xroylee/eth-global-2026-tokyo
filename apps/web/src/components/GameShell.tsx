@@ -195,7 +195,6 @@ export function GameShell() {
               >
                 <option value="local">LOCAL · 31337</option>
                 <option value="base-sepolia">BASE SEPOLIA · 84532</option>
-                <option value="robinhood-testnet">ROBINHOOD · 46630 · HISTORICAL</option>
               </select>
             </label>
             {arena.wallet.account ? (

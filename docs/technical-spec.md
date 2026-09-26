@@ -178,7 +178,7 @@ The mock reducer, timer-driven attack hook, and mock badge are removed. [`battle
 
 The SDK exposes both configured pool fee rates in `RoundSnapshot` and `AttackQuote`, read from the Router's pool keys at the snapshot block. Quote review shows both rates. The newly available paginated `readActivity` API can supply historical contribution, but the battle's current HUD displays wallet holdings and rewards only. It does not sum an incomplete session history or count transfer events as attacks.
 
-Base Sepolia is the default target, and the published deployment manifest is included. Local Anvil remains available for integration with a real deployed fixture; historical Robinhood is read-only. Missing manifests and failed verification still produce unavailable states. Browser and local-chain verification are recorded separately in the PR; this integration does not broadcast transactions to Base Sepolia.
+Base Sepolia is the default target, and the published deployment manifest is included. The app's network settings offer Base Sepolia and Local Anvil only. Legacy Robinhood battle URLs fall back to Base Sepolia; Robinhood deployment and receipt reads remain available through the SDK. Missing manifests and failed verification still produce unavailable states. Browser and local-chain verification are recorded separately in the PR; this integration does not broadcast transactions to Base Sepolia.
 
 ## Deployment and proof gate
 

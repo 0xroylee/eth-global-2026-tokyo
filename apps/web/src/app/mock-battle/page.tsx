@@ -4,6 +4,6 @@ export default async function LiveBattlePage({ searchParams }: {
   searchParams: Promise<{ network?: string }>;
 }) {
   const { network } = await searchParams;
-  const initialNetwork = network === "local" || network === "robinhood-testnet" ? network : "base-sepolia";
+  const initialNetwork = network === "local" ? "local" : "base-sepolia";
   return <BattlePage initialNetwork={initialNetwork} />;
 }

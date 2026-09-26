@@ -17,7 +17,7 @@ The user confirmed this replacement for the earlier physical/magic design:
 - Player BossHP sell-backs into the battle pool are disabled. Transfers do not deal new damage. The worked reward proposal lets eligible token transfers carry reward rights, then locks surrendered tokens at claim. Protocol reserve and fee HP remain excluded. See [reward math](docs/refill-math.md#rewards-follow-eligible-bosshp).
 - Permissionless Boss Factory rounds let creators select an existing MEME, its allocation, a prize percentage, and a MockUSD volume target. The contract derives the start price and unlocks three MEME stages at 1:2:3 volume gates. See [Boss Factory](docs/boss-factory.md).
 - No MROY, magic-price multiplier, or parallel physical/magic pools.
-- Next.js App Router, TypeScript, Tailwind CSS, and direct viem are the selected frontend stack. The current target network is Base Sepolia, chain `84532`. Robinhood testnet `46630` remains supported only for historical deployment and receipt reads. See the [frontend architecture](docs/technical-spec.md#frontend-architecture) and [migration sequence](docs/delivery-plan.md#frontend-build-sequence).
+- Next.js App Router, TypeScript, Tailwind CSS, and direct viem are the selected frontend stack. The app offers Base Sepolia, chain `84532`, and Local Anvil, chain `31337`. Robinhood testnet `46630` remains available through the SDK for historical deployment and receipt reads. See the [frontend architecture](docs/technical-spec.md#frontend-architecture) and [migration sequence](docs/delivery-plan.md#frontend-build-sequence).
 
 ## Status
 

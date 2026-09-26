@@ -78,7 +78,7 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
   const defeated = round?.status === 3;
   const expired = Boolean(round && !defeated && (round.status === 4 || secondsLeft === 0));
   const busy = arena.writeState.status === "prompting" || arena.writeState.status === "pending" || arena.writeState.status === "unresolved" || Boolean(arena.pendingRecord);
-  const canAttack = round?.status === 1 && secondsLeft > 0 && !busy && arena.network !== "robinhood-testnet";
+  const canAttack = round?.status === 1 && secondsLeft > 0 && !busy;
   const stage = round ? STAGES[round.currentStage] : undefined;
   const visualStage = effect ? STAGES[effect.stage] : stage;
   const openActions = () => actionsDialog.current?.showModal();
@@ -124,7 +124,6 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
           <select id="battle-network" className={`${BUTTON} max-w-full`} value={arena.network} onChange={(event) => arena.selectNetwork(event.target.value as NetworkKey)}>
             <option value="base-sepolia">Base Sepolia</option>
             <option value="local">Local chain</option>
-            <option value="robinhood-testnet">Historical · read only</option>
           </select>
           <button type="button" className={BUTTON} onClick={account && !arena.networkMismatch ? openActions : connectOrSwitch}>
             {!account ? "CONNECT WALLET" : arena.networkMismatch ? "SWITCH NETWORK" : `${account.slice(0, 6)}…${account.slice(-4)}`}

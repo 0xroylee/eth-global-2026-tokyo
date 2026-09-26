@@ -5,15 +5,12 @@ import {
   createPublicClientForNetwork,
   DEFAULT_BASE_SEPOLIA_RPC_URL,
   DEFAULT_LOCAL_RPC_URL,
-  DEFAULT_ROBINHOOD_RPC_URL,
   fetchBaseSepoliaDeployment,
   fetchLocalDeployment,
-  fetchRobinhoodDeployment,
   BASE_SEPOLIA_CHAIN_ID,
   LOCAL_CHAIN_ID,
   parseDeployment,
   RequoteRequiredError,
-  ROBINHOOD_TESTNET_CHAIN_ID,
   TransactionReplacedError,
   TransactionRevertedError,
   verifyDeployment,
@@ -24,13 +21,12 @@ import {
   type PendingOperation,
   type PendingRequest,
   type SkippedApproval,
-  type SupportedChainId,
   type WaitResult,
 } from "@boss-pool/chain";
 import { createWalletClient, custom, defineChain, UserRejectedRequestError, type EIP1193Provider, type WalletClient } from "viem";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-export type NetworkKey = "local" | "base-sepolia" | "robinhood-testnet";
+export type NetworkKey = "local" | "base-sepolia";
 
 type VerifiedContext = {
   key: NetworkKey;
@@ -100,7 +96,7 @@ export function useBossPool() {
   const [pendingRecord, setPendingRecord] = useState<StoredPending | null>(null);
   const [writeState, setWriteState] = useState<WriteState>({ status: "idle" });
 
-  const selectedChainId: SupportedChainId = chainIdForNetwork(network);
+  const selectedChainId: typeof LOCAL_CHAIN_ID | typeof BASE_SEPOLIA_CHAIN_ID = chainIdForNetwork(network);
   const fallbackRpcUrl = rpcUrlForNetwork(network);
   const targetRpcUrl = deployment.kind === "live" && deployment.network === network ? deployment.rpcUrl : fallbackRpcUrl;
   const walletChain = useMemo(
@@ -449,7 +445,7 @@ export function useBossPool() {
     deployment,
     wallet,
     sdk,
-    canWrite: Boolean(network !== "robinhood-testnet" && wallet.account && walletClient && sdk),
+    canWrite: Boolean(wallet.account && walletClient && sdk),
     networkMismatch,
     connect,
     switchToSelectedNetwork,
@@ -480,26 +476,22 @@ async function loadVerifiedContext(network: NetworkKey, originManifest?: Deploym
 
 async function fetchDeploymentForNetwork(network: NetworkKey): Promise<DeploymentManifest> {
   if (network === "local") return fetchLocalDeployment();
-  if (network === "base-sepolia") return fetchBaseSepoliaDeployment();
-  return fetchRobinhoodDeployment();
+  return fetchBaseSepoliaDeployment();
 }
 
-function chainIdForNetwork(network: NetworkKey): SupportedChainId {
+function chainIdForNetwork(network: NetworkKey): typeof LOCAL_CHAIN_ID | typeof BASE_SEPOLIA_CHAIN_ID {
   if (network === "local") return LOCAL_CHAIN_ID;
-  if (network === "base-sepolia") return BASE_SEPOLIA_CHAIN_ID;
-  return ROBINHOOD_TESTNET_CHAIN_ID;
+  return BASE_SEPOLIA_CHAIN_ID;
 }
 
 function networkName(network: NetworkKey): string {
   if (network === "local") return "Boss Pool Local";
-  if (network === "base-sepolia") return "Base Sepolia";
-  return "Robinhood Testnet (historical)";
+  return "Base Sepolia";
 }
 
 function rpcUrlForNetwork(network: NetworkKey): string {
   if (network === "local") return process.env.NEXT_PUBLIC_BOSS_POOL_LOCAL_RPC_URL ?? DEFAULT_LOCAL_RPC_URL;
-  if (network === "base-sepolia") return process.env.NEXT_PUBLIC_BOSS_POOL_BASE_SEPOLIA_RPC_URL ?? DEFAULT_BASE_SEPOLIA_RPC_URL;
-  return process.env.NEXT_PUBLIC_BOSS_POOL_ROBINHOOD_RPC_URL ?? DEFAULT_ROBINHOOD_RPC_URL;
+  return process.env.NEXT_PUBLIC_BOSS_POOL_BASE_SEPOLIA_RPC_URL ?? DEFAULT_BASE_SEPOLIA_RPC_URL;
 }
 
 function deploymentRpcUrl(network: NetworkKey, manifestRpcUrl?: string): string {
@@ -517,8 +509,9 @@ function readStoredPending(): StoredPending | null {
     const value = JSON.parse(raw) as unknown;
     if (!value || typeof value !== "object") return null;
     const item = value as Partial<StoredPending>;
+    // Unsupported saved chains stay untouched in storage; never reinterpret one as the selected network.
     if (
-      (item.network !== "local" && item.network !== "base-sepolia" && item.network !== "robinhood-testnet") ||
+      (item.network !== "local" && item.network !== "base-sepolia") ||
       !item.request || typeof item.request !== "object" || typeof item.submittedAt !== "number" || !item.manifest
     ) return null;
     const manifest = parseDeployment(item.manifest);
