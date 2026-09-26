@@ -3,6 +3,7 @@
 /* Design tokens carried over from the BP01 shell. */
 @theme {
   --font-sans: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: var(--font-dm-mono), ui-monospace, monospace;
   --font-pixel: var(--font-silkscreen), var(--font-dm-mono), monospace;
 
@@ -89,8 +90,34 @@
   from { transform: translateY(0); }
   to { transform: translateY(-2px); }
 }
+.boss-hit {
+  animation: boss-hit 280ms var(--ease-out-strong);
+}
+.battle-log-panel {
+  background: #fff9e9;
+  border: 3px solid #2b4a8b;
+  box-shadow: 4px 4px 0 #041833;
+  opacity: 1;
+  transition: opacity 180ms var(--ease-out-strong);
+}
+@media (hover: hover) and (pointer: fine) {
+  .battle-log-panel:not([data-error="true"]) {
+    opacity: 0.25;
+  }
+  .battle-log-panel:hover,
+  .battle-log-panel:focus-within {
+    opacity: 1;
+  }
+}
+@keyframes boss-hit {
+  0%, 100% { transform: none; }
+  18% { transform: translate(14px, -4px) rotate(6deg) scale(0.94, 1.03); }
+  45% { transform: translate(-8px, 1px) rotate(-3deg); }
+  70% { transform: translate(4px, -1px) rotate(1deg); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .boss-float {
+  .boss-float,
+  .boss-hit {
     animation: none;
   }
   .boss-sprite {
@@ -114,6 +141,7 @@
 .attack-slash,
 .attack-flash,
 .attack-spark,
+.attack-impact-ring,
 .attack-clear-ring {
   position: absolute;
   left: 0;
@@ -121,65 +149,113 @@
   image-rendering: pixelated;
 }
 .attack-token {
-  width: 12px;
-  height: 12px;
-  margin-left: -6px;
-  margin-top: -6px;
-  background: #f6e7b2;
-  box-shadow: 2px 2px 0 #041833;
-  transition: transform 240ms cubic-bezier(0.23, 1, 0.32, 1), opacity 120ms linear;
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  margin-top: -11px;
+  border: 4px solid #fff9e9;
+  background: #f6ca67;
+  box-shadow: 0 0 0 3px #092b61, -10px 10px 0 #fff9e980, -18px 18px 0 #f6ca6740;
+  /* Match BattleView's confirmed-receipt impact at 240ms. */
+  animation: attack-flight 240ms linear both;
+}
+@keyframes attack-flight {
+  from { transform: translate(0, 0) rotate(0deg); }
+  to { transform: translate(var(--attack-x), var(--attack-y)) rotate(180deg); }
 }
 .attack-slash {
-  width: 84px;
-  height: 8px;
-  margin-left: -42px;
-  margin-top: -4px;
-  background: repeating-linear-gradient(90deg, #f6e7b2 0 8px, #041833 8px 10px, transparent 10px 14px);
-  opacity: 1;
+  --slash-angle: -32deg;
+  width: 156px;
+  height: 12px;
+  margin-left: -78px;
+  margin-top: -6px;
+  background: #fff9e9;
+  box-shadow: 0 4px 0 #f6ca67, 0 8px 0 #092b61;
+  animation: attack-slash 240ms var(--ease-out-strong) both;
+}
+.attack-slash-cross {
+  --slash-angle: 48deg;
+  width: 112px;
+  margin-left: -56px;
+}
+@keyframes attack-slash {
+  from { opacity: 1; transform: rotate(var(--slash-angle)) scaleX(0.9); }
+  50% { opacity: 1; }
+  to { opacity: 0; transform: rotate(var(--slash-angle)) scaleX(1.2); }
 }
 .attack-flash {
-  width: 28px;
-  height: 36px;
-  margin-left: -14px;
-  margin-top: -18px;
+  width: 88px;
+  height: 88px;
+  margin-left: -44px;
+  margin-top: -44px;
   background: #fff9e9;
-  opacity: 0.9;
+  clip-path: polygon(50% 0, 62% 32%, 100% 50%, 66% 62%, 50% 100%, 36% 66%, 0 50%, 32% 36%);
   animation: attack-flash 160ms linear forwards;
 }
 @keyframes attack-flash {
-  from { opacity: 0.9; }
-  to { opacity: 0; }
+  from { opacity: 0.9; transform: scale(0.95); }
+  to { opacity: 0; transform: scale(1.15); }
 }
 .attack-spark {
-  width: 6px;
-  height: 6px;
-  margin-left: -3px;
-  margin-top: -3px;
-  background: #f6e7b2;
-  box-shadow: 1px 1px 0 #041833;
-  animation: attack-spark 200ms linear forwards;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  margin-top: -5px;
+  background: #f6ca67;
+  box-shadow: 2px 2px 0 #092b61;
+  animation: attack-spark 280ms var(--ease-out-strong) both;
 }
 @keyframes attack-spark {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from { opacity: 1; transform: translate(0, 0) rotate(0deg); }
+  50% { opacity: 1; }
+  to { opacity: 0; transform: translate(var(--spark-x), var(--spark-y)) rotate(90deg); }
+}
+.attack-impact-ring {
+  width: 88px;
+  height: 88px;
+  margin-left: -44px;
+  margin-top: -44px;
+  border: 4px solid #f6ca67;
+  box-shadow: 0 0 0 2px #092b61;
+  animation: attack-impact-ring 280ms var(--ease-out-strong) both;
+}
+@keyframes attack-impact-ring {
+  from { opacity: 0.9; transform: rotate(45deg) scale(0.95); }
+  50% { opacity: 0.7; }
+  to { opacity: 0; transform: rotate(45deg) scale(1.6); }
 }
 .attack-clear-ring {
-  width: 16px;
-  height: 16px;
-  margin-left: -8px;
-  margin-top: -8px;
-  border: 4px solid #7ee7f7;
-  opacity: 0.9;
-  animation: attack-clear-ring 400ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  width: 100px;
+  height: 100px;
+  margin-left: -50px;
+  margin-top: -50px;
+  border: 6px solid #fff9e9;
+  box-shadow: 0 0 0 3px #092b61;
+  animation: attack-clear-ring 280ms var(--ease-out-strong) forwards;
 }
 @keyframes attack-clear-ring {
-  from { opacity: 0.95; transform: scale(1); }
-  to { opacity: 0; transform: scale(2.4); }
+  from { opacity: 0.95; transform: scale(0.95); }
+  to { opacity: 0; transform: scale(1.8); }
 }
 .attack-result {
   margin: 0;
-  text-shadow: 2px 2px 0 #041833;
-  white-space: nowrap;
+  width: max-content;
+  max-width: min(20rem, 75vw);
+  padding: 8px 12px;
+  border: 2px solid #fff9e9;
+  background: #092b61;
+  box-shadow: 3px 3px 0 #041833;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+  animation: attack-result 160ms linear both;
+}
+@keyframes attack-result {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.attack-effects-reduced .attack-result {
+  animation: none;
 }
 
 /* Boss entry panel: enters from slightly below and scaled, never from nothing. */

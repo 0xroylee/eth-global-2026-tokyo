@@ -90,7 +90,7 @@ export function GameCanvasRuntime({ bridge, onPhase }: { bridge: GameBridge; onP
             <button
               type="button"
               onClick={() => setAttempt((current) => current + 1)}
-              className="mt-4 rounded-lg border border-white/12 px-4 py-2 font-mono text-[11px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100"
+              className="mt-4 rounded-lg border border-white/12 px-4 py-2 font-mono text-[11px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100"
             >
               RETRY
             </button>

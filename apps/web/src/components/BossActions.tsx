@@ -11,8 +11,10 @@ import {
 } from "@boss-pool/chain";
 import { displayAmount, displayEstimate, roundStatusLabel } from "@/lib/format";
 import { writeStateMatchesEncounter } from "@/lib/battle";
-import { attackCapAmount, routeAttackCommand, type AttackCap } from "@/lib/attackCommand";
+import { ATTACK_CAPS, attackCapAmount, routeAttackCommand, type AttackCap } from "@/lib/attackCommand";
+import { pollAttackQuotes } from "@/lib/attackQuotes";
 import { type useBossPool } from "@/lib/useBossPool";
+import { BattleDetails } from "./battle/BattleDetails";
 
 type Arena = ReturnType<typeof useBossPool>;
 type QuoteState = {
@@ -38,6 +40,8 @@ const DEFAULT_SLIPPAGE_BPS = 100;
 
 export type AttackQuotePreview = {
   quote: AttackQuote | null;
+  quotes: Partial<Record<AttackCap, AttackQuote>>;
+  errors: Partial<Record<AttackCap, string>>;
   fresh: boolean;
   loading: boolean;
   allowanceLoading: boolean;
@@ -70,14 +74,15 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
   onApprovalReady,
   onQuotePreviewChange,
 }, ref) {
-  const [quoteState, setQuoteState] = useState<QuoteState | null>(null);
-  const [quoteBusy, setQuoteBusy] = useState(false);
-  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [quoteStates, setQuoteStates] = useState<Partial<Record<AttackCap, QuoteState>>>({});
+  const [quoteErrors, setQuoteErrors] = useState<Partial<Record<AttackCap, string>>>({});
+  const quoteState = quoteStates[selectedCap] ?? null;
+  const quoteError = quoteErrors[selectedCap] ?? null;
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [claimText, setClaimText] = useState("");
   const [rewardPreview, setRewardPreview] = useState<RewardPreview | null>(null);
   const [rewardError, setRewardError] = useState<string | null>(null);
-  const [approvals, setApprovals] = useState<{ attack?: { maxMockUSD: bigint; status: ApprovalStatus }; claim?: ApprovalStatus }>({});
+  const [approvals, setApprovals] = useState<{ attack?: ApprovalStatus; claim?: ApprovalStatus }>({});
   const [lastResult, setLastResult] = useState<ActionResult | null>(null);
   const [now, setNow] = useState(Date.now());
   const [quoteRefreshVersion, setQuoteRefreshVersion] = useState(0);
@@ -140,9 +145,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
     let retry = 0;
     const readApprovals = async () => {
       setApprovalLoading(true);
-      const attackRequest = inputAmount !== null && inputAmount > 0n
-        ? sdk.getApproval({ kind: "attack", maxMockUSD: inputAmount }, account)
-        : Promise.resolve(undefined);
+      const attackRequest = sdk.getApproval({ kind: "attack", maxMockUSD: attackCapAmount(10) }, account);
       const claimRequest = hpAmount !== null && hpAmount > 0n && defeated && !factory
         ? sdk.getApproval({ kind: "claimReward", hpAmount }, account)
         : Promise.resolve(undefined);
@@ -150,7 +153,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
       if (!activeRequest) return;
       const attack = attackResult.status === "fulfilled" ? attackResult.value : undefined;
       const claim = claimResult.status === "fulfilled" ? claimResult.value : undefined;
-      setApprovals({ attack: attack ? { maxMockUSD: inputAmount, status: attack } : undefined, claim });
+      setApprovals({ attack, claim });
       setApprovalLoading(false);
       if (attackResult.status === "rejected" || claimResult.status === "rejected") {
         const retryDelays = [2_000, 5_000, 15_000, 30_000];
@@ -174,30 +177,43 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
       activeRequest = false;
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
     };
-  }, [sdk, account, inputAmount, hpAmount, defeated, factory, attackAllowance, claimAllowance, heldBossHP, rewardCredit, eligibleHP, redeemedHP, originalPrize]);
+  }, [sdk, account, hpAmount, defeated, factory, attackAllowance, claimAllowance, heldBossHP, rewardCredit, eligibleHP, redeemedHP, originalPrize]);
 
-  const quoteFresh = useMemo(() => {
-    if (!quoteState || !live || !round) return false;
-    const { quote } = quoteState;
-    return quoteState.network === arena.network &&
-      quoteState.hookAddress.toLowerCase() === live.hookAddress.toLowerCase() &&
-      quoteState.deploymentTxHash.toLowerCase() === live.manifest.deploymentTxHash.toLowerCase() &&
-      quoteState.account?.toLowerCase() === account?.toLowerCase() &&
-      quoteState.walletChainId === arena.wallet.chainId &&
-      quote.chainId === live.manifest.chainId &&
-      quote.stage === round.currentStage &&
-      round.stageSold[quote.stage] === quoteState.stageSold &&
-      round.stageVolume[quote.stage] === quoteState.stageVolume &&
-      round.bossCurrentSqrtPriceX96 === quoteState.bossPrice &&
-      inputAmount !== null && quote.maxMockUSD === inputAmount &&
-      chainTimestamp < quote.expiresAt && quoteTimestamp < quote.expiresAt && active;
-  }, [quoteState, live, round, arena.network, arena.wallet.chainId, account, inputAmount, chainTimestamp, quoteTimestamp, active]);
+  const freshQuotes = useMemo(() => {
+    const quotes: Partial<Record<AttackCap, AttackQuote>> = {};
+    if (!live || !round || !active) return quotes;
+    for (const cap of ATTACK_CAPS) {
+      const state = quoteStates[cap];
+      if (!state) continue;
+      const { quote } = state;
+      const timestamp = quote.quotedAt + BigInt(Math.max(0, Math.floor((now - state.receivedAt) / 1_000)));
+      if (state.network === arena.network &&
+        state.hookAddress.toLowerCase() === live.hookAddress.toLowerCase() &&
+        state.deploymentTxHash.toLowerCase() === live.manifest.deploymentTxHash.toLowerCase() &&
+        state.account?.toLowerCase() === account?.toLowerCase() &&
+        state.walletChainId === arena.wallet.chainId &&
+        quote.chainId === live.manifest.chainId &&
+        quote.stage === round.currentStage &&
+        round.stageSold[quote.stage] === state.stageSold &&
+        round.stageVolume[quote.stage] === state.stageVolume &&
+        round.bossCurrentSqrtPriceX96 === state.bossPrice &&
+        quote.maxMockUSD === attackCapAmount(cap) &&
+        chainTimestamp < quote.expiresAt && timestamp < quote.expiresAt) quotes[cap] = quote;
+    }
+    return quotes;
+  }, [quoteStates, live, round, arena.network, arena.wallet.chainId, account, chainTimestamp, now, active]);
+  const quoteFresh = Boolean(freshQuotes[selectedCap]);
+  const quoteBusy = active && !quoteFresh && !quoteError;
   const selectedQuoteState = quoteState?.quote.maxMockUSD === inputAmount ? quoteState : null;
 
   const quoteSecondsLeft = quoteState && live
     ? Math.max(0, Number(quoteState.quote.expiresAt - quoteTimestamp))
     : 0;
-  const attackApproval = approvals.attack?.maxMockUSD === inputAmount ? approvals.attack.status : undefined;
+  const attackApproval = approvals.attack ? {
+    ...approvals.attack,
+    requiredAllowance: inputAmount,
+    approvalNeeded: approvals.attack.currentAllowance < inputAmount,
+  } : undefined;
   const claimApproval = approvals.claim;
   const hasInputBalance = Boolean(player && inputAmount !== null && inputAmount > 0n && player.mockUSDBalance >= inputAmount);
   const attackReady = Boolean(
@@ -210,20 +226,14 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
   );
 
   useEffect(() => {
-    if (writeBusy || arena.pendingRecord) {
-      setQuoteBusy(false);
-      return;
-    }
-    if (!sdk || !live || !round || inputAmount === null || inputAmount <= 0n || !active ||
+    setQuoteStates({});
+    setQuoteErrors({});
+    if (writeBusy || arena.pendingRecord) return;
+    if (!sdk || !live || !round || !active ||
       quoteStage === undefined || quoteStageSold === undefined || quoteStageVolume === undefined || quoteBossPrice === undefined) {
-      setQuoteState(null);
-      setQuoteBusy(false);
       return;
     }
 
-    let current = true;
-    let timer: number | undefined;
-    let retry = 0;
     const context = {
       network: arena.network,
       account,
@@ -236,53 +246,28 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
       bossPrice: quoteBossPrice,
     };
 
-    const request = async () => {
-      setQuoteBusy(true);
-      setQuoteError(null);
-      try {
-        const startedAt = Date.now();
-        const quote = await sdk.quoteAttack({
-          maxMockUSD: inputAmount,
-          stage: context.stage,
-          account,
-          slippageBps: DEFAULT_SLIPPAGE_BPS,
-        });
-        if (!current) return;
-        setQuoteState({
-          quote,
-          ...context,
-          receivedAt: Date.now(),
-        });
-        setQuoteError(null);
-        retry = 0;
-        const validForMs = Number(quote.expiresAt - quote.quotedAt) * 1_000 - (Date.now() - startedAt);
-        timer = window.setTimeout(request, Math.max(1_000, validForMs + 1_000));
-      } catch (error) {
-        if (!current) return;
-        setQuoteState(null);
-        setQuoteError(errorMessage(error));
-        const retryDelays = [2_000, 5_000, 15_000, 30_000];
-        const delay = retryDelays[Math.min(retry, retryDelays.length - 1)];
-        retry += 1;
-        timer = window.setTimeout(request, delay);
-      } finally {
-        if (current) setQuoteBusy(false);
-      }
-    };
-
-    setQuoteState(null);
-    void request();
-    return () => {
-      current = false;
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, [sdk, live?.hookAddress, live?.manifest.deploymentTxHash, round?.status, inputAmount, active,
+    return pollAttackQuotes(
+      (cap) => sdk.quoteAttack({
+        maxMockUSD: attackCapAmount(cap),
+        stage: context.stage,
+        account,
+        slippageBps: DEFAULT_SLIPPAGE_BPS,
+      }),
+      (cap, quote, requestedAt) => {
+        setQuoteStates((previous) => ({ ...previous, [cap]: { quote, ...context, receivedAt: requestedAt } }));
+        setQuoteErrors((previous) => ({ ...previous, [cap]: undefined }));
+      },
+      (cap, error) => setQuoteErrors((previous) => ({ ...previous, [cap]: errorMessage(error) })),
+    );
+  }, [sdk, live?.hookAddress, live?.manifest.deploymentTxHash, round?.status, active,
     arena.network, account, arena.wallet.chainId, quoteStage, quoteStageSold, quoteStageVolume, quoteBossPrice,
     writeBusy, arena.pendingRecord, quoteRefreshVersion]);
 
   useEffect(() => {
     onQuotePreviewChange({
       quote: selectedQuoteState?.quote ?? null,
+      quotes: freshQuotes,
+      errors: quoteErrors,
       fresh: quoteFresh,
       loading: quoteBusy,
       allowanceLoading: approvalLoading,
@@ -295,7 +280,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
       outputSymbol: hpToken?.symbol ?? "HP",
       outputDecimals: hpToken?.decimals ?? 18,
     });
-  }, [onQuotePreviewChange, selectedQuoteState?.quote, quoteFresh, quoteBusy, quoteError, attackApproval?.approvalNeeded,
+  }, [onQuotePreviewChange, selectedQuoteState?.quote, freshQuotes, quoteErrors, quoteFresh, quoteBusy, quoteError, attackApproval?.approvalNeeded,
     Boolean(attackApproval), approvalLoading, hasInputBalance, attackReady, Boolean(player), hpToken?.symbol, hpToken?.decimals]);
 
   useEffect(() => {
@@ -356,18 +341,20 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
     }
   }
 
-  async function attack() {
-    if (!sdk || !quoteFresh || !quoteState || quoteState.quote.maxMockUSD !== inputAmount) return;
-    setQuoteError(null);
+  async function attack(cap: AttackCap = selectedCap) {
+    const quote = freshQuotes[cap];
+    if (!sdk || !quote || quote.maxMockUSD !== attackCapAmount(cap)) return;
+    setQuoteErrors((previous) => ({ ...previous, [cap]: undefined }));
     try {
-      const confirmed = await arena.runPending(`${attackCommandLabel} · max ${selectedCap} MockUSD`, () => sdk.attack(quoteState.quote), "attack");
+      const label = cap === 1 ? "SWAP ATTACK" : `${cap}× SWAP ATTACK`;
+      const confirmed = await arena.runPending(label, () => sdk.attack(quote), "attack");
       if (confirmed?.status === "confirmed") {
-        setLastResult({ kind: "attack", hash: confirmed.hash, maxMockUSD: inputAmount, result: confirmed.result });
+        setLastResult({ kind: "attack", hash: confirmed.hash, maxMockUSD: quote.maxMockUSD, result: confirmed.result });
       }
     } catch (error) {
       if (error instanceof RequoteRequiredError) {
-        setQuoteState(null);
-        setQuoteError(error.message);
+        setQuoteStates((previous) => ({ ...previous, [cap]: undefined }));
+        setQuoteErrors((previous) => ({ ...previous, [cap]: error.message }));
         setQuoteRefreshVersion((version) => version + 1);
       }
     }
@@ -376,21 +363,23 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
   useImperativeHandle(ref, () => ({
     attackOrRequestApproval(requestedCap) {
       const requestedMaxMockUSD = attackCapAmount(requestedCap);
-      if (requestedCap !== selectedCap || inputAmount !== requestedMaxMockUSD) return;
+      const quote = freshQuotes[requestedCap];
+      const walletReady = Boolean(sdk && account && arena.canWrite && !arena.networkMismatch && active &&
+        player && player.mockUSDBalance >= requestedMaxMockUSD && !writeBusy && !arena.pendingRecord);
+      const allowanceMissing = Boolean(approvals.attack && approvals.attack.currentAllowance < requestedMaxMockUSD);
       const route = routeAttackCommand({
-        quoteFresh,
-        quoteMaxMockUSD: quoteState?.quote.maxMockUSD ?? null,
+        quoteFresh: Boolean(quote),
+        quoteMaxMockUSD: quote?.maxMockUSD ?? null,
         selectedMaxMockUSD: requestedMaxMockUSD,
-        attackReady,
-        allowanceMissing: Boolean(attackApproval?.approvalNeeded),
-        approvalReady: approvalCanContinue,
+        attackReady: walletReady && Boolean(approvals.attack) && !allowanceMissing,
+        allowanceMissing,
+        approvalReady: walletReady && allowanceMissing,
       });
-      if (route === "attack") void attack();
+      if (route === "attack") void attack(requestedCap);
       else if (route === "approval") onApprovalRequired();
     },
-  }), [selectedCap, inputAmount, quoteFresh, quoteState?.quote.maxMockUSD, attackReady, approvalCanContinue, onApprovalRequired, attack]);
+  }));
 
-  const statusText = round ? roundStatusLabel(round.status) : arena.deployment.kind === "not-deployed" ? "Not deployed" : arena.deployment.kind === "error" ? "Unavailable" : "Checking";
   const attackBlockReason = !account
     ? "Connect a wallet before attacking. The quote remains public."
     : arena.networkMismatch
@@ -409,7 +398,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
 
   if (approvalOnly) {
     return (
-      <div className="font-mono text-sm leading-relaxed text-[#2b4a8b]">
+      <div className="font-system text-sm leading-relaxed text-[#2b4a8b]">
         <p>BossRouter needs permission to spend MockUSD before this {attackCommandLabel}.</p>
         <dl className="mt-3 grid gap-1 border-y border-[#2b4a8b]/25 py-2 text-xs">
           <div className="flex justify-between gap-3"><dt>Token</dt><dd>MockUSD</dd></div>
@@ -444,40 +433,28 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
   }
 
   return (
-    <div className="mt-5">
-      {arena.deployment.kind === "live" && (
-        <>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/35 px-3 py-2">
-          <div>
-            <p className="font-mono text-[9px] tracking-[0.12em] text-dim">ROUND</p>
-            <p className="mt-1 text-sm text-fog">{statusText} · Stage {round ? round.currentStage + 1 : "—"} / 3</p>
-          </div>
-          {round && <div className="text-right">
-            <p className="font-mono text-[9px] tracking-[0.12em] text-dim">{factory ? "CURRENT STAGE VOLUME" : "CURRENT STAGE HP"}</p>
-            <p className="mt-1 break-all text-sm text-fog">{factory
-              ? `${displayAmount(round.stageVolume[round.currentStage], 6)} / ${displayAmount(round.stageVolumeTarget[round.currentStage], 6)} mUSD`
-              : `${displayAmount(round.remainingSellableHP, hpToken?.decimals ?? 18)} ${hpToken?.symbol ?? "HP"} remaining`}</p>
-            {factory && player && <p className="mt-1 text-xs text-muted">Purchased {displayAmount(player.bossHPBalance, hpToken?.decimals ?? 18)} {hpToken?.symbol ?? "MEME"}</p>}
-          </div>}
-        </div>
-        {round && <p className="mt-2 font-mono text-[9px] text-faint">{round.deadline === 0n ? "ROUND DURATION · UNTIL DEFEATED" : `ON-CHAIN DEADLINE · ${formatUtc(round.deadline)}`}</p>}
-        </>
-      )}
+    <div className="font-system text-sm leading-relaxed text-[#2b4a8b]">
+      {round && <>
+        <BattleDetails round={round} quote={freshQuotes[1] ?? null} priceStatus={!active ? "Attacks are closed. No current exchange quote." : quoteErrors[1] ? "Price unavailable. The quote will retry automatically." : "Refreshing the current exchange rate…"} />
+        <p className="mt-3 text-xs">{round.deadline === 0n ? "Battle stays open until defeated." : `Deadline: ${formatUtc(round.deadline)}`}</p>
+      </>}
 
-      {!defeated && <section aria-labelledby="quote-heading">
+      {!defeated && <details className="mt-4 border-y border-[#2b4a8b]/25 py-2" open={!round}>
+        <summary className="min-h-11 cursor-pointer py-3 font-pixel text-[11px]">Attack quote details</summary>
+        <section aria-labelledby="quote-heading" className="pb-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="eyebrow">STEP 01 · PUBLIC PREVIEW</p>
+            <p className="font-pixel text-[10px]">STEP 01 · PUBLIC PREVIEW</p>
             <h3 id="quote-heading" className="mt-1 text-base font-medium">Automatic public quote</h3>
           </div>
-          <span className="font-mono text-[9px] tracking-[0.1em] text-dim">NO WALLET OR ALLOWANCE NEEDED</span>
+          <span className="font-system text-[9px] tracking-[0.1em] text-[#405b88]">NO WALLET OR ALLOWANCE NEEDED</span>
         </div>
-        <p className="mt-3 text-sm text-fog">Selected cap: up to {selectedCap} MockUSD · damage is estimated from the live quote and can vary with pool prices.</p>
-        <p className="mt-1 text-xs text-muted">The public quote refreshes when the stage, pool, wallet, selected cap, or quote validity changes.</p>
-        {arena.deployment.kind === "not-deployed" && <p className="mt-2 text-xs text-muted">No deployment manifest exists for this network, so no quote is available.</p>}
-        {arena.deployment.kind === "error" && <p className="mt-2 text-xs text-danger" role="status">Public quote unavailable: {arena.deployment.message}</p>}
+        <p className="mt-3 text-sm text-[#2b4a8b]">Selected cap: up to {selectedCap} MockUSD · damage is estimated from the live quote and can vary with pool prices.</p>
+        <p className="mt-1 text-xs text-[#405b88]">All attack quotes load in advance and refresh every 30 seconds, or when the stage, pool, or wallet changes.</p>
+        {arena.deployment.kind === "not-deployed" && <p className="mt-2 text-xs text-[#405b88]">No deployment manifest exists for this network, so no quote is available.</p>}
+        {arena.deployment.kind === "error" && <p className="mt-2 text-xs text-[#a14845]" role="status">Public quote unavailable: {arena.deployment.message}</p>}
         {round && !active && !quoteError && (
-          <p className="mt-2 text-xs text-muted" role="status">
+          <p className="mt-2 text-xs text-[#405b88]" role="status">
             {round.status === 3
               ? "This deployment's round is already defeated; an attack quote is unavailable."
               : round.status === 4 || (round.deadline !== 0n && chainTimestamp >= round.deadline)
@@ -485,10 +462,10 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
                 : `Attack quotes require an Active round. Current status: ${roundStatusLabel(round.status)}.`}
           </p>
         )}
-        {quoteError && <p className="mt-2 text-xs text-danger" role="alert">Quote or simulation failed: {quoteError}</p>}
+        {quoteError && <p className="mt-2 text-xs text-[#a14845]" role="alert">Quote or simulation failed: {quoteError}</p>}
         {selectedQuoteState && (
-          <div className={`mt-3 border-l-2 pl-3 ${quoteFresh ? "border-live/60" : "border-danger/70"}`} aria-live="polite">
-            <p className={`font-mono text-[9px] tracking-[0.1em] ${quoteFresh ? "text-live-soft" : "text-danger"}`}>
+          <div className={`mt-3 border-l-2 pl-3 ${quoteFresh ? "border-[#286b36]" : "border-[#a14845]"}`} aria-live="polite">
+            <p className={`font-system text-[9px] tracking-[0.1em] ${quoteFresh ? "text-[#286b36]" : "text-[#a14845]"}`}>
               {quoteFresh ? "FRESH QUOTE" : "QUOTE STALE · REFRESHING AUTOMATICALLY"}
             </p>
             <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
@@ -499,21 +476,21 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
               <QuoteMetric label="ATTACK TOKEN SPENT" amount={selectedQuoteState.quote.roySpent} decimals={18} unit="Attack Token" />
               <QuoteMetric label="ATTACK TOKEN REFUND" amount={selectedQuoteState.quote.royRefunded} decimals={18} unit="Attack Token" />
             </div>
-            <div className="mt-2 text-xs text-muted">
+            <div className="mt-2 text-xs text-[#405b88]">
               {selectedQuoteState.quote.bossDefeated
                 ? "This attack is predicted to defeat the boss."
                 : selectedQuoteState.quote.stageCleared
                   ? `This attack is predicted to clear Stage ${selectedQuoteState.quote.stage + 1} and open Stage ${selectedQuoteState.quote.nextStage + 1}.`
                   : `Stage ${selectedQuoteState.quote.stage + 1} remains active.`}
               <span
-                className="ml-2 text-faint"
+                className="ml-2 text-[#405b88]"
                 title={`Exact floors: ${displayAmount(selectedQuoteState.quote.minRoyOut, 18)} Attack Token and ${displayAmount(selectedQuoteState.quote.minBossHPOut, hpToken?.decimals ?? 18)} ${hpToken?.symbol ?? "HP"}`}
               >
                 Min ≈ {displayEstimate(selectedQuoteState.quote.minRoyOut, 18)} Attack Token + {displayEstimate(selectedQuoteState.quote.minBossHPOut, hpToken?.decimals ?? 18)} {hpToken?.symbol ?? "HP"} · block {selectedQuoteState.quote.quotedBlock.toString()}
               </span>
             </div>
-            <details className="mt-2 text-[10px] text-faint">
-              <summary className="cursor-pointer font-mono tracking-[0.08em]">EXACT DECIMAL VALUES</summary>
+            <details className="mt-2 text-[10px] text-[#405b88]">
+              <summary className="min-h-11 cursor-pointer py-3 font-system tracking-[0.08em]">EXACT DECIMAL VALUES</summary>
               <dl className="mt-1 grid grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2">
                 <ExactValue label={`${hpToken?.symbol ?? "Token"} output`} amount={selectedQuoteState.quote.bossHPOut} decimals={hpToken?.decimals ?? 18} unit={hpToken?.symbol ?? "HP"} />
                 <ExactValue label="MockUSD spent" amount={selectedQuoteState.quote.mockUSDSpent} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
@@ -525,40 +502,41 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
                 <ExactValue label={`Minimum ${hpToken?.symbol ?? "HP"} output`} amount={selectedQuoteState.quote.minBossHPOut} decimals={hpToken?.decimals ?? 18} unit={hpToken?.symbol ?? "HP"} />
               </dl>
             </details>
-            <p className="mt-1 font-mono text-[9px] text-faint">
+            <p className="mt-1 font-system text-[9px] text-[#405b88]">
               {quoteFresh ? `${quoteSecondsLeft}s remaining` : "Waiting for the automatic quote refresh"} · 1% output tolerance
             </p>
-            <p className="mt-1 text-xs text-muted">
+            <p className="mt-1 text-xs text-[#405b88]">
               Supply pool fee: {selectedQuoteState.quote.supplyPoolFee / 10_000}% · Boss pool fee: {selectedQuoteState.quote.bossPoolFee / 10_000}%
             </p>
           </div>
         )}
-      </section>}
+        </section>
+      </details>}
 
-      <div className="hairline my-4 border-t" />
+      <div className="border-[#2b4a8b]/25 my-4 border-t" />
 
       <section aria-labelledby="readiness-heading">
-        <p className="eyebrow">PLAYER READINESS</p>
+        <p className="font-pixel text-[10px]">PLAYER READINESS</p>
         <h3 id="readiness-heading" className="mt-1 text-base font-medium">Complete these actions in order</h3>
         {!account ? (
-          <p className="mt-2 text-xs leading-relaxed text-muted">Connect a wallet to attack or claim. Public round reads and quotes work without a wallet.</p>
+          <p className="mt-2 text-xs leading-relaxed text-[#405b88]">Connect a wallet to attack or claim. Public round reads and quotes work without a wallet.</p>
         ) : !player ? (
-          <p className="mt-2 text-xs text-muted">Reading this account on the selected network…</p>
+          <p className="mt-2 text-xs text-[#405b88]">Reading this account on the selected network…</p>
         ) : (
           <div className="mt-3 space-y-3">
-            <p className="break-words text-[11px] leading-relaxed text-faint">
+            <p className="break-words text-[11px] leading-relaxed text-[#405b88]">
               {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD · {displayAmount(player.royBalance, 18)} Attack Token · {displayAmount(player.bossHPBalance, hpToken?.decimals ?? 18)} {hpToken?.symbol ?? "HP"}{factory ? ` · ${displayAmount(player.rewardCredit, rewardToken?.decimals ?? 18)} reward credit` : ""} · {displayAmount(player.nativeBalance, 18)} ETH gas
               <span className="ml-2">{player.hasAttacked ? "ATTACKED" : "NO ATTACK YET"}</span>
             </p>
             {!defeated && <><ReadinessRow step="A" title="Router allowance" state={!quoteState ? "waiting" : !quoteFresh ? "stale" : attackApproval?.approvalNeeded ? "needed" : "ready"}>
-              {!quoteState ? <p className="text-xs text-muted">The public quote loads automatically before approval or attack.</p> : (
+              {!quoteState ? <p className="text-xs text-[#405b88]">The public quote loads automatically before approval or attack.</p> : (
                 <>
                   {attackApproval && (
-                    <p className="text-xs text-muted">
+                    <p className="text-xs text-[#405b88]">
                       Current allowance: {displayAmount(attackApproval.currentAllowance, MOCK_USD_DECIMALS)} mUSD
                     </p>
                   )}
-                  <p className="mt-1 break-all font-mono text-[9px] text-faint">
+                  <p className="mt-1 break-all font-system text-[9px] text-[#405b88]">
                     MockUSD {live ? shortAddress(live.manifest.addresses.mockUSD) : "—"} → BossRouter {live ? shortAddress(live.manifest.addresses.router) : "—"} · unlimited approval
                   </p>
                   {quoteFresh && selectedQuoteState && attackApproval?.approvalNeeded && (
@@ -566,13 +544,13 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
                       Approve MockUSD for BossRouter
                     </ActionButton>
                   )}
-                  {!quoteFresh && <p className="mt-1 text-xs text-danger">Waiting for a fresh quote. Bounds from an earlier stage, amount, account, chain, or deployment cannot be used.</p>}
+                  {!quoteFresh && <p className="mt-1 text-xs text-[#a14845]">Waiting for a fresh quote. Bounds from an earlier stage, amount, account, chain, or deployment cannot be used.</p>}
                 </>
               )}
             </ReadinessRow>
 
             <ReadinessRow step="B" title="Attack" state={attackReady ? "ready" : active ? "waiting" : "closed"}>
-              <p className="text-xs leading-relaxed text-muted" role="status">{attackBlockReason}</p>
+              <p className="text-xs leading-relaxed text-[#405b88]" role="status">{attackBlockReason}</p>
               <ActionButton primary disabled={!attackReady} onClick={() => void attack()}>
                 {attackCommandLabel} · STAGE {round ? round.currentStage + 1 : "—"}
               </ActionButton>
@@ -584,19 +562,19 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
 
       {defeated && account && player && (
         <>
-          <div className="hairline my-4 border-t" />
+          <div className="border-[#2b4a8b]/25 my-4 border-t" />
           <section aria-labelledby="reward-heading">
-            <p className="eyebrow">POST-DEFEAT CLAIMS</p>
+            <p className="font-pixel text-[10px]">POST-DEFEAT CLAIMS</p>
             <h3 id="reward-heading" className="mt-1 text-base font-medium">Reward rights and victory NFT are separate</h3>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div className="min-w-0">
-                <p className="font-mono text-[9px] tracking-[0.1em] text-dim">{factory ? "ATTACK REWARD CREDIT" : "TRANSFERABLE HP REWARD RIGHTS"}</p>
-                <p className="mt-1 text-xs text-muted">{factory
+                <p className="font-system text-[9px] tracking-[0.1em] text-[#405b88]">{factory ? "ATTACK REWARD CREDIT" : "TRANSFERABLE HP REWARD RIGHTS"}</p>
+                <p className="mt-1 text-xs text-[#405b88]">{factory
                   ? `This wallet has ${displayAmount(claimableAmount, claimToken?.decimals ?? 18)} ${claimToken?.symbol ?? "MEME"} reward credit. Claiming credit leaves purchased MEME in the wallet.`
                   : `Wallet holds ${displayAmount(claimableAmount, claimToken?.decimals ?? 18)} ${claimToken?.symbol ?? "BossHP"}. No attack history is required to redeem transferred HP.`}</p>
                 {claimableAmount > 0n && (
                   <>
-                    <label htmlFor="reward-hp-amount" className="mt-2 block text-xs text-muted">{factory ? `${claimToken?.symbol ?? "MEME"} credit to claim` : `${claimToken?.symbol ?? "BossHP"} to surrender`}</label>
+                    <label htmlFor="reward-hp-amount" className="mt-2 block text-xs text-[#405b88]">{factory ? `${claimToken?.symbol ?? "MEME"} credit to claim` : `${claimToken?.symbol ?? "BossHP"} to surrender`}</label>
                     <div className="mt-1 flex gap-2">
                       <input
                         id="reward-hp-amount"
@@ -605,17 +583,17 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
                         inputMode="decimal"
                         autoComplete="off"
                         aria-invalid={Boolean(claimInputError)}
-                        className="min-w-0 flex-1 rounded-lg border border-white/12 bg-ink px-2.5 py-2 font-mono text-xs text-fog outline-none focus:border-accent/70"
+                        className="min-w-0 flex-1 border border-[#2b4a8b]/40 bg-[#fff9e9] px-2.5 py-2 font-system text-xs text-[#2b4a8b] focus:border-[#2b4a8b]"
                       />
-                      <button type="button" className="rounded border border-white/12 px-2 text-[9px] text-muted" onClick={() => setClaimText(displayAmount(claimableAmount, claimToken?.decimals ?? 18))}>
+                      <button type="button" className="min-h-11 border border-[#2b4a8b]/40 px-2 text-[9px] text-[#405b88]" onClick={() => setClaimText(displayAmount(claimableAmount, claimToken?.decimals ?? 18))}>
                         MAX
                       </button>
                     </div>
-                    {claimInputError && <p className="mt-1 text-xs text-danger" role="alert">{claimInputError}</p>}
-                    {rewardError && <p className="mt-1 text-xs text-danger" role="status">{rewardError}</p>}
-                    {rewardPreview && <p className="mt-1 text-xs text-live-soft">Estimated payout: {displayAmount(rewardPreview.payout, rewardToken?.decimals ?? 18)} {rewardToken?.symbol ?? "reward token"}</p>}
+                    {claimInputError && <p className="mt-1 text-xs text-[#a14845]" role="alert">{claimInputError}</p>}
+                    {rewardError && <p className="mt-1 text-xs text-[#a14845]" role="status">{rewardError}</p>}
+                    {rewardPreview && <p className="mt-1 text-xs text-[#286b36]">Estimated payout: {displayAmount(rewardPreview.payout, rewardToken?.decimals ?? 18)} {rewardToken?.symbol ?? "reward token"}</p>}
                     {!factory && claimApproval && (
-                      <p className="mt-1 break-all font-mono text-[9px] text-faint">
+                      <p className="mt-1 break-all font-system text-[9px] text-[#405b88]">
                         {claimToken?.symbol ?? "BossHP"} {shortAddress(claimApproval.tokenAddress)} → BossHook {shortAddress(claimApproval.spenderAddress)} · unlimited approval
                       </p>
                     )}
@@ -634,19 +612,19 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
                     )}
                   </>
                 )}
-                {claimableAmount === 0n && <p className="mt-2 text-xs text-faint">{factory ? "No reward credit is available for this account." : `No unredeemed ${claimToken?.symbol ?? "BossHP"} is held by this account.`}</p>}
+                {claimableAmount === 0n && <p className="mt-2 text-xs text-[#405b88]">{factory ? "No reward credit is available for this account." : `No unredeemed ${claimToken?.symbol ?? "BossHP"} is held by this account.`}</p>}
               </div>
-              <div className="hairline border-l pl-3">
-                <p className="font-mono text-[9px] tracking-[0.1em] text-dim">PARTICIPATION-BASED VICTORY NFT</p>
-                <p className="mt-1 text-xs text-muted">Eligibility follows the account’s attack history, even if its HP was transferred away.</p>
+              <div className="border-[#2b4a8b]/25 border-l pl-3">
+                <p className="font-system text-[9px] tracking-[0.1em] text-[#405b88]">PARTICIPATION-BASED VICTORY NFT</p>
+                <p className="mt-1 text-xs text-[#405b88]">Eligibility follows the account’s attack history, even if its HP was transferred away.</p>
                 {player.victoryClaimed ? (
-                  <p className="mt-2 text-xs text-live-soft">Victory NFT already claimed.</p>
+                  <p className="mt-2 text-xs text-[#286b36]">Victory NFT already claimed.</p>
                 ) : player.hasAttacked ? (
                   <ActionButton disabled={!arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord)} onClick={() => void claimVictoryNFT()}>
                     Claim victory NFT
                   </ActionButton>
                 ) : (
-                  <p className="mt-2 text-xs text-faint">This wallet did not attack the round, so it is not NFT eligible.</p>
+                  <p className="mt-2 text-xs text-[#405b88]">This wallet did not attack the round, so it is not NFT eligible.</p>
                 )}
               </div>
             </div>
@@ -656,18 +634,18 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
 
       {lastResult && <ConfirmedResult result={lastResult} hpToken={hpToken} claimToken={claimToken} rewardToken={rewardToken} />}
       {writeMatches && arena.writeState.status !== "idle" && <WriteStatus state={arena.writeState} hpToken={hpToken} rewardToken={rewardToken} />}
-      {writeBusy && !writeMatches && <p className="mt-4 text-xs text-accent-soft" role="status">A wallet action for another boss is still in progress. It stays attached to its original encounter.</p>}
+      {writeBusy && !writeMatches && <p className="mt-4 text-xs text-[#2b4a8b]" role="status">A wallet action for another boss is still in progress. It stays attached to its original encounter.</p>}
       {arena.pendingRecord && <div className="mt-2">
-        <p className="text-xs text-muted">{writeMatches ? `A transaction from ${arena.pendingRecord.network} is saved for this boss.` : "A transaction for another boss is saved."} Check its receipt before another write.</p>
+        <p className="text-xs text-[#405b88]">{writeMatches ? `A transaction from ${arena.pendingRecord.network} is saved for this boss.` : "A transaction for another boss is saved."} Check its receipt before another write.</p>
         <ActionButton disabled={arena.writeState.status === "pending" || arena.writeState.status === "prompting"} onClick={() => void arena.resumePending()}>
           Check saved transaction
         </ActionButton>
       </div>}
       {round && !active && !defeated && round.status === 4 && (
-        <p className="hairline mt-4 border-t pt-3 text-xs text-muted">Round expired at its on-chain deadline. Attacks are closed.</p>
+        <p className="border-[#2b4a8b]/25 mt-4 border-t pt-3 text-xs text-[#405b88]">Round expired at its on-chain deadline. Attacks are closed.</p>
       )}
       {round && round.status !== 3 && round.status !== 4 && (round.deadline !== 0n && chainTimestamp >= round.deadline) && (
-        <p className="hairline mt-4 border-t pt-3 text-xs text-danger">The on-chain deadline has passed. Attacks are disabled.</p>
+        <p className="border-[#2b4a8b]/25 mt-4 border-t pt-3 text-xs text-[#a14845]">The on-chain deadline has passed. Attacks are disabled.</p>
       )}
     </div>
   );
@@ -692,12 +670,12 @@ function ReadinessRow({
     closed: "CLOSED",
   }[state];
   return (
-    <div className="grid grid-cols-[26px_1fr] gap-2.5 border-t border-white/8 pt-3">
-      <span className="grid size-6 place-items-center rounded-full border border-white/12 font-mono text-[9px] text-dim">{step}</span>
+    <div className="grid grid-cols-[26px_1fr] gap-2.5 border-t border-[#2b4a8b]/25 pt-3">
+      <span className="grid size-6 place-items-center border border-[#2b4a8b]/40 font-system text-[9px] text-[#405b88]">{step}</span>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-sm font-medium">{title}</h4>
-          <span className={`font-mono text-[8px] tracking-[0.1em] ${state === "ready" ? "text-live-soft" : state === "stale" || state === "closed" ? "text-danger" : "text-dim"}`}>{badge}</span>
+          <span className={`font-system text-[8px] tracking-[0.1em] ${state === "ready" ? "text-[#286b36]" : state === "stale" || state === "closed" ? "text-[#a14845]" : "text-[#405b88]"}`}>{badge}</span>
         </div>
         <div className="mt-1.5">{children}</div>
       </div>
@@ -721,8 +699,8 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`mt-2 rounded-lg px-3 py-2 font-mono text-[9px] tracking-[0.1em] transition-opacity disabled:cursor-not-allowed disabled:opacity-35 ${
-        primary ? "bg-accent font-medium text-ink" : "border border-accent/35 bg-accent/10 text-accent-soft"
+      className={`mt-2 min-h-11 border-2 px-3 py-2 font-pixel text-[9px] tracking-[0.1em] transition-opacity disabled:cursor-not-allowed disabled:opacity-35 ${
+        primary ? "border-[#2b4a8b] bg-[#2b4a8b] font-medium text-white" : "border-[#2b4a8b] bg-transparent text-[#2b4a8b]"
       }`}
     >
       {children}
@@ -734,8 +712,8 @@ function QuoteMetric({ label, amount, decimals, unit }: { label: string; amount:
   const exact = `${displayAmount(amount, decimals)} ${unit}`;
   return (
     <div className="min-w-0" title={exact} aria-label={`${label}: approximately ${displayEstimate(amount, decimals)} ${unit}; exact ${exact}`}>
-      <p className="font-mono text-[8px] tracking-[0.09em] text-faint">{label}</p>
-      <p className="mt-0.5 break-words text-xs text-fog">≈ {displayEstimate(amount, decimals)} {unit}</p>
+      <p className="font-system text-[8px] tracking-[0.09em] text-[#405b88]">{label}</p>
+      <p className="mt-0.5 break-words text-xs text-[#2b4a8b]">≈ {displayEstimate(amount, decimals)} {unit}</p>
     </div>
   );
 }
@@ -766,9 +744,9 @@ function ConfirmedResult({ result, hpToken, claimToken, rewardToken }: {
       break;
   }
   return (
-    <div className="hairline mt-4 border-t pt-3 text-xs text-live-soft" role="status">
+    <div className="border-[#2b4a8b]/25 mt-4 border-t pt-3 text-xs text-[#286b36]" role="status">
       <p>{text}</p>
-      <p className="mt-1 break-all font-mono text-[9px] text-faint">Confirmed · {result.hash}</p>
+      <p className="mt-1 break-all font-system text-[9px] text-[#405b88]">Confirmed · {result.hash}</p>
     </div>
   );
 }
@@ -779,24 +757,24 @@ function WriteStatus({ state, hpToken, rewardToken }: {
   rewardToken?: { symbol: string; decimals: number };
 }) {
   if (state.status === "prompting") {
-    return <p className="mt-4 text-xs text-muted" role="status">Wallet prompt: {state.action}. No game state changes until a receipt confirms.</p>;
+    return <p className="mt-4 text-xs text-[#405b88]" role="status">Wallet prompt: {state.action}. No game state changes until a receipt confirms.</p>;
   }
   if (state.status === "pending") {
-    return <p className="mt-4 text-xs text-accent-soft" role="status">{state.action} submitted. Waiting for a confirmed receipt; encounter state has not changed yet.</p>;
+    return <p className="mt-4 text-xs text-[#2b4a8b]" role="status">{state.action} submitted. Waiting for a confirmed receipt; encounter state has not changed yet.</p>;
   }
   if (state.status === "unresolved") {
-    return <p className="mt-4 text-xs text-danger" role="status">{state.action} is unresolved: {state.message}</p>;
+    return <p className="mt-4 text-xs text-[#a14845]" role="status">{state.action} is unresolved: {state.message}</p>;
   }
   if (state.status === "confirmed") {
     return (
-      <div className="mt-4 text-xs text-live-soft" role="status">
+      <div className="mt-4 text-xs text-[#286b36]" role="status">
         <p>Confirmed · {state.record.request.hash}</p>
-        <p className="mt-1 text-muted">{recoveredSummary(state.result, hpToken, rewardToken)}</p>
+        <p className="mt-1 text-[#405b88]">{recoveredSummary(state.result, hpToken, rewardToken)}</p>
       </div>
     );
   }
   if (state.status === "idle") return null;
-  return <p className={`mt-4 break-words text-xs ${state.status === "rejected" ? "text-muted" : "text-danger"}`} role="status">{state.status.toUpperCase()}: {state.message}{state.hash ? ` · ${state.hash}` : ""}</p>;
+  return <p className={`mt-4 break-words text-xs ${state.status === "rejected" ? "text-[#405b88]" : "text-[#a14845]"}`} role="status">{state.status.toUpperCase()}: {state.message}{state.hash ? ` · ${state.hash}` : ""}</p>;
 }
 
 function ApprovalWriteStatus({ state }: { state: Arena["writeState"] }) {

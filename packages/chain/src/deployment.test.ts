@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { getDefaultBossHook, parseBaseSepoliaDeployment, parseDeployment } from "./deployment";
+import { baseSepolia } from "viem/chains";
+import {
+  createBaseSepoliaPublicClient,
+  createLocalPublicClient,
+  getDefaultBossHook,
+  parseBaseSepoliaDeployment,
+  parseDeployment,
+} from "./deployment";
 
 const standaloneHook = "0xe217b4840049f928d4392030ac86aCe6b3766AC0" as const;
 const factoryHook = "0xc11D07448948AC4757592E91D8f5155907Ef6AC0" as const;
@@ -49,6 +56,16 @@ const previousFactoryBossManifest = {
     collectibles: "0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925",
   },
 };
+
+describe("public client explorer metadata", () => {
+  test("exposes the Base Sepolia explorer and leaves local clients without one", () => {
+    const baseSepoliaClient = createBaseSepoliaPublicClient("https://rpc.example");
+    const localClient = createLocalPublicClient();
+
+    expect(baseSepoliaClient.chain?.blockExplorers?.default.url).toBe(baseSepolia.blockExplorers.default.url);
+    expect(localClient.chain?.blockExplorers).toBeUndefined();
+  });
+});
 
 describe("default Boss Hook selection", () => {
   test("uses the configured Factory Hook while preserving the standalone deployment address", () => {

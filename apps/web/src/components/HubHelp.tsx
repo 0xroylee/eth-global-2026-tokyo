@@ -73,14 +73,14 @@ export function HubHelp({ onClose, onReplay }: { onClose: () => void; onReplay: 
             ref={backRef}
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-white/12 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100"
+            className="rounded-lg border border-white/12 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100"
           >
             BACK · ESC
           </button>
           <button
             type="button"
             onClick={onReplay}
-            className="rounded-lg border border-[#f5b04a]/40 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-[#f5b04a] transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100"
+            className="rounded-lg border border-[#f5b04a]/40 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-[#f5b04a] transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100"
           >
             REPLAY GUIDE
           </button>

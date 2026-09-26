@@ -96,7 +96,7 @@ function WelcomeDialog({ onStart, onSkip }: { onStart: () => void; onSkip: () =>
       >
         <p className="eyebrow mb-1">HUB</p>
         <h2 id="hub-guide-title" className="text-xl font-semibold tracking-[-0.03em]">
-          Welcome to Boss Pool
+          Welcome to Boss BoostPad
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-muted">Explore the garden and find a boss pool to challenge.</p>
         <p className="mt-2 text-sm leading-relaxed text-muted">
@@ -126,7 +126,7 @@ export function ReplayGuide({ disabled, onReplay }: { disabled: boolean; onRepla
         onReplay();
       }}
       disabled={disabled}
-      className="self-start rounded-md border border-white/12 px-2 py-1 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 hover:text-fog disabled:opacity-40 motion-reduce:transition-none"
+      className="self-start rounded-md border border-white/12 px-2 py-1 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 disabled:opacity-40 motion-reduce:transition-none"
     >
       REPLAY GUIDE
     </button>
@@ -134,4 +134,4 @@ export function ReplayGuide({ disabled, onReplay }: { disabled: boolean; onRepla
 }
 
 const buttonClass =
-  "mt-2 rounded-lg border border-white/12 px-3 py-2 font-mono text-[11px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100";
+  "mt-2 rounded-lg border border-white/12 px-3 py-2 font-mono text-[11px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100";

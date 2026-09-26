@@ -128,7 +128,7 @@ export function SageDialog({ lines, onClose }: { lines: string[]; onClose: () =>
             type="button"
             onClick={advance}
             aria-label={nextDescription}
-            className="rounded-lg border border-white/12 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-fog transition-opacity duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100"
+            className="rounded-lg border border-white/12 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-fog transition-opacity duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100"
           >
             {nextLabel}
           </button>
@@ -139,7 +139,7 @@ export function SageDialog({ lines, onClose }: { lines: string[]; onClose: () =>
               if (event.detail > 0) event.currentTarget.blur();
               onClose();
             }}
-            className="rounded-lg border border-white/12 px-3 py-2.5 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 hover:text-fog active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100"
+            className="rounded-lg border border-white/12 px-3 py-2.5 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100"
           >
             ESC · CLOSE
           </button>

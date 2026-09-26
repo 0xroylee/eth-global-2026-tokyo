@@ -52,7 +52,7 @@ export function FullscreenControl({ target }: { target: RefObject<HTMLElement | 
       }}
       aria-pressed={active}
       aria-label={active ? "Exit fullscreen" : "Enter fullscreen"}
-      className="rounded-md border border-white/12 px-2 py-1 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 hover:text-fog motion-reduce:transition-none"
+      className="rounded-md border border-white/12 px-2 py-1 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 motion-reduce:transition-none"
     >
       {active ? "EXIT FULLSCREEN" : "FULLSCREEN"}
     </button>

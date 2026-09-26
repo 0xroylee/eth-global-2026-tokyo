@@ -468,7 +468,7 @@ function chainIdForNetwork(network: NetworkKey): typeof LOCAL_CHAIN_ID | typeof 
 }
 
 function networkName(network: NetworkKey): string {
-  if (network === "local") return "Boss Pool Local";
+  if (network === "local") return "Boss BoostPad Local";
   return "Base Sepolia";
 }
 

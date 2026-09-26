@@ -4,31 +4,22 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { BossVisualState } from "@/lib/battle";
+import type { BossImageBounds } from "@/game/bosses";
 
 /**
  * Boss sprite, painted directly on the battlefield. The PNGs are transparent;
  * this box has no fill, so the lake shows around the character.
  */
-export function BossStage({ stage, stageImages, state, reducedMotion = false }: {
+export function BossStage({ stage, stageImages, state, reducedMotion = false, visibleBounds }: {
   stage: 1 | 2 | 3;
   stageImages: readonly [string, string, string];
   state: BossVisualState;
   reducedMotion?: boolean;
+  visibleBounds?: BossImageBounds;
 }) {
-  const [beat, setBeat] = useState<"left" | "right" | null>(null);
   const [entering, setEntering] = useState(false);
   const prevState = useRef(state);
   const idle = state === "idle" && !entering;
-
-  useEffect(() => {
-    if (state !== "hit" || reducedMotion) {
-      setBeat(null);
-      return;
-    }
-    setBeat("left");
-    const timer = window.setTimeout(() => setBeat("right"), 120);
-    return () => window.clearTimeout(timer);
-  }, [reducedMotion, state]);
 
   useEffect(() => {
     if (prevState.current === "transition" && state !== "transition") {
@@ -47,24 +38,27 @@ export function BossStage({ stage, stageImages, state, reducedMotion = false }: 
         ? "scaleY(0.4)"
         : entering
           ? "scale(0.92)"
-          : beat === "left"
-            ? "translateX(-4px)"
-            : beat === "right"
-              ? "translateX(4px)"
-              : "none";
+          : "none";
   const opacity = state === "transition" ? 0.3 : state === "defeated" ? 0.7 : 1;
 
   return (
     <div
-      className={`relative h-full w-full bg-transparent ${idle ? "boss-float" : ""}`}
+      className={`relative h-full w-full bg-transparent ${idle && !reducedMotion ? "boss-float" : ""}`}
+      style={visibleBounds ? { containerType: "size" } : undefined}
     >
       <img
         src={stageImages[stage - 1]}
         alt=""
         aria-hidden
-        className="boss-sprite absolute inset-0 h-full w-full bg-transparent object-contain object-bottom opacity-100 [image-rendering:pixelated] transition-[transform,opacity] duration-[120ms] ease-[var(--ease-out-strong)]"
+        className={`boss-sprite absolute ${visibleBounds ? "max-w-none" : "inset-0 h-full w-full object-contain object-bottom"} origin-bottom bg-transparent opacity-100 [image-rendering:pixelated] transition-[transform,opacity] duration-[120ms] ease-[var(--ease-out-strong)] ${state === "hit" && !reducedMotion ? "boss-hit" : ""}`}
         style={{
-          transform,
+          ...(visibleBounds ? {
+            width: `${visibleBounds.sourceWidth / visibleBounds.height * 100}cqh`,
+            height: `${visibleBounds.sourceHeight / visibleBounds.height * 100}%`,
+            left: `calc(50% - ${(visibleBounds.x + visibleBounds.width / 2) / visibleBounds.height * 100}cqh)`,
+            bottom: `-${(visibleBounds.sourceHeight - visibleBounds.y - visibleBounds.height) / visibleBounds.height * 100}cqh`,
+          } : {}),
+          transform: reducedMotion ? "none" : transform,
           opacity,
           filter: "drop-shadow(3px 4px 0 #041833)",
         }}
