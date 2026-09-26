@@ -999,10 +999,11 @@ function decodeExpectedEvents(
       try {
         const event = decodeEventLog({ abi: spec.abi, data: log.data, topics: log.topics, strict: true });
         if (event.eventName === spec.eventName) {
+          const args = normalizeDecodedEventArgs(event.eventName, event.args as unknown as Record<string, unknown>);
           decoded.push({
             address: log.address,
             eventName: event.eventName,
-            args: event.args,
+            args,
             transactionHash: log.transactionHash ?? receipt.transactionHash,
             logIndex: Number(log.logIndex ?? BigInt(decoded.length)),
           } as unknown as DecodedContractEvent);
@@ -1016,6 +1017,15 @@ function decodeExpectedEvents(
     }
   }
   return decoded;
+}
+
+function normalizeDecodedEventArgs(eventName: string, args: Record<string, unknown>): Record<string, unknown> {
+  if (eventName !== "RewardClaimed") return args;
+  return {
+    player: args.player,
+    bossHPIn: args.bossHPIn ?? args.rewardCreditUsed,
+    mockUSDOut: args.mockUSDOut ?? args.memeTokenPrize,
+  };
 }
 
 function onlyEvent<Name extends DecodedContractEvent["eventName"]>(
