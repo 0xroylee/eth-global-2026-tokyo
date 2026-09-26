@@ -250,7 +250,7 @@ export function createPublicClientForNetwork(chainId: SupportedChainId, rpcUrl: 
     name: network,
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: { default: { http: [rpcUrl] } },
-    ...(isBaseSepolia ? { contracts: baseSepolia.contracts } : {}),
+    ...(isBaseSepolia ? { contracts: baseSepolia.contracts, blockExplorers: baseSepolia.blockExplorers } : {}),
   });
   return createPublicClient({
     chain,
