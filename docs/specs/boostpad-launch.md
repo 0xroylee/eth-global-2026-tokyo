@@ -15,7 +15,7 @@ Updated for [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72),
 - Retain short-lived attack quote and transaction deadlines. Existing deployed bosses and the standalone BossHP demo keep their existing rules.
 - Closing the form hides it without cancelling submitted transactions. Persist pending operations and confirmed launch results across navigation and reload.
 - Success shows the confirmed boss identifiers and transaction link. The Hook-address battle feature merged from main is retained, including its optional success link. Integration changes only adapt that existing feature to zero deadlines and retain verified discovery of bosses from the previous Factory.
-- The earlier compatible Factory deployment remains recorded on Base Sepolia. PR #72's build has no public deployment recorded here. Existing bosses keep their rules, and new launches are disabled when the configured Factory's pinned build differs from the bundled build. Any future deployment needs its own authorization and verification; do not relaunch or replace an existing boss.
+- PR #75 records a compatible Base Sepolia deployment of PR #72's continuous-liquidity Factory with fixed 0.3% fees. No Boss was created during that migration. Existing bosses keep their rules, and the optional mock-enabled Factory remains undeployed publicly. New launches still require matching pinned build hashes. Any future deployment needs its own authorization and verification; do not relaunch or replace an existing boss.
 
 ## Implementation and acceptance
 

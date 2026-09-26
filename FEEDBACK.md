@@ -48,8 +48,9 @@ For new testnets, a small development-stack checklist should distinguish officia
 | Record | What it establishes |
 | --- | --- |
 | [Contract dependency notes](contracts/README.md) and [Foundry configuration](contracts/foundry.toml) | V4-core pin `46c6834698c48bc4a463a86d8420f4eb1d7f3b75`; Solidity 0.8.26, Cancun, via IR, and optimizer runs 200. |
-| [PR #72 integration review](https://github.com/0xroylee/eth-global-2026-tokyo/blob/39e651d67be4bb063349a328e945e48c4bdb3696/docs/evidence/2026-09-27-pr72-integration-review.md) | Records 14 passing real-v4 contract cases, ABI/bytecode consistency, SDK/UI checks, and historical Base Sepolia reads for the same source head. Owner LP management was excluded from that review's acceptance scope. |
-| [Base Sepolia Factory deployment](docs/evidence/base-sepolia-perpetual-factory.json) and [demo launch](docs/evidence/base-sepolia-factory-demo-boss.json) | Older public contract builds and launch provenance, not a deployment of PR #72's continuous-liquidity/mock-fee build. |
+| [PR #72 integration review](docs/evidence/2026-09-27-pr72-integration-review.md) | Records 14 passing real-v4 contract cases, ABI/bytecode consistency, SDK/UI checks, and historical Base Sepolia reads for the same source head. Owner LP management was excluded from that review's acceptance scope. |
+| [Continuous Factory deployment](docs/evidence/base-sepolia-continuous-factory.json) | PR #75 records the compatible continuous-liquidity launch Factory with fixed 0.3% fees. No new Boss or public mock controller was created. |
+| [Earlier Factory deployment](docs/evidence/base-sepolia-perpetual-factory.json) and [demo launch](docs/evidence/base-sepolia-factory-demo-boss.json) | Older public builds and provenance; the default Boss retains these staged rules. |
 | [Historical Factory review](docs/evidence/factory-review-verification.json) | Earlier local contract/SDK results and source identities. These results do not verify the newer fee/cooldown rules. |
 | [Historical Robinhood SDK journey](docs/sdk-verification.md#historical-robinhood-testnet-run) | Separate deployment, gameplay, and claim receipts from the standalone fixture. |
 

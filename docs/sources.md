@@ -1,6 +1,6 @@
 # Source notes
 
-Hook and fee references checked on 27 September 2026 against [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`. Sponsor and network notes below retain their earlier research context. Base Sepolia has recorded older Factory deployments and a read-only demo quote; this does not establish a public deployment of the current continuous-liquidity/mock-fee build or a complete browser attack/claim journey. Historical Robinhood receipts and burn proofs remain separately labelled. See [Factory deployment history](boss-factory.md#base-sepolia-deployment) and [BP01 evidence](bp01-foundation.md).
+Hook and fee references checked on 27 September 2026 against [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`. Sponsor and network notes below retain their earlier research context. [PR #75](https://github.com/0xroylee/eth-global-2026-tokyo/pull/75) and the [continuous Factory record](evidence/base-sepolia-continuous-factory.json) establish the current Base Sepolia launch Factory with fixed 0.3% fees. The default Boss still uses an older staged build. A mock-enabled public deployment and complete browser attack/claim journey remain unverified. Historical Robinhood receipts and burn proofs remain separately labelled. See [Factory deployment history](boss-factory.md#base-sepolia-deployment) and [BP01 evidence](bp01-foundation.md).
 
 ## Sponsor requirements
 
@@ -60,7 +60,7 @@ Use [viem simulateContract](https://viem.sh/docs/contract/simulateContract) befo
 
 ## Claims to avoid
 
-- The current public demo has PR #72's continuous liquidity, cooldowns, owner-LP controls, or mock fees. Public contracts retain their deployed build.
+- The default public Boss was upgraded by the newer launch Factory. Existing encounters retain their deployed contracts; the new Factory uses continuous liquidity and fixed fees, while mock-driven fees remain local.
 - Factory stages release token percentages or separate sale buckets. All sale liquidity is active at launch; 1:2:3 splits eligible volume goals.
 - The Mock Token Oracle reports real USD prices or completes external-oracle protection. It is an owner-controlled testnet reference.
 - Dynamic fees reset AMM price or guarantee that arbitrage and market losses disappear. They change the transaction's LP fee only.

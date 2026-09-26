@@ -1,6 +1,6 @@
 # Boss Pool technical specification
 
-Status: the current local Factory build activates all sale liquidity at launch, bounds purchases to each volume stage, and enforces 60/120-second cooldowns. It supports a separate owner liquidity position and an owner-controlled testnet mock price for dynamic Boss fees. Public Factory deployments retain their historical build and behavior. New launches require the current bundled build. See the [Factory reference](boss-factory.md).
+Status: the current Factory build activates all sale liquidity at launch, bounds purchases to each volume stage, and enforces 60/120-second cooldowns. The current Base Sepolia launch Factory matches that build and supports a separate owner liquidity position, using fixed 0.3% fees. The owner-controlled mock-price/dynamic-fee configuration remains a local demo. Earlier public Factories and the default Boss retain their historical behavior. New launches require a compatible bundled build. See the [Factory reference](boss-factory.md).
 
 The source baseline is [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`, checked on 27 September 2026. The [hook design explanation](uniswap-v4-hooks.md) owns the rationale, benefits, limitations, and execution diagram; this specification defines interfaces and accounting.
 
@@ -38,7 +38,7 @@ The contract enables `beforeInitialize`, `beforeAddLiquidity`, `beforeRemoveLiqu
 
 Calling callbacks directly fails PoolManager authentication. Another router calling the canonical Boss pool fails initiating-sender/context checks. A script calling BossRouter still obeys the same cooldown, fee, and volume rules as the browser. Free-form `hookData`, transfers, and external markets cannot create game credit. Cooldowns therefore remain enforceable even when the frontend is bypassed. See the [official hooks overview](https://developers.uniswap.org/docs/protocols/v4/concepts/hooks).
 
-The remaining staged LP, refill, and transferable HP descriptions in this document describe the standalone BossHP mode. Existing public Factory battles retain their historical staged behavior and bypass new getters through their pinned build identities.
+The remaining staged LP, refill, and transferable HP descriptions in this document describe the standalone BossHP mode. The existing default public Factory battle retains its historical staged behavior and bypass new getters through their pinned build identities.
 
 ## BoostPad creation
 

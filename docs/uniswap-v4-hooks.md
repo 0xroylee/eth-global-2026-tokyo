@@ -1,6 +1,6 @@
 # Why Boss BoostPad uses Uniswap v4 hooks
 
-This explanation follows [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`, checked on 27 September 2026. It describes the current Factory contracts and local demo. Public Base Sepolia bosses retain their earlier contract rules; updating this repository does not update them. The [Factory reference](boss-factory.md#base-sepolia-deployment) records that distinction.
+This explanation follows [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`, checked on 27 September 2026. It describes the current Factory contracts and local mock demo. The Base Sepolia launch Factory now matches the continuous-liquidity build with fixed 0.3% fees, as recorded in PR #75. No Boss was created during that migration. The default Boss retains its earlier contract rules; source updates do not upgrade existing encounters. The [Factory reference](boss-factory.md#base-sepolia-deployment) records that distinction.
 
 ## The problem at the swap boundary
 
