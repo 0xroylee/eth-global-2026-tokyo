@@ -93,9 +93,10 @@ export function BossEntryPanel({
             ref={actionRef}
             type="button"
             onClick={onConnect}
-            className="mt-5 w-full rounded-lg bg-accent/20 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-accent-soft transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-accent/25 active:scale-[0.98]"
+            disabled={arena.wallet.busy || arena.wallet.status === "checking" || arena.wallet.status === "missing"}
+            className="mt-5 w-full rounded-lg bg-accent/20 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-accent-soft transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-accent/25 active:scale-[0.98] disabled:opacity-40"
           >
-            CONNECT WALLET TO CHALLENGE
+            {arena.wallet.status === "choosing" ? "CHOOSE WALLET TO CHALLENGE" : arena.wallet.busy ? "CONNECTING WALLET…" : "CONNECT WALLET TO CHALLENGE"}
           </button>
         )}
         {needsSwitch && (
@@ -103,9 +104,10 @@ export function BossEntryPanel({
             ref={actionRef}
             type="button"
             onClick={onSwitch}
-            className="mt-5 w-full rounded-lg border border-[#f5b04a]/40 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-[#f5b04a] transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-[#f5b04a]/10 active:scale-[0.98]"
+            disabled={arena.wallet.busy}
+            className="mt-5 w-full rounded-lg border border-[#f5b04a]/40 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-[#f5b04a] transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-[#f5b04a]/10 active:scale-[0.98] disabled:opacity-40"
           >
-            SWITCH WALLET TO {arena.selectedChainId}
+            {arena.wallet.busy ? "SWITCHING NETWORK…" : `SWITCH WALLET TO ${arena.selectedChainId}`}
           </button>
         )}
         {supported && (

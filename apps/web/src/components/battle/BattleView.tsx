@@ -118,9 +118,22 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
         <img src="/images/arena-lake-background.png" alt="" className="size-full object-cover [image-rendering:pixelated]" />
       </div>
       <h1 id="battle-title" className="sr-only">Pool Unis · Live boss battle</h1>
-      {/* Keep John Ku's desktop composition from c5b11b3 while reading live state. */}
-      <div className="relative mx-auto grid min-h-dvh max-w-[1800px] grid-cols-1 gap-4 p-3 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] md:grid-rows-[auto_auto_minmax(180px,1fr)_auto] md:p-5 lg:block lg:h-dvh lg:min-h-[720px] lg:max-w-none lg:p-0">
-        <div role="group" aria-label="Battle controls" className="flex flex-wrap items-center justify-end gap-2 md:col-span-2 lg:absolute lg:right-3 lg:top-2 lg:z-30">
+      <div className="relative mx-auto grid min-h-dvh max-w-[1800px] grid-cols-1 gap-4 p-3 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] md:grid-rows-[auto_auto_minmax(180px,1fr)_auto] md:p-5">
+        <div role="group" aria-label="Battle controls" className="flex flex-wrap items-center justify-end gap-2 md:col-span-2">
+          <label className="sr-only" htmlFor="battle-network">Battle network</label>
+          <select id="battle-network" className={`${BUTTON} max-w-full`} value={arena.network} onChange={(event) => arena.selectNetwork(event.target.value as NetworkKey)}>
+            <option value="base-sepolia">Base Sepolia</option>
+            <option value="local">Local chain</option>
+            <option value="robinhood-testnet">Historical · read only</option>
+          </select>
+          <button
+            type="button"
+            className={BUTTON}
+            onClick={account && !arena.networkMismatch ? openActions : connectOrSwitch}
+            disabled={arena.wallet.busy || arena.wallet.status === "checking" || arena.wallet.status === "missing"}
+          >
+            {!account ? "CONNECT WALLET" : arena.networkMismatch ? "SWITCH NETWORK" : `${account.slice(0, 6)}…${account.slice(-4)}`}
+          </button>
           <button type="button" className={BUTTON} onClick={openActions}>{arena.pendingRecord ? "CHECK TRANSACTION" : "BATTLE DETAILS"}</button>
           <button type="button" onClick={onClose} className={BUTTON}>ESC · EXIT</button>
         </div>
@@ -153,17 +166,14 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
           <h2 id="battle-actions-title" className="font-pixel text-sm">{defeated ? "REWARDS" : "SWAP ATTACK · 1 MockUSD MAX"}</h2>
           <button type="button" autoFocus className="min-h-[44px] border border-white/30 px-3 text-xs" onClick={() => actionsDialog.current?.close()}>CLOSE</button>
         </div>
-        <div role="group" aria-label="Network and wallet" className="my-3 flex flex-wrap gap-2">
-          <label className="sr-only" htmlFor="battle-network">Battle network</label>
-          <select id="battle-network" className={`${BUTTON} max-w-full`} value={arena.network} onChange={(event) => arena.selectNetwork(event.target.value as NetworkKey)}>
-            <option value="base-sepolia">Base Sepolia</option>
-            <option value="local">Local chain</option>
-          </select>
-          {(!account || arena.networkMismatch) ? <button type="button" className={BUTTON} onClick={connectOrSwitch}>
-            {!account ? "CONNECT WALLET" : "SWITCH NETWORK"}
-          </button> : <span className="self-center font-mono text-xs">{account.slice(0, 6)}…{account.slice(-4)}</span>}
-          {arena.deployment.kind !== "live" && <button type="button" className={BUTTON} onClick={arena.refresh}>RETRY</button>}
-        </div>
+        {(!account || arena.networkMismatch) && <button
+          type="button"
+          onClick={connectOrSwitch}
+          disabled={arena.wallet.busy || arena.wallet.status === "checking" || arena.wallet.status === "missing"}
+          className="mt-3 min-h-[44px] border border-white/30 px-3 text-sm disabled:opacity-50"
+        >
+          {!account ? "Connect wallet" : "Switch wallet network"}
+        </button>}
         {arena.wallet.error && <p role="status" className="mt-2 break-words text-sm text-danger">{arena.wallet.error}</p>}
         <BossActions key={identity} arena={arena} />
       </dialog>

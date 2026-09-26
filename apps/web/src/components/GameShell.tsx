@@ -32,7 +32,7 @@ export function GameShell() {
   const [canvasPhase, setCanvasPhase] = useState<CanvasPhase>("loading");
   const guide = useHubGuide(bridge, nearBoss);
   const welcomeOpen = guide.hydrated && guide.state.step === "welcome" && canvasPhase !== "error";
-  const overlayOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen;
+  const overlayOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen || arena.wallet.busy;
 
   useEffect(() => {
     const offNear = bridge.on("gate:near", ({ bossId }) => setNearBoss(bossId));
@@ -199,17 +199,17 @@ export function GameShell() {
               <button
                 type="button"
                 onClick={connectWallet}
-                disabled={overlayOpen}
+                disabled={overlayOpen || arena.wallet.busy || arena.wallet.status === "checking" || arena.wallet.status === "missing"}
                 className="rounded-lg border border-white/10 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-fog disabled:opacity-40"
               >
-                {arena.wallet.busy ? "CONNECTING…" : arena.wallet.status === "missing" ? "NO WALLET" : "CONNECT WALLET"}
+                {arena.wallet.status === "choosing" ? "CHOOSE WALLET…" : arena.wallet.busy ? "CONNECTING…" : arena.wallet.status === "missing" ? "NO WALLET" : "CONNECT WALLET"}
               </button>
             )}
             {arena.networkMismatch && (
               <button
                 type="button"
                 onClick={switchWallet}
-                disabled={overlayOpen}
+                disabled={overlayOpen || arena.wallet.busy}
                 className="rounded-lg border border-danger/40 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-danger disabled:opacity-40"
               >
                 SWITCH WALLET TO {arena.selectedChainId}

@@ -2,14 +2,12 @@
 
 /* eslint-disable @next/next/no-img-element -- wallet icons are validated data URIs supplied by the wallet */
 
-import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import type { Address } from "@boss-pool/chain";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { BASE_SEPOLIA_CHAIN, type Address } from "@boss-pool/chain";
 import { useWallet } from "@/wallet/WalletProvider";
-import type { DiscoveredWallet } from "@/wallet/types";
+import type { DiscoveredWallet, SwitchableWalletChain } from "@/wallet/types";
 
-type Dialog = "chooser" | "error" | "menu" | null;
-
-export type WalletControlHandle = { openConnect: () => void };
+type Dialog = "error" | "menu" | null;
 
 const PILL =
   "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-[9px] tracking-[0.12em] transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] disabled:active:scale-100";
@@ -22,20 +20,8 @@ export function shortAddress(address: Address): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-export function WalletControl({
-  onModalChange,
-  onDismissConnect,
-  onHudConnect,
-  blocked = false,
-  ref,
-}: {
-  onModalChange(open: boolean): void;
-  onDismissConnect?: () => void;
-  onHudConnect?: () => void;
-  blocked?: boolean;
-  ref?: React.Ref<WalletControlHandle>;
-}) {
-  const { state, connect, switchToBase, disconnect, clearError } = useWallet();
+export function WalletControl() {
+  const { state, requestConnect, connect, switchToChain, disconnect, clearError } = useWallet();
   const [dialog, setDialog] = useState<Dialog>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -45,30 +31,15 @@ export function WalletControl({
     if (state.status === "error") setDialog("error");
   }, [state.status]);
 
-  useEffect(() => {
-    onModalChange(dialog !== null);
-    return () => onModalChange(false);
-  }, [dialog, onModalChange]);
-
-  const close = useCallback(() => {
-    setDialog(null);
-    onDismissConnect?.();
-    triggerRef.current?.focus();
-  }, [onDismissConnect]);
-
   const openConnect = useCallback(() => {
-    if (state.status === "connecting" || state.status === "discovering") return;
-    if (state.providers.length === 1) void connect(state.providers[0]!.info.uuid);
-    else if (state.providers.length > 1) setDialog("chooser");
-  }, [connect, state.providers, state.status]);
+    if (state.status === "connecting" || state.status === "discovering" || state.status === "choosing") return;
+    void requestConnect();
+  }, [requestConnect, state.status]);
 
-  useImperativeHandle(ref, () => ({ openConnect }), [openConnect]);
-
-  const closeDialog = useCallback((cancelIntent: boolean) => {
+  const closeDialog = useCallback(() => {
     setDialog(null);
-    if (cancelIntent) onDismissConnect?.();
     triggerRef.current?.focus();
-  }, [onDismissConnect]);
+  }, []);
 
   useEffect(() => {
     if (dialog === null) return;
@@ -77,21 +48,15 @@ export function WalletControl({
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      closeDialog(dialog !== "menu");
+      closeDialog();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [dialog, closeDialog]);
 
-  const choose = (wallet: DiscoveredWallet) => {
-    setDialog(null);
-    triggerRef.current?.focus();
-    void connect(wallet.info.uuid);
-  };
-
   const dismissError = () => {
     clearError();
-    closeDialog(true);
+    closeDialog();
   };
 
   const retry = () => {
@@ -99,20 +64,14 @@ export function WalletControl({
     const { selected, account } = state;
     clearError();
     setDialog(null);
-    if (selected && account) void switchToBase();
+    if (selected && account) void switchToChain(baseSepoliaSwitchConfig()).catch(() => undefined);
     else if (selected) void connect(selected.info.uuid);
     else openConnect();
   };
 
   const onDisconnect = () => {
     disconnect();
-    closeDialog(false);
-  };
-
-  const onHudClick = () => {
-    if (blocked) return;
-    onHudConnect?.();
-    openConnect();
+    closeDialog();
   };
 
   return (
@@ -124,56 +83,29 @@ export function WalletControl({
         </Pill>
       )}
       {state.status === "disconnected" && (
-        <Pill ref={triggerRef} className={ACCENT} onClick={onHudClick} disabled={blocked} aria-haspopup={state.providers.length > 1 ? "dialog" : undefined}>
+        <Pill ref={triggerRef} className={ACCENT} onClick={openConnect} aria-haspopup={state.providers.length > 1 ? "dialog" : undefined}>
           CONNECT WALLET
         </Pill>
       )}
+      {state.status === "choosing" && <Pill className={NEUTRAL} disabled dot>WALLET · CHOOSE</Pill>}
       {state.status === "connecting" && <Pill className={NEUTRAL} disabled dot>WALLET · WAITING</Pill>}
-      {state.status === "wrong-chain" && (
-        <>
-          <Pill ref={triggerRef} className={NEUTRAL} onClick={() => setDialog("menu")} aria-haspopup="dialog">
-            {shortAddress(state.account)}
-          </Pill>
-          <Pill className={WARN} onClick={() => void switchToBase()}>
-            SWITCH TO BASE SEPOLIA
-          </Pill>
-        </>
-      )}
       {state.status === "connected" && (
-        <Pill ref={triggerRef} className={LIVE} onClick={() => setDialog("menu")} aria-haspopup="dialog" dot live>
-          {shortAddress(state.account)}
-          <span className="hidden text-live-soft/70 sm:inline">· BASE SEPOLIA</span>
-        </Pill>
+        <>
+          <Pill ref={triggerRef} className={LIVE} onClick={() => setDialog("menu")} aria-haspopup="dialog" dot live>
+            {shortAddress(state.account)}
+            <span className="hidden text-live-soft/70 sm:inline">· CHAIN {state.chainId ?? "UNKNOWN"}</span>
+          </Pill>
+          {state.chainId !== BASE_SEPOLIA_CHAIN.id && (
+            <Pill className={WARN} onClick={() => void switchToChain(baseSepoliaSwitchConfig()).catch(() => undefined)}>
+              SWITCH TO BASE SEPOLIA
+            </Pill>
+          )}
+        </>
       )}
       {state.status === "error" && (
         <Pill ref={triggerRef} className={WARN} onClick={() => setDialog("error")} aria-haspopup="dialog">
           WALLET · RETRY
         </Pill>
-      )}
-
-      {dialog === "chooser" && (
-        <Overlay ref={dialogRef} title="Choose a wallet" titleId="wallet-chooser-title">
-          <ul className="mt-4 flex flex-col gap-2">
-            {state.providers.map((wallet) => (
-              <li key={wallet.info.uuid}>
-                <button
-                  type="button"
-                  onClick={() => choose(wallet)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-white/12 px-4 py-3 text-left transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.98]"
-                >
-                  <WalletIcon wallet={wallet} />
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-fog">{wallet.info.name}</span>
-                    <span className="block truncate font-mono text-[9px] tracking-[0.1em] text-dim">{wallet.info.rdns}</span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <DialogActions>
-            <SecondaryButton onClick={() => closeDialog(true)}>CANCEL · ESC</SecondaryButton>
-          </DialogActions>
-        </Overlay>
       )}
 
       {dialog === "error" && state.status === "error" && (
@@ -188,23 +120,86 @@ export function WalletControl({
         </Overlay>
       )}
 
-      {dialog === "menu" && (state.status === "connected" || state.status === "wrong-chain") && (
+      {dialog === "menu" && state.status === "connected" && (
         <Overlay ref={dialogRef} title={state.selected.info.name} titleId="wallet-menu-title" eyebrow="CONNECTED WALLET">
           <p className="mt-2 break-all font-mono text-[11px] tracking-[0.06em] text-fog">{state.account}</p>
           <p className="mt-1 font-mono text-[9px] tracking-[0.12em] text-dim">
-            {state.status === "connected" ? "CHAIN · BASE SEPOLIA (84532)" : `CHAIN · ${state.chainId ?? "UNKNOWN"} · NOT BASE SEPOLIA`}
+            CHAIN · {state.chainId ?? "UNKNOWN"}
           </p>
           <p className="mt-4 text-sm leading-relaxed text-muted">
             This clears Boss Pool&apos;s local session. It does not revoke wallet permissions.
           </p>
           <DialogActions>
             <PrimaryButton onClick={onDisconnect}>DISCONNECT APP</PrimaryButton>
-            <SecondaryButton onClick={() => closeDialog(false)}>CLOSE · ESC</SecondaryButton>
+            <SecondaryButton onClick={closeDialog}>CLOSE · ESC</SecondaryButton>
           </DialogActions>
         </Overlay>
       )}
     </>
   );
+}
+
+export function WalletChooserHost() {
+  const { state, connect, cancelConnect } = useWallet();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (state.status !== "choosing") return;
+    const activeElement = document.activeElement;
+    returnFocusRef.current = activeElement instanceof HTMLElement ? activeElement : null;
+    dialogRef.current?.querySelector<HTMLElement>("button")?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancelConnect();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      returnFocusRef.current?.focus();
+      returnFocusRef.current = null;
+    };
+  }, [cancelConnect, state.status]);
+
+  if (state.status !== "choosing") return null;
+
+  return (
+    <Overlay ref={dialogRef} title="Choose a wallet" titleId="wallet-chooser-title">
+      <ul className="mt-4 flex flex-col gap-2">
+        {state.providers.map((wallet) => (
+          <li key={wallet.info.uuid}>
+            <button
+              type="button"
+              onClick={() => void connect(wallet.info.uuid)}
+              className="flex w-full items-center gap-3 rounded-lg border border-white/12 px-4 py-3 text-left transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.98]"
+            >
+              <WalletIcon wallet={wallet} />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-fog">{wallet.info.name}</span>
+                <span className="block truncate font-mono text-[9px] tracking-[0.1em] text-dim">{wallet.info.rdns}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <DialogActions>
+        <SecondaryButton onClick={cancelConnect}>CANCEL · ESC</SecondaryButton>
+      </DialogActions>
+    </Overlay>
+  );
+}
+
+function baseSepoliaSwitchConfig(): SwitchableWalletChain {
+  const chain = BASE_SEPOLIA_CHAIN;
+  return {
+    id: chain.id,
+    name: chain.name,
+    rpcUrls: [...chain.rpcUrls.default.http],
+    nativeCurrency: chain.nativeCurrency,
+    blockExplorerUrls: chain.blockExplorers ? [chain.blockExplorers.default.url] : undefined,
+  };
 }
 
 function Pill({
@@ -260,7 +255,7 @@ function Overlay({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-30 grid place-items-center bg-ink/70 p-4 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-ink/70 p-4 backdrop-blur-[2px]">
       <div
         ref={ref}
         role="dialog"
