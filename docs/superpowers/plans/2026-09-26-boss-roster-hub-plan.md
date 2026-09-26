@@ -61,7 +61,7 @@
 
 **After（本計畫）**：spawn 不動；第一眼由近至遠三層——
 
-1. 近景：**老智者**立於北 3–4 tile（石徑旁，marker 落點 §4.3），idle bob、名牌 `THE SAGE`、接近時 E 提示。
+1. 近景：**老智者**立於 spawn 西北、石徑西側一格 (18,21)（marker 落點 §4.3；互動 zone 向東覆蓋石徑中段，行經即出 E 提示），idle bob、名牌 `THE SAGE`。
 2. 中景：中央 clearing 北緣，**頂列 9 門神社一字排開的天際線**（9 色 portal glow 各自 accent 色）——扇形分布的第一印象（研究 §3.3：Nexus 式輻射 + 單一圓心導航）。
 3. 遠景：西側樹籬間隙露出西列 2 門、東側露出東南 1 門。
 
@@ -69,7 +69,7 @@
 BEFORE（向北看）                    AFTER（向北看）
   [cat]   [LOCKED]   [whale]      [HC][TAL][ROO][AGR][CAT][RBP][AEVA][MW][PONS]
        （空曠草園）                    ▓▓▓ central clearing 北緣 ▓▓▓
-   ········                       ♂ THE SAGE（20,21, bob）
+   ········                       ♂ THE SAGE（18,21, bob）
       ● spawn (20,25)                │ 石徑（既有 jog 保留）
                                    ● spawn (20,25)    西 [AD][MUSEBOOK] · 東南 [ROBIN]
 ```
@@ -80,7 +80,7 @@ BEFORE（向北看）                    AFTER（向北看）
 - **accent 色 per-boss**：`BossDefinition.accent` 取代 `GATE_COLORS`（`HubScene.ts:24-28`），glow 顏色與名牌 plate 描邊沿用該色（現行 plate stroke 用 gate color，`HubScene.ts:336`）。
 - **portrait 三種**：cat/macro-whale 維持既有 `makeCroppedTexture` 產物；roster 門 Phase 1 畫 code-drawn 盾牌 + ticker 首兩字母（參考 locked 門鎖頭語彙 `HubScene.ts:292-296`）；Phase 2 換 emblem 美術（§7.2）。
 - **名牌**：第一行 `TICKER`（大寫，複用現行 `boss.name.toUpperCase()` 渲染，`HubScene.ts:302-308`）；第二行 caption：roster 門 `LB #N · ROBINHOOD`、cat/macro-whale `BOSS POOL`（D8）。
-- **status chip**：roster 門名牌下方加 4px 小字 chip——`NO CONTRACT`（灰）／`LOCKED`（灰）；cat 保留既有 live stage label（`renderCatStageLabel` `HubScene.ts:534-556` 不動）。任何門不得顯示 Live/Ready 等非真實字樣（`apps/web/AGENTS.md` fixture 規則）。
+- **status chip**：roster 門名牌下方加 4px 小字 chip——`NO CONTRACT`（灰）；`LOCKED` chip 為 **Phase 2 預留**（Phase 1 全 12 門皆 unlocked，D4 三態模型中無門落入 locked 態，故 Phase 1 不會渲染）；cat 保留既有 live stage label（`renderCatStageLabel` `HubScene.ts:534-556` 不動）。任何門不得顯示 Live/Ready 等非真實字樣（`apps/web/AGENTS.md` fixture 規則）。
 
 ### 3.3 老智者 NPC 視覺
 
@@ -114,7 +114,7 @@ BEFORE（向北看）                    AFTER（向北看）
 
 ### 4.2 扇形分佈：座標級提案
 
-gate 矩形維持 3×2 tile（GATE 48×32，`HubScene.ts:18`）。頂列 9 門每 4 格一門（3 寬 + 1 空隙），兩門之間的 torch 由 generator 既有邏輯寫入同一空隙 tile（`generate-hub-map.ts:199-207`，寫同值、無衝突）：
+gate 矩形維持 3×2 tile（GATE 48×32，`HubScene.ts:18`）。頂列 9 門每 4 格一門（3 寬 + 1 空隙），兩門之間的空隙 tile 同時是左右兩門 torch 的目標格；generator 既有 torch 邏輯（`generate-hub-map.ts:201-207`）寫入前先檢查 `collision`（:204 `if (layers.collision[index(c, r)] !== 0) continue`）——先寫的 torch 已 `block` 該 tile（:206），第二次寫入被跳過、不覆蓋：
 
 | gate id | col,row | 區位 | 備註 |
 |---|---|---|---|
@@ -133,16 +133,17 @@ gate 矩形維持 3×2 tile（GATE 48×32，`HubScene.ts:18`）。頂列 9 門�
 
 其他座標決策：
 
-- **SPAWN 不動** (20,25)；**SAGE** marker (20,21)（spawn 北 4 tile、石徑旁）；中央 clearing（cols 15-25, rows 10-20，`generate-hub-map.ts:53-58`）保留。
+- **SPAWN 不動** (20,25)；**SAGE** marker (18,21)（spawn 西北、石徑西側一格——spawn→clearing 石徑為 cols 19-21、rows 20-23，NPC 靜態 body 不擋路；其互動 zone（§6.1）向東覆蓋石徑中段，玩家行經即觸發 E 提示）；中央 clearing（cols 15-25, rows 10-20，`generate-hub-map.ts:53-58`）保留。
 - **POND 移位**：原 (4,20,6,6)（`generate-hub-map.ts:102-103`；即 cols 4-9、rows 20-25）移到左下 (2,24,6,6)——cols 2-7、rows 24-29（含外緣 row 29 阻斷，外圈全封斷言仍成立）；原 pond 區還原草皮，供 spawn→西側動線。
+- **舊 pond fence 移除**：既有 `fenceH(2, 18, 10, [11,11])`（pond 北側花園邊界，`generate-hub-map.ts:188`）在 pond 移位後失去對位 → 移除該 fence 呼叫；pond 自有 banked 邊緣 + 外圈 reserve，外圈全封斷言與 garden 語彙不受影響。
 - **東路 future route 保留**：cols 33-38、rows 12-14（`generate-hub-map.ts:71-73`）；robin(35,18) approach（rows 20-23）不衝突。
-- **ROO 巡邏路徑（Phase 2）**：手挑 waypoint＝roo 門前石徑段 cols 11-13、rows 6-14（不進任何 gate approach rect；§8.2）。
+- **ROO 巡邏路徑（Phase 2）**：手挑 waypoint＝roo 門前石徑段 cols 11-13、rows 8-14（roo 自身 gate approach 為 cols 10-14、rows 4-7，waypoint 起點 row 8 恰在其正下方、全段不與任何 gate approach rect 重疊；§8.2）。
 - **動線重畫**：中央 clearing 北緣 → 頂列每門各留 3 寬石徑直下（`reserveRoute` 每門一筆）；spawn→clearing 既有 jog 石徑保留（`generate-hub-map.ts:61-62`）；西列兩門接 clearing 西緣。
 - **裝飾規則沿用**：每門兩側 torch（既有 for-GATES 邏輯）、approach 4 行 clear（`generate-hub-map.ts:96-99`）、lantern/tree cluster 座標重挑避開新 reserve（:160-165）。
 
 ### 4.3 產生與驗證流程（hub.json markers 擴充規格）
 
-- `generate-hub-map.ts` 修改：`GATES` 改 12 筆（:10-14）；新增 `SAGE` point marker；pond 移位；route/reserve/cluster 重畫。
+- `generate-hub-map.ts` 修改：`GATES` 改 12 筆（:10-14）；新增 `SAGE` point marker（(18,21) tile 中心，px 296,344）＋ `reserve(18, 21)`（站位 cell，避免灌木/石頭落點壓住 NPC）；pond 移位＋舊 pond fence 移除；route/reserve/cluster 重畫。
 - `check-hub-map.ts` 修改：`gates.length` 3→12（:68）；bossIds 清單（:72）改為 `import { BOSSES } from "../src/game/bosses"` 後做**集合相等**斷言（generator 已有 import TS 先例：`generate-hub-map.ts:4` import `hubTiles`）；新增「恰一個 sage point marker」斷言；pond 位置斷言由既有 water-interior 邏輯自然覆蓋（:132-156）。
 - **markers 規格**：`sage` point object `{name:"sage", point:true, x, y}`；gate object 維持 `{name:"gate", properties:[{name:"bossId", value}]}` 對位（現行格式，`hub.json` 實讀確認）。
 - 執行：`bun run map:build` → `bun run map:check`（`apps/web/package.json:10-11`）。
@@ -232,7 +233,7 @@ curated snapshot（D5）：10 筆、頂層附 `snapshotDate` 與 `source` 註記
 - **靜態 body**：`this.physics.add.existing(sage, true)` 的 body 讓玩家不能穿過（NPC 擋路＝引導，Pokemon 關都老人先例）；body 尺寸 12×8 對齊玩家 collider 語彙（`HubScene.ts:390`）。
 - **idle bob**：`this.tweens.add({targets: sage, y: y ± 2, duration: 900, yoyo: true, repeat: -1, ease: "Sine.easeInOut"})`；`reduceMotion` 時不啟動（§3.3）。
 - **zone**：`new Phaser.Geom.Rectangle(x - 10, y - 8, 28, 28)` 包住 NPC 下半；`updateSageProximity()` 併入 `update()`（`HubScene.ts:255`），進出變化時 emit `npc:near`——完整複製 `updateGateProximity` 的 Contains 模式（`HubScene.ts:707-720`）。
-- **E 攔截第三分支**：`setupInput()`（`HubScene.ts:394-419`）優先序 `nearGate → nearSage → nearRegion`，sage 在 spawn 北側、zone 不與任何 gate zone 重疊（座標 §4.2 保證）。
+- **E 攔截第三分支**：`setupInput()`（`HubScene.ts:394-419`）優先序 `nearGate → nearSage → nearRegion`，sage 在 spawn 西北側、zone 不與任何 gate zone 重疊（座標 §4.2 保證）。
 
 ### 6.2 新 bridge event pair（`apps/web/src/game/bridge.ts`）
 
@@ -264,7 +265,9 @@ export type GameEvents = {
 
 > 回訪（未擊敗）：「還是那 10 位。名單會變，就像城裡的流言。記住那隻叫 ROO 的——只有牠不守規矩，會在路上遊蕩。」
 
-> cat 已擊敗（DEFEATED）：「你擊敗了 Roy。剩下的 9 位還在等他們的合約降臨。名單之後還會換，改天再來看看吧。」
+> cat 已擊敗（DEFEATED）：「你擊敗了 Roy。剩下的 11 位還在等他們的合約降臨。名單之後還會換，改天再來看看吧。」
+
+> （剩餘計數＝12 門 − 已擊敗數：12 = cat + macro-whale + 10 roster，cat 已擊敗後剩 11。此為腳本常數，與 §3.5「不做 HUD 剩餘計數」的假進度約束不衝突。）
 
 - 首訪/回訪由 `boss-pool:sage-talked:v1`（§5.4）判定；「已擊敗」由 `useBossPool` 的 `round.status` 真實值判定——**不寫死**。
 
@@ -318,13 +321,13 @@ export type GameEvents = {
 | 7 | `hubGuide.ts:22` `isUnlocked` 用 `findBoss(id).locked` | `status !== "locked"` |
 | 8 | `HubScene.ts:632-648` `chooseHintGate` 對 unlocked 取最近 | 邏輯不變（12 門皆 unlocked 時取最近，仍正確）；僅型別隨 `BossId=string` 調整 |
 | 9 | `check-hub-map.ts:68` 3 gate、`:72` bossIds 清單 | 12 gate + `import { BOSSES }` 集合相等（§4.3） |
-| 10 | `generate-hub-map.ts:10-14` `GATES` 3 筆 | 12 筆 + sage marker + pond/route/cluster 重畫（§4.2） |
+| 10 | `generate-hub-map.ts:10-14` `GATES` 3 筆 | 12 筆 + sage marker（+ 站位 reserve）+ pond 移位/舊 fence 移除/route/cluster 重畫（§4.2） |
 | 11 | `GameShell.tsx:36-38` gate 事件接線 | 新增 `npc:near`/`npc:talk` 接線與 `SageDialog`/`SagePrompt` 渲染（§6.3）；`overlayOpen` 加 `sageOpen` |
 
 ### 8.2 巡邏狀態機規格（Phase 2；ROO 一隻）
 
 - **不做 pathfinding**（研究 §3.4：瓶頸是 AI/尋路不是繪製）。FSM：`idle(1–4s 隨機) → pick(waypoint 依序或隨機) → bezier(tween, 20px/s, 控制點=中點垂直偏移 ±12) → idle`。
-- waypoint 清單＝§4.2 的 roo 石徑段 tile 中心（cols 11-13、rows 6-14），手挑、排除任何 gate approach rect（含自己門前的 5×4）。
+- waypoint 清單＝§4.2 的 roo 石徑段 tile 中心（cols 11-13、rows 8-14），起點 row 8 在自身 gate approach（cols 10-14、rows 4-7）正下方，全段手挑排除任何 gate approach rect（含自己門前的 5×4）。
 - **碰撞**：巡邏者加 static arcade body？——**不需要**：waypoint 全在 `reserveRoute` 石徑上（generator 保證 walkable）；與玩家無交互（走過即分離，無 push）。唯一約束：不進 gate approach 區與不與 sage zone 重疊。
 - **與 gate 的互斥**：巡邏路徑不觸碰 12 門的 approach rect 集合（`Gate.zone`）；FSM 選點時用 `Phaser.Geom.Rectangle.Contains` 過濾（既有工具）。
 - `reduceMotion`：不移動（停在門前，僅保留 glow）。
@@ -359,7 +362,7 @@ export type GameEvents = {
 | task-id | 描述 | 涉及檔案 | 依賴 | 估時 | 負責 |
 |---|---|---|---|---|---|
 | T1 | `BossDefinition` 擴充 + `boss-roster.json` + `BOSSES` 組合 | `bosses.ts`、新 `boss-roster.json` | — | 0.25d | JK |
-| T2 | 地圖重畫：GATES 12 筆、sage marker、pond 移位、route/cluster 重挑 | `scripts/generate-hub-map.ts` | T1（bossId 命名） | 0.5d | JK |
+| T2 | 地圖重畫：GATES 12 筆、sage marker、pond 移位＋舊 pond fence 移除、route/cluster 重挑 | `scripts/generate-hub-map.ts` | T1（bossId 命名） | 0.5d | JK |
 | T3 | checker：12 gate + bossIds 集合相等 + sage 斷言 | `scripts/check-hub-map.ts` | T2 | 0.25d | JK |
 | T4 | gate 渲染 data-driven：accent/status/ticker/rank chip/字首盾牌；crop 迴圈 | `src/game/HubScene.ts` | T1、T2 | 0.5d | JK |
 | T5 | sage entity：marker 讀取、crop、static body、bob、zone、E 第三分支 + bridge events | `HubScene.ts`、`bridge.ts` | T2、T4 | 0.5d | JK |

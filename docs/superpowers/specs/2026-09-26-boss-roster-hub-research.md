@@ -167,7 +167,7 @@
   - `apps/web/src/lib/useHubGuide.ts`：localStorage once-per-browser（:12, :21）+ bridge 同步（`scene:ready` 時重送 command，:77）。
   - `HubScene` 整合：`guide:step` command（:179）；move 階段位移累積 24px 發 `guide:moved`（`trackGuideTravel`）；find 階段畫琥珀色箭頭指向最近未鎖 gate（`updateGuideHint` :607-630 + `chooseHintGate` :632-648）。
 - **可重用零件**：✅ 對話框 UI 樣板（WelcomeDialog/HubHelp/HubRouteNotice 同一套 modal 模式）；✅ 世界空間 crisp label（`resolution: ZOOM`）；✅ `Phaser.Geom.Rectangle` zone + `Contains` 感應模式（gate 與 region-exit 皆是）→ 可直接複製成 NPC 對話感應區；✅ 輸入鎖定（`ui:modal` command + `domControlFocused`）。
-- **缺口**：❌ **無 NPC 實體型別**（場景中除 player 外只有 gate 群 + atmosphere 光點）；❌ **無打字機/逐字渲染**（全 workspace 搜尋無結果）；❌ 對話互動只有兩種觸發（gate zone 的 E、region-exit zone 的 E）——新增 NPC 對話需在 `setupInput` 的 interact 攔截器加第三分支 + 新 bridge event pair。
+- **缺口**：❌ **無 NPC 實體型別**（場景中除 player 外只有 gate 群 + atmosphere 光點）；❌ **無打字機/逐字渲染**——負面存在性結論，範圍與式樣可重現（2026-09-26 執行 `grep -rilE 'typewriter|type-writer|typeWriter|逐字' apps/web/src apps/web/scripts packages/chain/src scripts` 無命中、exit 1；node_modules 不在範圍內）。無法窮盡驗證，此為「本輪檢查範圍內未發現」；❌ 對話互動只有兩種觸發（gate zone 的 E、region-exit zone 的 E）——新增 NPC 對話需在 `setupInput` 的 interact 攔截器加第三分支 + 新 bridge event pair。
 
 ### 4.4 資料層與資產管線
 
@@ -214,7 +214,7 @@
 | `apps/web/AGENTS.md:25` 資產分工 | `:18` |
 | `hub-completion-pass.md:19/:22` 約束行 | `:19`（No new bosses）、`:23`（No NPC conversations） |
 
-所有內容層面主張（3 boss、神社繪製、cat 特判、crop 硬編碼、markers 對位、guide 狀態機、24 motes、6 layers、未使用 npc-* 圖、無打字機程式碼）均與源碼一致。
+所有內容層面主張（3 boss、神社繪製、cat 特判、crop 硬編碼、markers 對位、guide 狀態機、24 motes、6 layers、未使用 npc-* 圖、無打字機程式碼（§4.3 檢查範圍內））均與源碼一致。
 
 ## 5. 研究結論（餵給 PLAN Round 2）
 
