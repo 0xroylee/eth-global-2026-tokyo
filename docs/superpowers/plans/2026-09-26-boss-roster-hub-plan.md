@@ -1,5 +1,7 @@
 # 出生場景改版實作計畫：老智者 NPC × 10 Boss 呈現（Boss Roster Hub Plan）
 
+> **附註（2026-09-27 新增）**：實作進度與調整記錄見 **§14**。
+
 - 分支：`docs/boss-roster-hub`｜品質模式：standard（threshold 85）｜PLAN Round 2/3
 - 讀者：JK（frontend）、Roy（contracts 交界）、決策者｜交付物：實作計畫（交付物 2；研究報告＝交付物 1：`docs/superpowers/specs/2026-09-26-boss-roster-hub-research.md`）
 - 上游輸入：研究報告（Round 1，§x.x 引用即指該報告）、`.edison/research/{a1,a2,b}`；源碼 file:line 由 architect 於 2026-09-26 實讀驗證（§8）
@@ -471,6 +473,51 @@ flowchart LR
         L; M
     end
 ```
+
+## 14. 實作進度與調整記錄（2026-09-27）
+
+- 記錄範圍：`feat/boss-roster-hub`（HEAD `d8458bc`）｜merge-base（`main`）＝`0b6739d`｜分支共 **55** commits（docs 13 + 實作/修復 42）
+- 本節為**附錄式新增**，不改動 §1–§13 內容；任務定義見 §10、分期見 §9。表中每個短 hash 均已逐筆以 `git log --oneline` 核對存在且訊息相符。
+- 一句話結論：**Phase 1 與 Phase 2 全數完成（T1–T11 ＋ 計畫外必要的 T14）**；T15–T17 為 2026-09-27 的 vNext 調整（Base 名單轉向 ＋ 全英文 ＋ 互動修復），亦已完成。**未完成者僅 T12／T13 兩項 Phase 3 可選項。**
+
+### 14.1 原任務進度（T1–T13 ＋ 追加 T14）
+
+狀態：✅ 完成｜⬜ 未開。
+
+| task | 狀態 | commit（短 hash） | 備註 |
+|---|---|---|---|
+| T1 | ✅ | `4d9b0ab`, `efa01ac`, `64ab330` | roster JSON／`BossDefinition` 擴充／accent 調色 |
+| T2 | ✅ | `b5a95ee`, `d0ff1fb` | 12 門地圖重畫／cluster 重挑 |
+| T3 | ✅ | `eb7fdc5` | checker 集合相等 ＋ sage 斷言 |
+| T4 | ✅ | `e11a448`, `fceed6b`, `c9cc047`, `beeefe1` | accent/portrait data-driven／ticker 名牌 ＋ chip／字首盾牌；追加 `beeefe1`＝canvas 字型 token 修正（`var(--font-dm-mono)` 無法被 `ctx.font` 解析 → 全標籤放大 1.94×、12 門名牌重疊；修正後 NEXT REGION／cat stage label 回宣告字級） |
+| T5 | ✅ | `979d234`, `421ce0a` | sage entity ＋ bridge events／`npc:talk` 分支 |
+| T6 | ✅ | `77f12b6`, `3b62aa4`, `108e740`, `d5273aa`, `cc5d8b1` | typewriter／sageLines／SageDialog／GameShell 接線／caret 修正 |
+| T7 | ✅ | `bcb7a8b`, `3546c34`, `7ca7d4e` | BossRosterCard／分流接線；`7ca7d4e` 為修復：分流改走 `boss.source === "chain"`，移除死欄位 |
+| T8 | ✅ | —（純 review） | 審查完成：smith ＋ QA 實測 `BossEntryPanel` 零 diff、cat eyebrow 不變 |
+| T9 | ✅ | `083f3c6` | HUD `12 CHALLENGERS` ＋ guide 回歸 |
+| T10 | ✅ | `961e447` | ROO 巡邏 FSM：4 waypoint、modal 暫停、reduce-motion 靜止 |
+| T11 | ✅ | `d259776`, `fb2e235` | defeated 標記寫入 ＋ status 常數釘住 |
+| T12 | ⬜ | — | Phase 3 未開（LLM 雙軌，可選） |
+| T13 | ⬜ | — | Phase 3 未開（fetch-trending 刷新，可選） |
+| T14 | ✅ | `28d9698`, `fc5895b` | **追加（計畫外必要項）**：`hubGuide` 舊測試重寫為 Phase 1 契約 ＋ sageLines 測試 |
+
+**品質閘門（2026-09-26）**：smith 全 diff 審查 **92/100（REPAIRABLE）** → 修復 F1 焦點逃逸／F2 source 分流／F3 locked 護欄／F5 payload（`2cc4404`, `7ca7d4e`, `0cce847`, `266adee`, `d898d74`；末筆＝F12 走道幾何：13 條走道全寬、含 (18,8) 卡點）→ delta 複審 **95/100 PASS**；QA 12/12 TC **GO**。
+
+**分支家務**：`f8d450b`（`.gitignore` 納入 `.playwright-mcp`）不對應任何 task，列此備查。
+
+### 14.2 本次調整（2026-09-27 vNext：T15–T17，全數完成）
+
+- **T15 全英文**（`3e6b1e7`＋`3770f92`）：sage 三段台詞改英文（ASCII 標點）；全庫可見 CJK 清零，遊戲可見文字只剩英文。
+- **T16 Base 轉向**（`0b49ec6`, `3282404`, `2a67628`, `535d032`）：roster 換成 Base trending 實時精選 10 名（AERO／BRETT／SOL／VVV／TIBBIR／MORPHO／AVNT／BNKR／DRB／B3；source＝GeckoTerminal `networks/base/trending_pools` @2026-09-26）；gate caption `LB #N · BASE`、卡片 eyebrow `LAUNCH BOOST · BASE`、CHAIN＝Base；**遊蕩者重綁 `sol`（Solana (Bridged)）**；網路選單標籤去品牌（`46630 · HISTORICAL`／`Historical Testnet (46630)`）；技術性歷史字串（BossActions／RoundStatePanel／manifest）保留事實（邊界決策）。
+- **T17 互動修復**（`91669bc`, `b0f5e14`, `32fb5ad`, `d8458bc`）：四根因——① `domControlFocused` 過度抑制（含 WelcomeDialog 掃尾 focus 到 SOUND 按鈕 → 關閉指引後凍結）② prompts 是 span 不可點 ③ roamer 零互動（新增 22px 互動 radius）④ `ESC · CLOSE` 死 span。修後驗收：點 HUD 按鈕不再凍結、E／Enter／點擊三路皆通、roamer 可挑戰、鍵盤 a11y 保留。
+- **驗證狀態**：四檢查全綠（`typecheck`／`web:build`／`map:check`／`bun test` 34 pass）；瀏覽器驗收 6/6；smith 複審與 QA 重點實測**進行中**。
+
+### 14.3 待決事項（owner 跟進）
+
+1. `LAUNCH BOOST` 品牌字樣在 Base 語境是否保留（現僅換鏈名）。
+2. HUD `12 CHALLENGERS` 與 sage 的「10 challengers」同詞不同義（12 門 vs 10 roster）。
+3. Phase 3 可選（T12／T13）是否啟動。
+4. `npc-thesis-wizard.png` 授權記錄（延續未決）。
 
 
 
