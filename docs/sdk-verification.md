@@ -8,6 +8,8 @@ The previous quote contract changes came from `b98b685fadd5`; SDK and UI work fo
 
 ## Local and browser checks
 
+PR #39's visual conflict resolution was checked at `d34bc6974fc34835e29a5ffd69d9319e20ca4c87`. Typecheck, production web build, and the three existing battle tests passed. Browser checks covered the merged live page at 1280×800, 390×844, 320×640, and 844×390. The narrow layouts had no horizontal overflow, the boss and dialogue stayed separate, and the exit target measured 44px high. SWAP ATTACK opened a real 1 MockUSD quote with both 0.3% pool fees; missing deployment data remained unavailable. The merge preserves the shared transaction provider, confirmed effects, and reward controls. No wallet transaction or new gameplay journey was run for this presentation change.
+
 The live battle integration is implemented through commit `3b537e7fcd4c2ee40c5fc91d15ae8be38438ab71` in PR #37. `/mock-battle` now uses the shared SDK and a transaction provider that survives navigation to the hub.
 
 | Check | Result |

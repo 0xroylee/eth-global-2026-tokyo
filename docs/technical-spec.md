@@ -89,7 +89,7 @@ Preserve the existing approval, simulation, receipt, and stale-stage rules. Atta
 
 `/mock-battle` now consumes the live SDK while retaining its existing URL. [Live battle page requirements](requirements.md#live-battle-page) owns the user flow. The route uses the selected verified deployment and has no simulated-damage fallback.
 
-The page represents one shared, deployed Boss Pool round. The lake arena, player sprite, Attack Token boss forms, pixel windows, command menu, and dialog describe that encounter. Attack Token in the nameplate is the boss identity; its displayed level follows the stage. The nameplate is not the connected wallet's identity or a separate player progression system. On-chain stage indices are zero-based; labels and artwork use stages 1 through 3.
+The page represents one shared, deployed Boss Pool round. The lake arena, player sprite, Pool Unis boss forms, pixel windows, command menu, and dialog describe that encounter. Pool Unis in the nameplate is the boss identity; its displayed level follows the stage. Attack Token is the payment currency. On-chain stage indices are zero-based; labels and artwork use stages 1 through 3. The Silkscreen battle frames use a responsive grid so the HUD, nameplate, portrait, boss, commands, and dialogue stay separate on narrow or short screens.
 
 The existing integration code provides the starting points:
 
@@ -110,7 +110,7 @@ The screen data maps as follows:
 | Screen element | Live source | Meaning and limits |
 | --- | --- | --- |
 | Boss HP | `round.remainingSellableHP`, `round.stageCapacity[round.currentStage]` | Remaining purchasable HP against the current nominal capacity. Rounded display values do not determine stage completion. |
-| Stage dots, Attack Token level, boss form | `round.currentStage` and `round.status` | One shared round with three forms. The existing art order is form-b, form-a, then form-c. |
+| Stage line, Pool Unis level, boss form | `round.currentStage` and `round.status` | One shared round with three updated forms, in form-a, form-b, then form-c order. Stage, deadline, and network appear above the small player portrait. |
 | Round deadline | `round.deadline`, `round.blockTimestamp`, snapshot receipt time | Countdown derived from the chain deadline. Elapsed local time can animate the countdown between reads; it cannot reset the deadline or authorize an attack. |
 | Player HP during the fight | `player.bossHPBalance` | Current reward-bearing holdings, labeled YOUR HP until defeat. Disconnected wallets show a connect prompt or unavailable value. |
 | Reward share after defeat | `player.bossHPBalance / round.finalEligibleHP` | Share of the original prize represented by current unredeemed holdings. The denominator stays fixed after claims. No percentage is calculated with a zero denominator. |

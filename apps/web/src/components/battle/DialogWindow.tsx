@@ -1,8 +1,12 @@
+import { BattleFrame } from "./BattleFrame";
+
 export function DialogWindow({ title, detail }: { title: string; detail: string }) {
   return (
-    <div aria-live="polite" className="window-chrome w-[min(46vw,520px)] max-md:w-[94vw] px-4 py-3 font-mono">
-      <p className="text-[12px] leading-relaxed tracking-[0.14em] text-[#2b4a8b]">{title}</p>
-      <p className="break-words text-[11px] leading-relaxed tracking-[0.1em] text-[#2b4a8b]/80">{detail}</p>
-    </div>
+    <BattleFrame className="font-pixel">
+      <div aria-live="polite" className="flex min-h-[150px] flex-col justify-center px-4 py-4 sm:px-5">
+        <p className="break-words text-sm leading-relaxed sm:text-lg">{title}</p>
+        <p className="mt-3 break-words text-xs leading-relaxed sm:text-sm">{detail}</p>
+      </div>
+    </BattleFrame>
   );
 }

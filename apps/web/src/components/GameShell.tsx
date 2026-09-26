@@ -154,7 +154,7 @@ export function GameShell() {
               type="button"
               disabled={overlayOpen || canvasPhase === "error"}
               onClick={() => setOpenBoss("cat")}
-              aria-label="Open Attack Token boss actions"
+              aria-label="Open Pool Unis boss actions"
               className="rounded-lg border border-[#f5b04a]/35 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-[#ffd28a] disabled:opacity-40"
             >
               BOSS ACTIONS

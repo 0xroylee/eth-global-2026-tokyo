@@ -2,6 +2,8 @@
 
 Focus verification on the end-to-end journey and core features. Build the smallest set of checks that establishes the changed behavior.
 
+For browser viewport coverage, follow the [web app verification rules](../../apps/web/AGENTS.md#verification).
+
 ## Main journey
 
 Maintain one reusable two-wallet E2E scenario: fund a round, let fresh wallets use the auto-buy attack route, clear all three stages, and claim MockUSD. Assert that no NFT is minted during attacks or token claims, then exercise the optional victory-NFT claim. Assert actual receipts, balances, HP, contribution, and reward amounts along that journey. Use real v4 core for its contract execution. The requirements and technical specification define the current token and stage behavior.

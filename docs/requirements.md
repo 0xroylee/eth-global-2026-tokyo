@@ -77,11 +77,11 @@ Keep the shared E2E and focused accounting checks. Optional held-Attack Token at
 
 ## Live battle page
 
-`/mock-battle` is the live battle page using `@boss-pool/chain`; its URL is retained for existing links. The pixel arena presents the verified shared round. The command label is **ATTACK**, consistent with the purchase-based attack rules above.
+`/mock-battle` is the live battle page using `@boss-pool/chain`; its URL is retained for existing links. The pixel arena presents the verified shared round. The boss is named **Pool Unis**, and the command label is **SWAP ATTACK**, consistent with the purchase-based attack rules above. Attack Token remains the currency paid into the Boss pool.
 
 Players can inspect the shared boss without connecting a wallet. A wallet is required for approvals, attacks, and claims. Boss HP, stage, deadline, and rewards come from the selected verified deployment. An unavailable deployment shows an unavailable state. Entering or refreshing the page does not start a new round.
 
-**ATTACK** leads to a quote review before any transaction. The player sees the maximum MockUSD spend, expected spend and refunds, expected damage, and minimum accepted output. Approval and attack remain distinct wallet actions. Damage appears after confirmation. Other players' confirmed attacks also update the shared boss.
+**SWAP ATTACK** leads to a quote review before any transaction. The player sees the maximum MockUSD spend, expected spend and refunds, expected damage, and minimum accepted output. Approval and attack remain distinct wallet actions. Damage appears after confirmation. Other players' confirmed attacks also update the shared boss.
 
 Each attack uses a fixed input cap of **1 MockUSD**. The player does not enter an amount or choose a preset. The fixed cap appears in the quote review before confirmation. Damage varies with the live quote. A stage-clearing attack can spend less than 1 MockUSD and returns unused input.
 

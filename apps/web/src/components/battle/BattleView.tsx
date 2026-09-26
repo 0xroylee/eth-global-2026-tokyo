@@ -14,11 +14,11 @@ import { CommandWindow } from "./CommandWindow";
 import { CroppedSprite } from "./CroppedSprite";
 import { DialogWindow } from "./DialogWindow";
 import { NamePlate } from "./NamePlate";
-import { StatusPanel } from "./StatusPanel";
+import { BattleMeta, StatusPanel } from "./StatusPanel";
 import { VictoryCard } from "./VictoryCard";
 
 const STAGES = [1, 2, 3] as const;
-const BUTTON = "window-chrome min-h-[44px] px-3 py-2 font-mono text-[10px] tracking-[0.08em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff] disabled:opacity-60";
+const BUTTON = "min-h-11 border-2 border-[#FFF9E9] bg-[#092B61] px-3 py-2 font-pixel text-[10px] leading-relaxed text-white shadow-[3px_3px_0_#041833] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff] disabled:opacity-60";
 
 export function BattlePage({ initialNetwork }: { initialNetwork: NetworkKey }) {
   const arena = useArena();
@@ -86,8 +86,9 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
     void (account && arena.networkMismatch ? arena.switchToSelectedNetwork() : arena.connect()).catch(() => undefined);
   };
 
-  let title = "ATTACK TOKEN APPEARED!";
-  let detail = "Each attack spends up to 1 MockUSD. Review the expected damage first.";
+  const action = effect ? "HIT CONFIRMED" : busy ? arena.writeState.status === "prompting" ? "PREPARING" : "PENDING" : defeated ? "DEFEATED" : expired ? "ROUND ENDED" : canAttack ? "SWAP ATTACK" : "WAITING";
+  let title = "Guardian of the Liquidity Spring!";
+  let detail = "Pool Unis appeared. Each swap attack spends up to 1 MockUSD; review the expected damage first.";
   if (!round) {
     title = arena.deployment.kind === "loading" ? "CHECKING THE ROUND…" : "ROUND UNAVAILABLE";
     detail = arena.deployment.kind === "error" ? "Round data is unavailable. Open battle details or retry." : arena.deployment.kind === "not-deployed" ? "No deployment was found for this network." : "Reading the selected deployment.";
@@ -112,21 +113,15 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
   }
 
   return (
-    <main className="fixed inset-0 z-30 overflow-y-auto" aria-labelledby="battle-title">
+    <main className="fixed inset-0 z-30 overflow-y-auto font-pixel [-webkit-font-smoothing:none]" aria-labelledby="battle-title">
       <div aria-hidden className="fixed inset-0">
         <img src="/images/arena-lake-background.png" alt="" className="size-full object-cover [image-rendering:pixelated]" />
-        <div className="absolute inset-0 bg-ink/45" />
       </div>
-      <h1 id="battle-title" className="sr-only">Attack Token · Live boss battle</h1>
-      <div className={`relative ${defeated ? "min-h-[max(100dvh,740px)]" : "min-h-[max(100dvh,650px)]"}`}>
-        <div className="absolute left-[2%] top-4 w-[min(320px,42vw)]">
-          <StatusPanel deployment={arena.deployment} now={now} />
-        </div>
-        <div className="absolute right-[2%] top-4 flex max-w-[48vw] flex-col items-end gap-2">
-          <NamePlate stage={stage} />
-          <button type="button" onClick={onClose} className={BUTTON}>EXIT BATTLE · ESC</button>
+      <h1 id="battle-title" className="sr-only">Pool Unis · Live boss battle</h1>
+      <div className="relative mx-auto grid min-h-dvh max-w-[1800px] grid-cols-1 gap-4 p-3 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] md:grid-rows-[auto_auto_minmax(180px,1fr)_auto] md:p-5">
+        <div role="group" aria-label="Battle controls" className="flex flex-wrap items-center justify-end gap-2 md:col-span-2">
           <label className="sr-only" htmlFor="battle-network">Battle network</label>
-          <select id="battle-network" className={`${BUTTON} w-full`} value={arena.network} onChange={(event) => arena.selectNetwork(event.target.value as NetworkKey)}>
+          <select id="battle-network" className={`${BUTTON} max-w-full`} value={arena.network} onChange={(event) => arena.selectNetwork(event.target.value as NetworkKey)}>
             <option value="base-sepolia">Base Sepolia</option>
             <option value="local">Local chain</option>
             <option value="robinhood-testnet">Historical · read only</option>
@@ -136,22 +131,26 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
           </button>
           <button type="button" className={BUTTON} onClick={openActions}>{arena.pendingRecord ? "CHECK TRANSACTION" : "BATTLE DETAILS"}</button>
           {arena.deployment.kind !== "live" && <button type="button" className={BUTTON} onClick={arena.refresh}>RETRY</button>}
+          <button type="button" onClick={onClose} className={BUTTON}>ESC · EXIT</button>
         </div>
-
-        {visualStage && <div className="absolute bottom-[26%] right-[26%] aspect-square h-[min(34vh,340px)] max-md:right-[10%] max-md:bottom-[30%] max-md:h-[22vh]">
-          <BossStage stage={visualStage} state={effect?.defeated || defeated ? "defeated" : effect?.stageCleared ? "transition" : effect ? "hit" : "idle"} />
-        </div>}
-
-        {(!defeated || effect) && <div className="absolute inset-x-[2%] bottom-[3%] flex items-end justify-between gap-3 max-md:flex-col max-md:items-start">
-          {!defeated && <div className="flex items-end gap-3">
-            <CroppedSprite className="h-[min(26vh,190px)] max-md:h-[14vh]" />
-            <CommandWindow label={defeated ? "REWARDS" : "ATTACK"} disabled={!defeated && !canAttack} onAction={openActions} onClose={onClose} />
-          </div>}
-          <DialogWindow title={title} detail={detail} />
-        </div>}
-
-        {defeated && round && !effect && <div className="absolute inset-x-4 top-[320px] bottom-6 z-40 flex items-center justify-center">
-          <div className="w-[min(420px,90vw)]"><VictoryCard round={round} player={live?.player} onClaim={openActions} onClose={onClose} /></div>
+        <div className="min-w-0 md:col-start-1 md:row-start-2"><StatusPanel deployment={arena.deployment} /></div>
+        <div className="w-full min-w-0 max-w-[480px] justify-self-end md:col-start-2 md:row-start-2"><NamePlate stage={stage} action={action} /></div>
+        <div className="grid min-w-0 grid-cols-[minmax(100px,0.85fr)_minmax(0,1.15fr)] items-end gap-3 md:contents">
+          <div className="flex min-w-0 flex-col items-start gap-3 self-end md:col-start-1 md:row-start-3">
+            <BattleMeta deployment={arena.deployment} now={now} />
+            <div className="w-[108px] border-[3px] border-[#FFF9E9] bg-[#16356e] p-1.5 shadow-[3px_3px_0_#041833]">
+              <div className="mx-auto h-[84px] w-[70px] overflow-hidden"><CroppedSprite className="h-[140px]" /></div>
+              <p className="mt-1 text-center text-sm leading-none text-[#f6e7b2]">YOU</p>
+            </div>
+          </div>
+          <div className="relative h-[260px] min-w-0 self-end sm:h-[300px] md:col-start-2 md:row-start-3 md:h-[clamp(180px,30vh,360px)]">
+            {visualStage && <BossStage stage={visualStage} state={effect?.defeated || defeated ? "defeated" : effect?.stageCleared ? "transition" : effect ? "hit" : "idle"} />}
+          </div>
+        </div>
+        {!defeated && <div className="min-w-0 self-end md:col-start-1 md:row-start-4"><CommandWindow label="SWAP ATTACK" disabled={!canAttack} onAction={openActions} onClose={onClose} /></div>}
+        {(!defeated || effect) && <div className={`min-w-0 self-end md:row-start-4 ${defeated ? "md:col-span-2" : "md:col-start-2"}`}><DialogWindow title={title} detail={detail} /></div>}
+        {defeated && round && !effect && <div className="mx-auto w-full max-w-[640px] md:col-span-2 md:row-start-4">
+          <VictoryCard round={round} player={live?.player} onClaim={openActions} onClose={onClose} />
         </div>}
         {effect?.stageCleared && !effect.defeated && <div role="status" className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-ink/70">
           <div className="window-chrome px-6 py-3 font-mono text-[#2b4a8b]">STAGE {effect.stage + 1} CLEARED!</div>
@@ -160,7 +159,7 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
 
       <dialog ref={actionsDialog} aria-labelledby="battle-actions-title" onCancel={(event) => event.stopPropagation()} className="m-auto max-h-[90dvh] w-[min(640px,94vw)] overflow-y-auto border-4 border-[#2b4a8b] bg-panel p-5 text-fog backdrop:bg-ink/75">
         <div className="flex items-start justify-between gap-3">
-          <h2 id="battle-actions-title" className="font-mono text-base">{defeated ? "REWARDS" : "ATTACK · 1 MockUSD MAX"}</h2>
+          <h2 id="battle-actions-title" className="font-pixel text-sm">{defeated ? "REWARDS" : "SWAP ATTACK · 1 MockUSD MAX"}</h2>
           <button type="button" autoFocus className="min-h-[44px] border border-white/30 px-3 text-xs" onClick={() => actionsDialog.current?.close()}>CLOSE</button>
         </div>
         {(!account || arena.networkMismatch) && <button type="button" onClick={connectOrSwitch} className="mt-3 min-h-[44px] border border-white/30 px-3 text-sm">

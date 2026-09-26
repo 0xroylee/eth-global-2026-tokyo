@@ -1,4 +1,6 @@
-const CMD_CLASS = "min-h-[44px] border-2 border-[#2b4a8b] bg-[#f7f3e3] px-2 py-2 font-mono text-[10px] tracking-[0.14em] text-[#2b4a8b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff] hover:bg-[#2b4a8b]/10 disabled:cursor-not-allowed disabled:opacity-60";
+import { BattleFrame } from "./BattleFrame";
+
+const ROW = "flex min-h-[76px] w-full items-center gap-3 px-3 py-3 text-left text-[#092B61] focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-[#8ab4ff] disabled:cursor-not-allowed disabled:text-[#6d7c9c]";
 
 export function CommandWindow({ label, disabled, onAction, onClose }: {
   label: string;
@@ -7,11 +9,18 @@ export function CommandWindow({ label, disabled, onAction, onClose }: {
   onClose: () => void;
 }) {
   return (
-    <div className="window-chrome w-[min(26vw,260px)] max-md:w-[48vw] p-2.5">
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" disabled={disabled} onClick={onAction} className={CMD_CLASS}>{label}</button>
-        <button type="button" onClick={onClose} className={CMD_CLASS}>RUN</button>
+    <BattleFrame className="font-pixel">
+      <div className="bg-[#092B61] px-4 py-3 text-base leading-none text-white"><span lang="ja">コマンド</span> · COMMAND</div>
+      <div className="divide-y-4 divide-[#092B61]">
+        <button type="button" disabled={disabled} onClick={onAction} className={`${ROW} ${disabled ? "" : "bg-[#DCEEFF]"}`}>
+          <span aria-hidden className="grid size-10 shrink-0 place-items-center bg-[#092B61] text-2xl text-white">⚔</span>
+          <span className="min-w-0"><span lang="ja" className="block text-xs">こうげき</span><span className="block text-lg leading-snug sm:text-xl">{label}</span></span>
+        </button>
+        <button type="button" onClick={onClose} className={ROW}>
+          <span aria-hidden className="grid size-10 shrink-0 place-items-center bg-[#092B61] text-2xl text-white">➜</span>
+          <span><span lang="ja" className="block text-xs">にげる</span><span className="block text-lg sm:text-xl">RUN</span></span>
+        </button>
       </div>
-    </div>
+    </BattleFrame>
   );
 }
