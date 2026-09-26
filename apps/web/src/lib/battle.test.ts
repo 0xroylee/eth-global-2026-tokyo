@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { DecodedContractEvent, LocalDeploymentManifest } from "@boss-pool/chain";
-import { attackPlaybackChoice, attackWaitPhase, confirmedBattleAttack, rememberSeenAttackId, roundSecondsLeft, writeStateMatchesEncounter, SEEN_ATTACK_LIMIT } from "./battle";
+import type { ActivityPage, DecodedContractEvent, LocalDeploymentManifest } from "@boss-pool/chain";
+import { attackPlaybackChoice, attackWaitPhase, confirmedBattleAttack, mergeBattleAttacks, rememberSeenAttackId, roundSecondsLeft, writeStateMatchesEncounter, SEEN_ATTACK_LIMIT, type BattleAttack } from "./battle";
 import { findBossPresentation } from "../game/bosses";
 import type { WriteState } from "./useBossPool";
 
@@ -24,6 +24,37 @@ const events: DecodedContractEvent[] = [
     args: { stage: 1, sqrtPriceX96: 1n, liquidity: 1n, capacity: 600n * 10n ** 18n } },
 ];
 const confirmed: Extract<WriteState, { status: "confirmed" }> = { status: "confirmed", action: "Attack", record, result: { events } };
+
+test("public battle log keeps one row per attack, scopes the boss, and replaces rescanned history", () => {
+  const attack: BattleAttack = {
+    id: "attack-a", kind: "attack", authority: "authoritative-damage", chainId: manifest.chainId,
+    deploymentTxHash: manifest.deploymentTxHash, address: manifest.addresses.router,
+    blockNumber: 10n, blockHash: "0xab", blockTimestamp: 100n, transactionHash: "0xcd", transactionIndex: 0, logIndex: 2,
+    player: account, stage: 0, mockUSDSpent: 1_000_000n, royBought: 10n, roySpent: 10n,
+    bossHPReceived: 7123456789012345678n, mockUSDRefunded: 0n, royRefunded: 0n,
+  };
+  const second: BattleAttack = { ...attack, id: "attack-b", player: other, logIndex: 3, transactionIndex: 1 };
+  const page: ActivityPage = {
+    chainId: manifest.chainId, deploymentTxHash: manifest.deploymentTxHash,
+    rangeFromBlock: 10n, rangeToBlock: 20n, scannedFromBlock: 10n, scannedToBlock: 20n,
+    snapshotBlockNumber: 20n, snapshotBlockHash: "0xab", completeThroughSnapshot: true,
+    entries: [attack, attack, second,
+      { ...attack, id: "other-router", address: other },
+      { ...attack, id: "other-chain", chainId: 84532 },
+      { ...attack, id: "other-deployment", deploymentTxHash: "0xef" },
+      { ...attack, kind: "attack-recorded", authority: "corroborating-only", bossHPOut: attack.bossHPReceived, cumulativeSold: attack.bossHPReceived },
+      { ...attack, kind: "token-transfer", token: "BossHP", from: account, to: other, value: attack.bossHPReceived },
+    ],
+  };
+  const rows = mergeBattleAttacks([], page, manifest);
+  expect(rows.map((row) => row.id)).toEqual([second.id, attack.id]);
+  expect(rows[1]?.bossHPReceived).toBe(7123456789012345678n);
+  expect(mergeBattleAttacks(rows, page, manifest)).toEqual(rows);
+  const older = { ...attack, id: "older", blockNumber: 5n };
+  const loadedOlder = mergeBattleAttacks(rows, { ...page, scannedFromBlock: 1n, scannedToBlock: 9n, entries: [older] }, manifest);
+  expect(loadedOlder.map((row) => row.id)).toEqual([second.id, attack.id, older.id]);
+  expect(mergeBattleAttacks(loadedOlder, { ...page, entries: [] }, manifest)).toEqual([older]);
+});
 
 describe("confirmed battle effects", () => {
   test("a clearing receipt keeps its actual damage on the old stage and supports recovered results", () => {
