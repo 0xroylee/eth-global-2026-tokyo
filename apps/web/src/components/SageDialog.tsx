@@ -41,6 +41,11 @@ export function SageDialog({ lines, onClose }: { lines: string[]; onClose: () =>
     dialogRef.current?.focus({ preventScroll: true });
   }, []);
 
+  // Hand the keyboard back to the canvas on close, and only on close. This must not
+  // ride on the keydown effect below: that effect's identity changes with every line
+  // state change, so its cleanup would pull focus out of the open dialog.
+  useEffect(() => () => focusHubCanvas(), []);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -78,10 +83,7 @@ export function SageDialog({ lines, onClose }: { lines: string[]; onClose: () =>
       advance();
     };
     window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("keydown", onKey, true);
-      focusHubCanvas();
-    };
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [advance, onClose]);
 
   const nextLabel = !done ? "E · FINISH LINE" : lastLine ? "E · CLOSE" : "E · NEXT";
