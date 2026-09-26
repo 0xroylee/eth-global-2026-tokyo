@@ -31,9 +31,9 @@ The only remote wallet target in this slice is Base Sepolia:
 - Chain name: `Base Sepolia`
 - Native currency: ETH, 18 decimals
 - Public RPC: `https://sepolia.base.org`
-- Explorer: `https://sepolia-explorer.base.org`
+- Explorer: `https://sepolia.basescan.org`
 
-The values must have one authoritative definition in `@boss-pool/chain`. Wallet switching first requests `wallet_switchEthereumChain`. If the wallet reports an unknown chain, the UI may request `wallet_addEthereumChain` with the same configuration and then retry the switch.
+The values must have one authoritative definition in `@boss-pool/chain`, derived from viem's installed `baseSepolia` definition. Wallet switching first requests `wallet_switchEthereumChain`. If the wallet reports an unknown chain, the UI may request `wallet_addEthereumChain` with the same configuration and then retry the switch.
 
 The public Base RPC is rate-limited and is not promised for production traffic. This slice uses it only as the default testnet network value; a later deployment plan may introduce a configurable provider URL.
 
