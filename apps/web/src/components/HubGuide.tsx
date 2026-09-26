@@ -76,7 +76,12 @@ function WelcomeDialog({ onStart, onSkip }: { onStart: () => void; onSkip: () =>
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.querySelector<HTMLElement>('[aria-label="Map sound effects"]')?.focus();
+      // Land on the canvas, not a HUD button: a focused button keeps Space/Enter for itself,
+      // so the guide's first instruction ("use WASD… press E") would arrive dead.
+      const canvas = document.querySelector("main canvas");
+      if (!(canvas instanceof HTMLCanvasElement)) return;
+      canvas.tabIndex = -1;
+      canvas.focus({ preventScroll: true });
     };
   }, [onSkip]);
 
@@ -115,7 +120,11 @@ export function ReplayGuide({ disabled, onReplay }: { disabled: boolean; onRepla
   return (
     <button
       type="button"
-      onClick={onReplay}
+      onClick={(event) => {
+        // Blur so the focused button does not swallow the next Enter (see GameShell).
+        if (event.detail > 0) event.currentTarget.blur();
+        onReplay();
+      }}
       disabled={disabled}
       className="self-start rounded-md border border-white/12 px-2 py-1 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 hover:text-fog disabled:opacity-40 motion-reduce:transition-none"
     >

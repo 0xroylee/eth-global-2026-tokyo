@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { type Address, type DecodedContractEvent, type DeploymentManifest } from "@boss-pool/chain";
 import { BOSSES, findBoss, type BossId } from "@/game/bosses";
 import { GameBridge } from "@/game/bridge";
@@ -183,7 +183,10 @@ export function GameShell() {
             <button
               type="button"
               disabled={overlayOpen || canvasPhase === "error"}
-              onClick={() => setOpenBoss("cat")}
+              onClick={(event) => {
+                blurOnMouseClick(event);
+                setOpenBoss("cat");
+              }}
               aria-label="Open Boss actions for Roy the cat"
               className="rounded-lg border border-[#f5b04a]/35 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-[#ffd28a] disabled:opacity-40"
             >
@@ -222,7 +225,10 @@ export function GameShell() {
             ) : (
               <button
                 type="button"
-                onClick={connectWallet}
+                onClick={(event) => {
+                  blurOnMouseClick(event);
+                  connectWallet();
+                }}
                 disabled={overlayOpen || arena.wallet.status === "checking"}
                 className="rounded-lg border border-white/10 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-fog disabled:opacity-40"
               >
@@ -232,7 +238,10 @@ export function GameShell() {
             {arena.networkMismatch && (
               <button
                 type="button"
-                onClick={switchWallet}
+                onClick={(event) => {
+                  blurOnMouseClick(event);
+                  switchWallet();
+                }}
                 disabled={overlayOpen}
                 className="rounded-lg border border-danger/40 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-danger disabled:opacity-40"
               >
@@ -241,7 +250,10 @@ export function GameShell() {
             )}
             <button
               type="button"
-              onClick={() => setShowChain((open) => !open)}
+              onClick={(event) => {
+                blurOnMouseClick(event);
+                setShowChain((open) => !open);
+              }}
               aria-pressed={showChain}
               className={`rounded-lg border bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] ${live ? "border-live/25 text-live-soft" : "border-white/12 text-[#9da8c3]"}`}
             >
@@ -303,7 +315,10 @@ export function GameShell() {
           <div className="pointer-events-auto flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setHelpOpen(true)}
+              onClick={(event) => {
+                blurOnMouseClick(event);
+                setHelpOpen(true);
+              }}
               disabled={overlayOpen || canvasPhase === "error"}
               className="rounded-md border border-white/12 px-2 py-1 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 hover:text-fog disabled:opacity-40 motion-reduce:transition-none"
             >
@@ -338,6 +353,15 @@ export function GameShell() {
       )}
     </main>
   );
+}
+
+/**
+ * A mouse click leaves the button focused, and a focused button swallows the next Enter:
+ * the interact key would re-fire the HUD control instead of reaching the map. Blur only for
+ * real pointer clicks — keyboard activation keeps the focus ring the user tabbed to.
+ */
+function blurOnMouseClick(event: ReactMouseEvent<HTMLButtonElement>) {
+  if (event.detail > 0) event.currentTarget.blur();
 }
 
 function focusHubCanvas() {

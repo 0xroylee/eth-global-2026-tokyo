@@ -105,7 +105,21 @@ type Facing = (typeof WALK_ROWS)[number];
 const IDLE_COLUMN = 1;
 /** Foot pixel row inside the 32×32 cell. Origin and the feet collider share it. */
 const FOOT_ROW = 31;
-const PAGE_CONTROL = "button, a, input, select, textarea, [contenteditable='true'], [role='button']";
+/**
+ * Controls that own the keyboard while they hold focus. Text entry and comboboxes want
+ * every key they are given, so while one is focused the map must not also move the player
+ * or run its interact keys.
+ *
+ * Buttons and links are deliberately NOT in this list. Clicking a HUD button leaves it
+ * focused, and a focused button must not freeze the map — that stranded the player with no
+ * way back except clicking the canvas. `isPageControlTarget` still keeps Space/Enter on a
+ * focused button from also reaching the game, so the two lists are not the same list.
+ */
+const KEYBOARD_CAPTURING_CONTROLS =
+  'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="combobox"], [role="textbox"]';
+/** Anything that activates on Space/Enter, or wants raw typing: the interact listener skips it. */
+const PAGE_CONTROL =
+  'button, a, input, select, textarea, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="combobox"], [role="textbox"]';
 
 function isPageControlTarget(event: KeyboardEvent): boolean {
   const target = event.target;
@@ -966,9 +980,7 @@ export class HubScene extends Phaser.Scene {
 
   private refreshDomKeyboardFocus() {
     const active = document.activeElement;
-    const focusedOnControl = active instanceof Element && Boolean(active.closest(
-      'input, textarea, select, button, a[href], [contenteditable]:not([contenteditable="false"]), [role="button"], [role="combobox"], [role="textbox"]',
-    ));
+    const focusedOnControl = active instanceof Element && Boolean(active.closest(KEYBOARD_CAPTURING_CONTROLS));
     if (focusedOnControl !== this.domControlFocused) {
       this.domControlFocused = focusedOnControl;
       this.resetKeyboardState();
