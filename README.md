@@ -40,7 +40,7 @@ The project uses a two-person ownership split:
 3. Review the launch quote and approve the token deposit. The SDK calculates the pool configuration and mines a valid Uniswap v4 hook address.
 4. Launch the boss. `BossFactory` deploys a dedicated Router, Hook, and collectible contract. It funds the prize in the Hook, funds the battle inventory in the Router, and activates the full sale position and first stage.
 
-New Factory bosses have three fixed stages and default cat portraits. The prize, initial LP position, initial-position fees, and Router residue stay locked. Owners can add and remove a separate proportional liquidity position. These bosses have no expiry or creator cancellation. Public Factory deployments retain their original rules and require a matching build for new launches.
+New Factory bosses have three fixed stages and default cat portraits. The prize, initial LP position, initial-position fees, and Router residue stay locked. Owners can add and remove a separate proportional liquidity position. These bosses have no expiry or creator cancellation. The current Base Sepolia launch Factory matches this build; earlier public bosses retain their original rules.
 
 ### Fight through stage cooldowns
 
@@ -66,7 +66,7 @@ Unused MockUSD and Attack Token are refunded. The three stages require additiona
 
 Clearing stage one starts a shared 60-second cooldown; clearing stage two starts a 120-second cooldown. The full sale inventory is active from launch. Stage changes preserve the standard AMM price curve and LP position. Quotes and attacks reject during the cooldown, and failed swaps roll back all purchase credit. Clearing the final stage defeats the boss.
 
-The testnet demo can use an owner-controlled mock reference to make Boss fees more expensive or cheaper, including 0%. The supply pool fee stays 0.3%. This reference is labelled TESTNET MOCK PRICE and does not report a live market price. See the [mock price and fee reference](docs/boss-factory.md#testnet-mock-price-and-fees).
+The optional mock-oracle demo can use an owner-controlled reference to make Boss fees more expensive or cheaper, including 0%. It has been verified locally but is not deployed publicly. The current Base Sepolia Factory uses fixed 0.3% fees for both pools. The mock reference is labelled TESTNET MOCK PRICE and does not report a live market price. See the [mock price and fee reference](docs/boss-factory.md#testnet-mock-price-and-fees).
 
 ### Claim the prize
 
@@ -154,7 +154,7 @@ The following addresses come from the [app manifest](apps/web/public/deployments
 
 | Contract | Address | Use |
 | --- | --- | --- |
-| BossFactory | [0x353749ffa9640c4152dd28068c416adfc2eb168e](https://sepolia.basescan.org/address/0x353749ffa9640c4152dd28068c416adfc2eb168e) | Published earlier perpetual build; new launches require the bundled build |
+| BossFactory | [0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7](https://sepolia.basescan.org/address/0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7) | Current launch Factory; continuous liquidity, 60/120-second cooldowns, and matching SDK build |
 | PoolManager | [0x1EF1e7e79B14AFB530d9671A79B7B173FE41a1c3](https://sepolia.basescan.org/address/0x1EF1e7e79B14AFB530d9671A79B7B173FE41a1c3) | Shared v4 infrastructure |
 | MockUSD | [0x184B037F95A8E7a6E956AACad2244E5ded40d487](https://sepolia.basescan.org/address/0x184B037F95A8E7a6E956AACad2244E5ded40d487) | Test payment token |
 | Attack Token | [0x6e5390D3231beb061c1E49916806F2f26B3Feb22](https://sepolia.basescan.org/address/0x6e5390D3231beb061c1E49916806F2f26B3Feb22) | Shared intermediate token |
@@ -162,11 +162,12 @@ The following addresses come from the [app manifest](apps/web/public/deployments
 | Demo BossHook | [0xc11D07448948AC4757592E91D8f5155907Ef6AC0](https://sepolia.basescan.org/address/0xc11D07448948AC4757592E91D8f5155907Ef6AC0) | Bundled default encounter |
 | Demo BossRouter | [0x087D22c53082ED7841cB5716cB699111a02b0dEf](https://sepolia.basescan.org/address/0x087D22c53082ED7841cB5716cB699111a02b0dEf) | Demo attack and liquidity controller |
 | Demo BossCollectibles | [0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925](https://sepolia.basescan.org/address/0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925) | Demo victory NFT |
-| Earlier BossFactory | [0x9039F58150F1fFDFB301A3D7218D47A44406a269](https://sepolia.basescan.org/address/0x9039F58150F1fFDFB301A3D7218D47A44406a269) | Origin of the bundled timed demo |
+| Previous perpetual BossFactory | [0x353749ffa9640c4152dd28068c416adfc2eb168e](https://sepolia.basescan.org/address/0x353749ffa9640c4152dd28068c416adfc2eb168e) | Historical staged-liquidity build retained for discovery and recovery |
+| Earlier timed BossFactory | [0x9039F58150F1fFDFB301A3D7218D47A44406a269](https://sepolia.basescan.org/address/0x9039F58150F1fFDFB301A3D7218D47A44406a269) | Origin of the bundled timed demo |
 
 The PoolManager is a team-deployed test instance built from pinned v4-core source. These addresses are not an official Uniswap deployment.
 
-The current Factory was deployed at block `47334087`: [deployment transaction](https://sepolia.basescan.org/tx/0x8bbf9e9fcd76cf817c925c7513d22ebaaa3b0b01195aed33040c8c2ae8d4477f), [build and deployment evidence](docs/evidence/base-sepolia-perpetual-factory.json).
+The current Factory was deployed at block `47341945`: [deployment transaction](https://sepolia.basescan.org/tx/0x48b3c5d6a87f4432d8c0e974bb21370c146f4134067092d3e2de1d71082a85ef), [build and deployment evidence](docs/evidence/base-sepolia-continuous-factory.json). The public Blacksmith uses this address, passes SDK build verification, and returns funding quotes.
 
 The bundled demo was launched at block `47332745`: [launch transaction](https://sepolia.basescan.org/tx/0x757a887b2de2275dcd617b8daa8eeef6fa19d8dc469185b2aaa8f0aa1517a120), [launch evidence](docs/evidence/base-sepolia-factory-demo-boss.json). Its creator deposited 10,000 BHP, including a 1,000 BHP prize, and set a 60 MockUSD target. This older encounter's deadline is **3 October 2026 at 14:42:42 UTC**.
 
@@ -251,7 +252,7 @@ This historical integration table is pinned to source commit `6dd9c8e` so the li
 | ERC-20 settlement through PoolManager | [BossRouter.sol, lines 556–562](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossRouter.sol#L556-L562) |
 | Prize and victory-NFT claims | [BossHook.sol, lines 465–494](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossHook.sol#L465-L494) |
 
-That historical build uses a 0.30% fee for both pools and tick spacing 60. The current demo can use dynamic Boss fees while keeping the supply fee at 0.30%. The Hook uses ordinary v4 output settlement with zero hook return deltas. The integration calls v4-core directly through viem and the custom Router.
+That historical build and the current public Factory use a 0.30% fee for both pools and tick spacing 60. The optional local mock-oracle demo supports dynamic Boss fees while keeping the supply fee at 0.30%. The Hook uses ordinary v4 output settlement with zero hook return deltas. The integration calls v4-core directly through viem and the custom Router.
 
 ## Run the project
 
@@ -360,7 +361,7 @@ The repository records the following evidence:
 | Area | Recorded evidence |
 | --- | --- |
 | Contract behavior and local SDK journeys | [Factory review](docs/evidence/factory-review-verification.json) and [SDK verification](docs/sdk-verification.md) |
-| Current Base Sepolia Factory deployment and build hashes | [Perpetual Factory deployment](docs/evidence/base-sepolia-perpetual-factory.json) |
+| Current Base Sepolia Factory deployment and build hashes | [Continuous Factory deployment](docs/evidence/base-sepolia-continuous-factory.json) |
 | Bundled Factory demo, prize custody, launch receipt, and public attack quote | [Demo boss evidence](docs/evidence/base-sepolia-factory-demo-boss.json) |
 | Historical Robinhood gameplay and NFT claims | [SDK report](docs/sdk-verification.md#historical-robinhood-testnet-run) and [foundation report](docs/testnet-verification.md) |
 
