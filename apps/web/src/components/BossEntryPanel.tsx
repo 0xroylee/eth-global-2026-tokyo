@@ -93,6 +93,17 @@ export function BossEntryPanel({
 
         {supported && live && (
           <div className="mt-6">
+            <div className="mb-5 border-y-2 border-[#2b4a8b]/20 py-3">
+              <dl className="flex flex-wrap items-baseline justify-between gap-2">
+                <dt className="font-pixel text-xs">POOL PRIZE</dt>
+                <dd className="font-pixel text-xl [overflow-wrap:anywhere]">
+                  {displayAmount(live.round.originalPrize, live.round.rewardToken.decimals)} {live.round.rewardToken.symbol}
+                </dd>
+              </dl>
+              <p className="mt-2 font-mono text-xs leading-relaxed">
+                Shared by eligible fighters after the final stage.
+              </p>
+            </div>
             <Link
               ref={entryRef}
               href={`/battle/${live.hookAddress}?network=${arena.network}`}
