@@ -13,7 +13,9 @@ Updated 26 September 2026. This page records the research that selected Next.js,
 | React state | Local state and a small wallet context where shared access is needed |
 | Demo signer | MetaMask is the proposed browser wallet for the prepared two-wallet rehearsal |
 
-The [technical specification](technical-spec.md#frontend-architecture) owns the architecture. The [delivery plan](delivery-plan.md#frontend-build-sequence) owns migration and feature sequencing. Follow the [Next.js setup guide](https://nextjs.org/docs/app/getting-started/installation) and [Tailwind Next.js integration](https://tailwindcss.com/docs/installation/framework-guides/nextjs), then pin compatible versions during implementation.
+The [technical specification](technical-spec.md#frontend-architecture) owns the architecture. The [delivery plan](delivery-plan.md#frontend-build-sequence) records implementation sequencing and remaining release gates. Follow the [Next.js setup guide](https://nextjs.org/docs/app/getting-started/installation) and [Tailwind Next.js integration](https://tailwindcss.com/docs/installation/framework-guides/nextjs) for stack details.
+
+The active testnet target is Base Sepolia, chain `84532`, with RPC `https://sepolia.base.org`. The endpoint is reachable, but no Boss Pool Base Sepolia manifest or deployment is verified. The browser defaults to that network and renders Not Deployed until a real manifest exists. Robinhood `46630` remains available for historical deployment and receipt reads only.
 
 Viem is the application's wallet client library. The user's browser wallet holds keys and approves transactions through an EIP-1193 provider. The direct integration uses `createWalletClient` with `custom(provider)` and a separate public client for RPC reads and receipts. [Viem wallet client](https://viem.sh/docs/clients/wallet), [custom transport](https://viem.sh/docs/clients/transports/custom)
 
@@ -21,13 +23,13 @@ The earlier wagmi, RainbowKit, ConnectKit, Reown, and Privy comparison is supers
 
 ## Implemented frontend scope
 
-The app has migrated from Vite to Next.js App Router and Tailwind CSS. It uses `packages/chain` for verified deployment metadata, one-block state reads, wallet operations, public attack quotes, and typed receipt handling. Phaser scenes render the hub and boss encounters from confirmed state. The current page supports local chain `31337` and Robinhood testnet `46630`.
+The app has migrated from Vite to Next.js App Router and Tailwind CSS. It uses `packages/chain` for verified deployment metadata, one-block state reads, wallet operations, public attack quotes, and typed receipt handling. Phaser scenes render the tiled hub and boss encounters from confirmed state. The page supports local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`.
 
 Provider access stays in client-side effects and event handlers. Public reads and attack quotes remain available without a connected wallet. The wallet UI handles connection, account changes, chain changes, and network switching. Manual wallet-popup acceptance remains open because browser page tests do not automate extension dialogs. See the [checklist](sdk-verification.md#manual-browser-wallet-checklist). [Next.js client boundaries](https://nextjs.org/docs/app/getting-started/server-and-client-components), [EIP-1193](https://eips.ethereum.org/EIPS/eip-1193)
 
 `bun run typecheck` and `bun run web:build` pass. Local Anvil and Robinhood testnet journeys exercise SDK writes and receipts. Browser checks cover public quoting without a wallet, the defeated-round state, network selection, and text-input caret keys. They do not replace manual wallet-popup checks.
 
-## Robinhood testnet and demo wallet
+## Historical Robinhood testnet and demo-wallet research
 
 The official network configuration is:
 
@@ -53,12 +55,12 @@ The implementation covers the existing player slices. It keeps the original cont
 
 | Existing slice | Concrete frontend work |
 | --- | --- |
-| BP02/BP06 | The Next.js app reads verified local and Robinhood deployments. The SDK pins round and player reads to one block. |
+| BP02/BP06 | The Next.js app reads verified local and historical Robinhood deployments. Base Sepolia is selectable but shows not deployed until a manifest exists. The SDK pins round and player reads to one block. |
 | BP03 | The wallet UI connects through direct viem, switches network, displays balances and allowances, and supports approval and enrollment. |
 | BP04 | The Router exposes a public preapproval quote. The SDK runs the authenticated simulation after approval, sends writes, checks receipts, and rejects stale-stage quotes. |
 | BP05/BP06 | The Phaser hub and boss scenes show stage state and apply attack effects only from confirmed SDK events. |
 | BP07 | The SDK supports BossHP transfer and reward redemption. The UI supports reward redemption and a separate victory-NFT claim; it does not yet expose a BossHP transfer form. |
-| BP10/BP11 | A real two-wallet journey ran on the team testnet fixture. Manual injected-wallet popup checks remain open. |
+| BP10/BP11 | Historical Robinhood receipts verify an earlier two-wallet journey. Base Sepolia has no Boss Pool deployment yet. Manual injected-wallet popup checks remain open. |
 
 The approval map follows the actual contract spender:
 

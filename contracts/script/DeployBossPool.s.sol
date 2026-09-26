@@ -59,7 +59,7 @@ contract DeployBossPool is Script {
         if (block.chainid == 31337) {
             deployer = tx.origin;
             vm.startBroadcast();
-        } else if (block.chainid == 46_630) {
+        } else if (block.chainid == 84_532) {
             uint256 deployerKey = vm.envUint("TESTNET_DEPLOYER_PRIVATE_KEY");
             deployer = vm.addr(deployerKey);
             require(deployer == tx.origin, "testnet sender mismatch");

@@ -1,6 +1,6 @@
 # Boss Pool delivery plan
 
-Updated 26 September 2026. This is the implementation handoff for the current no-burn BossHP design. BP01 provides local contracts, the shared client, and a read-only web shell; see [recorded evidence](bp01-foundation.md). The full browser game, migration to the selected Next.js/Tailwind stack, and Robinhood deployment remain open. Earlier local burn prototypes are historical mechanism evidence.
+Updated 26 September 2026. The no-burn contracts, shared SDK, Next.js player app, and Phaser hub are implemented. Five focused Foundry cases pass. The local Anvil SDK journey passed 18 transactions. Base Sepolia RPC access is verified, but there is no Boss Pool Base Sepolia deployment. Manual wallet-popup acceptance and the Base Sepolia gameplay run remain open. Earlier local burn prototypes are historical mechanism evidence.
 
 ## Outcome and scope
 
@@ -8,7 +8,7 @@ Two wallets enroll, use MockUSD to buy ROY and then BossHP, clear three boss sta
 
 The [requirements](requirements.md) own gameplay, [technical specification](technical-spec.md) owns contracts/interfaces/custody, [HP lifecycle](hp-lifecycle.md) owns clearing details, and [refill/reward math](refill-math.md) owns calculations. [CONTEXT.md](../CONTEXT.md) is the glossary.
 
-Confirmed: one ROY attack currency, one ROY/BossHP battle pool, one MockUSD/ROY supply pool, no attack burn, stages 300/600/900, staged HP liquidity, rewards represented by BossHP, Robinhood testnet, Next.js/TypeScript/Tailwind CSS, direct viem, Bun, and a small monorepo. Physical/magic, MROY, damage multipliers, dynamic fees and public BossHP sell-backs are outside the core.
+Confirmed: one ROY attack currency, one ROY/BossHP battle pool, one MockUSD/ROY supply pool, no attack burn, stages 300/600/900, staged HP liquidity, rewards represented by BossHP, Base Sepolia, Next.js/TypeScript/Tailwind CSS, direct viem, Bun, and a small monorepo. Physical/magic, MROY, damage multipliers, dynamic fees and public BossHP sell-backs are outside the core.
 
 Working claim default: eligible HP is transferable; claim atomically surrenders it into permanent custody and pays a fixed proportional reward, without burning. This is the model used by the current plan. A frozen-balance alternative was discussed but not selected. Do not silently combine the two.
 
@@ -20,7 +20,7 @@ Use the [Bun monorepo layout](technical-spec.md#monorepo-and-ownership):
 
 - `contracts/`: Foundry, two core contracts, standard tokens/NFTs and the shared core scenario. A owns it.
 - `packages/chain/`: generated ABI, public deployment manifest, viem actions/views and shared types. A owns contract-facing changes; B reviews consumption.
-- `apps/web/`: Next.js App Router arena, Tailwind CSS UI, and direct viem wallet flows. B owns it; the existing Vite shell must be migrated.
+- `apps/web/`: Next.js App Router, Tailwind UI, direct viem wallet flows, and Phaser hub. B owns it; the migration from Vite is complete.
 - `scripts/`: seed, deploy, focused E2E and smoke commands. A owns them.
 
 One root Bun lockfile. Start with direct viem access; no backend service, database, queue, Turbo or Nx. Reuse the official v4 starter/helpers and OpenZeppelin before custom code. Keep AGENTS.md short and use the existing scoped guides; do not turn it into another product spec.
@@ -31,13 +31,13 @@ Implementation model routing remains exact: **gpt-6-sol high** for contracts, cu
 
 The [frontend architecture](technical-spec.md#frontend-architecture) owns the selected stack and client boundaries. Keep this work within the existing BP slices:
 
-1. **BP02/BP06 preparation:** migrate the read-only shell to Next.js App Router in `apps/web`, add Tailwind through PostCSS, and preserve deployment validation and real round reads. Replace Vite entry/configuration, scripts, and TypeScript setup. Keep the root Bun workspace commands usable. Check typecheck, production build, and the missing-deployment/live-local browser states.
-2. **BP03:** add the injected-wallet connection through viem, account/network handling, and enrollment approval/receipt flow. Start with prepared MetaMask test accounts for rehearsal.
-3. **BP04:** agree the authenticated quote method in `packages/chain`, then implement input bounds, approval, simulation, attack, receipts, and stale-stage recovery.
-4. **BP05/BP06:** build the three boss forms and responsive Tailwind arena, with confirmed stage changes, keyboard support, reduced motion, and refresh recovery.
-5. **BP07/BP10/BP11:** add redemption, separate NFT claims, expiry, verified Robinhood configuration, and the existing two-wallet browser journey.
+1. **BP02/BP06:** complete. The Next.js app uses Tailwind and `@boss-pool/chain` for verified deployment reads. Local and Base Sepolia manifests are selected independently. Browser checks cover missing deployment and live local state.
+2. **BP03:** implemented. The wallet UI handles injected-wallet connection, account and chain changes, approvals, enrollment, and receipts. Manual wallet-popup acceptance remains open.
+3. **BP04:** implemented. The Router quote works before approval. The SDK simulates authenticated attacks after approval and handles stale quotes, typed receipt results, and recovery.
+4. **BP05/BP06:** implemented. The Phaser hub and boss scenes use confirmed round state, keyboard input, and reduced-motion handling.
+5. **BP07/BP10/BP11:** SDK reward and NFT operations are implemented. The local journey passed. Base Sepolia deployment and gameplay remain open; historical Robinhood receipts do not close that gate.
 
-The stack decision does not mark the migration complete. Keep BP01's original Vite build evidence as historical evidence and record fresh Next.js verification when that implementation lands.
+BP01's Vite build evidence is historical. Current Next.js checks are listed in the [SDK verification record](sdk-verification.md).
 
 ## Candidate demo configuration
 
@@ -73,7 +73,7 @@ Keep the existing epic and 14 child issue identifiers. Rewrite their scopes rath
 | [BP08](https://github.com/0xroylee/eth-global-2026-tokyo/issues/9) | Use held ROY to buy BossHP as an optional attack route | P1 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | A + B | 1–2 h |
 | [BP09](https://github.com/0xroylee/eth-global-2026-tokyo/issues/10) | Replay shared attacks and distinguish damage from reward holdings | P1 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | A + B | 2–3 h |
 | [BP10](https://github.com/0xroylee/eth-global-2026-tokyo/issues/11) | Expire unfinished rounds and preserve outstanding reward custody | P0 | [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3), [BP07](https://github.com/0xroylee/eth-global-2026-tokyo/issues/8) | A + B | 2–3 h |
-| [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | Deploy and rehearse the real two-wallet Robinhood testnet journey | P0 | [BP06](https://github.com/0xroylee/eth-global-2026-tokyo/issues/7), [BP07](https://github.com/0xroylee/eth-global-2026-tokyo/issues/8), [BP10](https://github.com/0xroylee/eth-global-2026-tokyo/issues/11) | A + B | 2–4 h |
+| [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | Deploy and rehearse the real two-wallet Base Sepolia journey (original issue targets Robinhood) | P0 | [BP06](https://github.com/0xroylee/eth-global-2026-tokyo/issues/7), [BP07](https://github.com/0xroylee/eth-global-2026-tokyo/issues/8), [BP10](https://github.com/0xroylee/eth-global-2026-tokyo/issues/11) | A + B | 2–4 h |
 | [BP12](https://github.com/0xroylee/eth-global-2026-tokyo/issues/13) | Publish current judge evidence and complete Uniswap feedback | P0 | [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | A + B | 1–2 h |
 | [BP13](https://github.com/0xroylee/eth-global-2026-tokyo/issues/14) | Evaluate emissions or vesting for a future round only | P2 | [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | A + B | 2–4 h |
 | [BP14](https://github.com/0xroylee/eth-global-2026-tokyo/issues/15) | Define a World ID eligibility policy before integrating it | P2 | [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | A + B | 3–5 h |
@@ -94,7 +94,7 @@ flowchart TD
     E --> G["BP07: HP redemption and NFT"]
     B --> H["BP10: expiry and recovery"]
     G --> H
-    F --> I["BP11: Robinhood E2E and rehearsal"]
+    F --> I["BP11: Base Sepolia E2E and rehearsal"]
     G --> I
     H --> I
     I --> J["BP12: public evidence and submission"]
@@ -111,7 +111,7 @@ flowchart TD
 | First hit | BP04: real two-hop attack and ordinary HP delivery | Quote, signature, pending/failure/success feedback | Partial real attack, balances and stageSold agree |
 | Progression | BP05: same-pool refill, next LP, defeat, atomic failure | BP06: confirmed transitions, refresh and reduced motion | All three stages and two resets pass the shared scenario |
 | Rewards and terminal paths | BP07/BP10: transferable redemption, NFT, expiry, post-deadline custody | Claim approvals/results and expired/defeated screens | HP cannot be reused; prize and reserve balances reconcile |
-| Release | BP11: resolve target-chain access, provenance, deploy and run the same route | Testnet browser rehearsal and recording | Real Robinhood receipts, source commit, usable UI |
+| Release | BP11: verify Base Sepolia access and provenance, deploy, then run the same route | Testnet browser rehearsal and recording | Base Sepolia receipts, source commit, usable UI |
 | Submit | Supply verified source/transaction links and implementation observations | BP12: pitch, public README, recording and feedback form | Public evidence plus form confirmation |
 
 B's fixture work can start before its integration dependencies finish. It does not close an issue until the real route works. A publishes interface updates in the same change as contract changes; B does not maintain handwritten duplicate ABIs.
@@ -143,7 +143,7 @@ Reuse that fixture for a failed-transition rollback, the reproduced final-base-u
 
 A slice closes only when its acceptance works through the real relevant contracts and client, with a tested commit and focused evidence. Passing older burn-based prototypes does not satisfy no-burn/token-redemption acceptance. Do not rerun unrelated tests after documentation-only changes.
 
-BP01 is the local feasibility gate. Chain readiness is reported there but remains a separate **BP11 release gate** if the RPC is blocked. Local development may continue; release cannot be called Robinhood-tested without target-chain receipts.
+BP01 is the local feasibility gate. Chain readiness is reported there but remains a separate **BP11 release gate**. Local development may continue; release cannot be called Base Sepolia-tested without target-chain receipts. Existing Robinhood receipts are historical and do not close this gate.
 
 ## Evidence and unresolved gates
 
@@ -151,9 +151,9 @@ BP01 is the local feasibility gate. Chain readiness is reported there but remain
 | --- | --- | --- |
 | Verified historical | A pinned real-v4 burn-based same-pool refill scenario passed one local test; integer dust and settlement were recorded | Superseded for current local behavior by [BP01 evidence](bp01-foundation.md) |
 | Verified arithmetic | Finite-range clearing, refill costs and fixed-denominator redemption calculations reconcile | A verifies real no-burn delivery/redemption in BP01 and BP07 |
-| Observed blocker | Official testnet RPC again returned HTTP 403 from this environment on 26 September | A resolves endpoint access and provenance in BP11 |
-| Verified local | BP01 records no-burn contracts, transferable redemption, the shared real-v4 scenario, and a read-only web shell | Reuse [BP01 evidence](bp01-foundation.md) until relevant implementation changes |
-| Unverified | Complete browser game, Next.js/Tailwind migration, deployable production permissions, browser two-wallet E2E, and Robinhood deployment | P0 acceptance remains open |
+| Verified RPC access | Base Sepolia chain `84532` responds through the configured viem client. No Boss Pool deployment is verified there. | A deploys and verifies the team fixture in BP11 |
+| Verified local | BP01 records no-burn contracts and the shared real-v4 scenario. The current SDK and player app have separate fresh checks. | See [BP01 evidence](bp01-foundation.md) and the [SDK verification record](sdk-verification.md) |
+| Unverified | Base Sepolia deployment and player journey, manual browser-wallet popup acceptance, and production contract audit | Keep the BP11 target-chain and user wallet checks open |
 | Working default | Transferable HP surrendered without burn; fixed fees; candidate funding amounts | Revisit only on a user decision or contrary execution evidence |
 | Not supplied | Teammate handles, checkpoint timezone and a verified submission deadline | Leave issues unassigned; use relative checkpoints |
 

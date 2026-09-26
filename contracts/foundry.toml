@@ -15,4 +15,4 @@ remappings = [
 ]
 
 [rpc_endpoints]
-robinhood = "${ROBINHOOD_RPC_URL}"
+base_sepolia = "${BASE_SEPOLIA_RPC_URL}"

@@ -17,11 +17,11 @@ export function RoundStatePanel({ deployment }: { deployment: DeploymentState })
           <p className="eyebrow mb-2">ON-CHAIN ROUND STATE</p>
           <h2 className="text-[19px] font-medium tracking-[-0.025em]">
             {live
-              ? `Connected to ${deployment.network === "local" ? "local contracts" : "Robinhood testnet"}`
+              ? `Connected to ${deployment.network === "local" ? "local contracts" : deployment.network === "base-sepolia" ? "Base Sepolia" : "historical Robinhood testnet"}`
               : deployment.kind === "loading"
                 ? "Checking the selected deployment"
                 : deployment.kind === "not-deployed"
-                  ? `No ${deployment.network === "local" ? "local" : "testnet"} manifest found`
+                  ? `No ${deployment.network === "local" ? "local" : deployment.network === "base-sepolia" ? "Base Sepolia" : "historical Robinhood"} manifest found`
                   : "Deployment unavailable"}
           </h2>
         </div>

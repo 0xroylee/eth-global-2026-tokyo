@@ -8,6 +8,7 @@ import { useBossPool, type NetworkKey } from "@/lib/useBossPool";
 import { BossEntryPanel } from "./BossEntryPanel";
 import { GameCanvas } from "./GameCanvas";
 import { RoundStatePanel } from "./RoundStatePanel";
+import { HubSoundControl } from "./HubSoundControl";
 
 export function GameShell() {
   const bridge = useMemo(() => new GameBridge(), []);
@@ -23,7 +24,6 @@ export function GameShell() {
     return () => {
       offNear();
       offEnter();
-      bridge.clear();
     };
   }, [bridge]);
 
@@ -102,16 +102,14 @@ export function GameShell() {
           <span className="rounded-md border border-[#f5b04a]/40 bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-[#f5b04a]">
             HUB · FIXTURE MAP
           </span>
-          <span className="rounded-md bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-dim">
-            HUB // 001
-          </span>
+          <HubSoundControl bridge={bridge} />
         </div>
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between p-3">
           <span className="rounded-md bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.14em] text-dim">
             WASD / ARROWS · MOVE
           </span>
-          <GatePrompt bossId={nearBoss} hidden={openBoss !== null} />
+          <GatePrompt bossId={nearBoss} hidden={openBoss !== null || showChain} />
         </div>
 
         {openBoss && <BossEntryPanel boss={findBoss(openBoss)} arena={arena} onClose={closeBoss} />}
@@ -170,11 +168,12 @@ function Hud({
         <select
           id="network-choice"
           value={arena.network}
-          onChange={(event) => arena.selectNetwork(event.target.value as "local" | "robinhood-testnet")}
+          onChange={(event) => arena.selectNetwork(event.target.value as NetworkKey)}
           className="rounded-full border border-white/12 bg-panel px-3 py-2 font-mono text-[9px] tracking-[0.08em] text-fog outline-none focus:border-accent/70"
         >
           <option value="local">LOCAL · 31337</option>
-          <option value="robinhood-testnet">ROBINHOOD · 46630</option>
+          <option value="base-sepolia">BASE SEPOLIA · 84532</option>
+          <option value="robinhood-testnet">ROBINHOOD · 46630 · HISTORICAL</option>
         </select>
         {arena.wallet.account ? (
           <div className="flex items-center gap-2 rounded-full border border-white/12 px-2.5 py-1.5">

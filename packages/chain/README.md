@@ -1,6 +1,8 @@
 # Boss Pool chain SDK
 
-`@boss-pool/chain` is a browser-safe viem SDK for the local chain (31337) and Robinhood testnet (46630). It uses the generated Foundry ABIs in `src/generated/abi.ts`. Deployment, round creation, and maker administration remain CLI operations.
+`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses the generated Foundry ABIs in `src/generated/abi.ts`. Deployment, round creation, and maker administration remain CLI operations. No Boss Pool Base Sepolia manifest is published yet.
+
+Use `createLocalPublicClient` and `fetchLocalDeployment` for Anvil. Use `createBaseSepoliaPublicClient` and `fetchBaseSepoliaDeployment` for Base Sepolia. Use the corresponding `createRobinhoodPublicClient` and `fetchRobinhoodDeployment` exports only to inspect the historical Robinhood deployment. Public deployment manifests omit RPC URLs. Pass the endpoint separately to the client.
 
 ## Verify a deployment and read state
 
@@ -80,7 +82,7 @@ Each pending operation exposes a JSON-safe `request` with transaction hash, chai
 
 Use `DecodedContractEvent` results instead of decoding receipt logs in UI code. Logs are filtered to verified contract emitters and include the transaction hash and log index for effect deduplication. Broad contract errors remain unchanged; the SDK only maps known stale quote, stage, expiry, and slippage conditions to requote results.
 
-The faucet is available only through the verified local or Robinhood test-token deployment. It mints MockUSD and is not a real asset. Never place private keys, Bun/Node imports, or environment loading in browser imports.
+`faucetMockUSD` mints the configured deployment's test-only MockUSD. The current local and historical Robinhood deployments expose it. Base Sepolia has no Boss Pool manifest yet. MockUSD is not a real asset. Never place private keys, Bun/Node imports, or environment loading in browser imports.
 
 ## Compatibility exports
 

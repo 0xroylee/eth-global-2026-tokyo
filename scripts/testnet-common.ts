@@ -22,11 +22,11 @@ import {
   royTokenAbi,
 } from "@boss-pool/chain";
 
-export const ROBINHOOD_CHAIN_ID = 46_630;
-export const DEFAULT_ROBINHOOD_RPC_URL = "https://rpc.testnet.chain.robinhood.com/rpc";
+export const BASE_SEPOLIA_CHAIN_ID = 84_532;
+export const DEFAULT_BASE_SEPOLIA_RPC_URL = "https://sepolia.base.org";
 export const TESTNET_MANIFEST_PATH = path.join(
   process.cwd(),
-  "apps/web/public/deployments/robinhood-testnet.json",
+  "apps/web/public/deployments/base-sepolia.json",
 );
 export const CONTRACTS_DIR = path.join(process.cwd(), "contracts");
 
@@ -77,17 +77,17 @@ export function loadTestnetConfig(): TestnetConfig {
 }
 
 export function loadTestnetPublicConfig(): { rpcUrl: string; client: PublicClient } {
-  const rpcUrl = process.env.ROBINHOOD_RPC_URL ?? DEFAULT_ROBINHOOD_RPC_URL;
+  const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL ?? DEFAULT_BASE_SEPOLIA_RPC_URL;
   let url: URL;
   try {
     url = new URL(rpcUrl);
   } catch {
-    throw new Error("ROBINHOOD_RPC_URL must be a valid HTTPS endpoint.");
+    throw new Error("BASE_SEPOLIA_RPC_URL must be a valid HTTPS endpoint.");
   }
-  if (url.protocol !== "https:" || !url.hostname) throw new Error("ROBINHOOD_RPC_URL must be an HTTPS endpoint.");
+  if (url.protocol !== "https:" || !url.hostname) throw new Error("BASE_SEPOLIA_RPC_URL must be an HTTPS endpoint.");
   const chain = defineChain({
-    id: ROBINHOOD_CHAIN_ID,
-    name: "Robinhood Testnet",
+    id: BASE_SEPOLIA_CHAIN_ID,
+    name: "Base Sepolia",
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: { default: { http: [rpcUrl] } },
   });
@@ -106,15 +106,15 @@ export function readPrivateKey(name: string): Hex {
   return value as Hex;
 }
 
-export async function assertRobinhoodChain(client: PublicClient): Promise<bigint> {
+export async function assertBaseSepoliaChain(client: PublicClient): Promise<bigint> {
   let chainId: number;
   try {
     chainId = await client.getChainId();
   } catch {
-    throw new Error("Could not reach the configured Robinhood RPC endpoint.");
+    throw new Error("Could not reach the configured Base Sepolia RPC endpoint.");
   }
-  if (chainId !== ROBINHOOD_CHAIN_ID) {
-    throw new Error(`Refusing testnet operation on chain ${chainId}; expected ${ROBINHOOD_CHAIN_ID}.`);
+  if (chainId !== BASE_SEPOLIA_CHAIN_ID) {
+    throw new Error(`Refusing testnet operation on chain ${chainId}; expected ${BASE_SEPOLIA_CHAIN_ID}.`);
   }
   return client.getBlockNumber({ cacheTime: 0 });
 }
@@ -156,9 +156,9 @@ export async function runDeploymentScript(config: TestnetConfig, broadcast: bool
     "script",
     "script/DeployBossPool.s.sol:DeployBossPool",
     "--chain",
-    String(ROBINHOOD_CHAIN_ID),
+    String(BASE_SEPOLIA_CHAIN_ID),
     "--rpc-url",
-    "robinhood",
+    "base_sepolia",
     "--fork-block-number",
     forkBlock.toString(),
     "--sender",
@@ -178,7 +178,7 @@ export async function runDeploymentScript(config: TestnetConfig, broadcast: bool
       timeout: 900_000,
       maxBuffer: 16 * 1024 * 1024,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, ROBINHOOD_RPC_URL: config.rpcUrl },
+      env: { ...process.env, BASE_SEPOLIA_RPC_URL: config.rpcUrl },
     });
   } catch (error) {
     const result = error as { stdout?: string | Buffer; stderr?: string | Buffer; message?: string };
@@ -204,7 +204,7 @@ export function parseDeploymentSummary(output: string): DeploymentSummary {
   const addresses = value.addresses as Record<string, unknown> | undefined;
   const requiredAddresses = ["hook", "router", "bossHP", "roy", "mockUSD", "collectibles", "poolManager"];
   if (
-    value.chainId !== ROBINHOOD_CHAIN_ID ||
+    value.chainId !== BASE_SEPOLIA_CHAIN_ID ||
     !addresses || requiredAddresses.some((key) => !isAddressValue(addresses[key])) ||
     !isAddressValue(value.deployer) || !value.pools || !value.config || !value.prefunded
   ) throw new Error("Forge deployment summary does not match the expected testnet deployment shape.");
@@ -226,7 +226,7 @@ export type ReceiptEvidence = {
 export async function readRouterCreationReceipt(summary: DeploymentSummary) {
   const pathToBroadcast = path.join(
     CONTRACTS_DIR,
-    `broadcast/DeployBossPool.s.sol/${ROBINHOOD_CHAIN_ID}/run-latest.json`,
+    `broadcast/DeployBossPool.s.sol/${BASE_SEPOLIA_CHAIN_ID}/run-latest.json`,
   );
   let broadcast: { receipts?: Array<Record<string, unknown>> };
   try {
@@ -280,7 +280,7 @@ export async function verifyDeploymentOnChain(
     client.getChainId(),
     client.getTransactionReceipt({ hash: transactionHash }),
   ]);
-  if (chainId !== ROBINHOOD_CHAIN_ID) throw new Error("RPC chain changed during deployment verification.");
+  if (chainId !== BASE_SEPOLIA_CHAIN_ID) throw new Error("RPC chain changed during deployment verification.");
   if (receipt.status !== "success" || receipt.blockNumber !== blockNumber) {
     throw new Error("Router creation receipt does not match the successful Foundry receipt block.");
   }
@@ -392,7 +392,7 @@ async function retryPinnedRead<T>(blockNumber: bigint, read: () => Promise<T>): 
       if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
-  throw new Error(`Robinhood RPC did not expose final deployment state at block ${blockNumber} after bounded retries.`, { cause: lastError });
+  throw new Error(`Base Sepolia RPC did not expose final deployment state at block ${blockNumber} after bounded retries.`, { cause: lastError });
 }
 
 export function parseForgeGas(output: string): { gas: bigint; requiredWei: bigint } {
@@ -475,7 +475,7 @@ export function redactSensitive(message: string, additionalSecrets: string[] = [
   let sanitized = message;
   const secrets = [
     ...additionalSecrets,
-    process.env.ROBINHOOD_RPC_URL ?? "",
+    process.env.BASE_SEPOLIA_RPC_URL ?? "",
     process.env.TESTNET_DEPLOYER_PRIVATE_KEY ?? "",
     process.env.TESTNET_PLAYER_PRIVATE_KEY ?? "",
   ].filter(Boolean);

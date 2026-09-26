@@ -2,6 +2,8 @@
 
 Updated 26 September 2026. The current implementation uses the generated contract ABI, the `@boss-pool/chain` SDK, and the Next.js player app. The package API and setup examples live in the [chain SDK guide](../packages/chain/README.md).
 
+The active target is Base Sepolia, chain `84532`. Its RPC is reachable, but no Boss Pool manifest or deployment has been verified there. The browser defaults to Base Sepolia and shows a not-deployed state while the manifest is absent. The testnet transactions below are historical Robinhood evidence on chain `46630`; they do not verify Base Sepolia.
+
 The quote contract changes came from `b98b685fadd5`. The SDK implementation is `1802ffd6d812`. The reader retry and UI integration use `4033d7b7818f`; the NFT completion run used that SDK source. The current Robinhood PoolManager is deployed from pinned v4-core source by the team. It is a non-production fixture, not an official Robinhood deployment.
 
 ## Local and browser checks
@@ -11,11 +13,11 @@ The local suite and SDK journey passed these checks:
 - `bun run contracts:test` passed five focused Foundry cases for the HP0 round, HP1 normalized pricing and refill, public quote non-persistence, setup deadlines, and expiry.
 - `bun run typecheck` and `bun run web:build` passed.
 - The isolated local Anvil SDK journey recorded 18 successful transactions. It compared a public quote made before approval with actual execution, then exercised two wallets through all three stages, both refills, HP transfer and redemption, and both victory NFTs. Its ignored journal is `.scratch/boss-pool-exercise/local-20260926T073451640Z-45689.json`.
-- Browser checks showed a public attack quote without a connected wallet and rendered the defeated round. The header network selector changed from Local to Robinhood Testnet with ArrowDown and Enter. The amount field kept native caret movement when ArrowLeft was pressed.
+- Browser checks showed an active local round and a public attack quote without a connected wallet. Base Sepolia showed not deployed with no quote because its manifest is absent. The header selector changed from Local to Base Sepolia with ArrowDown and Enter. The amount field kept native caret movement after End and ArrowLeft.
 
 The browser checks did not automate an injected wallet's popup. Use the [manual wallet checklist](#manual-browser-wallet-checklist) to verify connect, network switch, approval, rejection, signing, and receipt recovery.
 
-## Robinhood testnet run
+## Historical Robinhood testnet run
 
 The original SDK gameplay process submitted 16 successful transactions on chain `46630`. It completed enrollment, all three stages and refills, BossHP transfer, and both prize claims. It stopped before the two victory-NFT writes when an RPC returned `Block at number "124485152" could not be found.` The saved gameplay journal therefore has `status: "failed"`, but all 16 recorded transactions succeeded.
 

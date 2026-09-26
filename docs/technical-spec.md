@@ -1,6 +1,6 @@
 # Boss Pool technical specification
 
-Status (26 September 2026): The no-burn contracts, transferable HP redemption, and public real-v4 fixture are implemented. Five focused Foundry cases pass. The browser uses the Next.js player UI and the shared viem SDK for public quotes, reads, and wallet actions. A local 18-transaction journey passed. On Robinhood testnet, the initial SDK run confirmed 16 player transactions through reward redemption, then stopped before NFT writes on a pinned-block RPC read error. A separate completion run confirmed both NFT claims. See the [SDK verification record](sdk-verification.md); the older [foundation report](testnet-verification.md) remains a historical report for its original deployment.
+Status (26 September 2026): The no-burn contracts, transferable HP redemption, and public real-v4 fixture are implemented. Five focused Foundry cases pass. The browser uses the Next.js player UI and shared viem SDK for public quotes, reads, and wallet actions. A local 18-transaction journey passed. Base Sepolia `84532` is the current target. The RPC is reachable, but no Boss Pool deployment is verified there. Historical Robinhood evidence records 16 successful gameplay transactions followed by two separate NFT claims. See the [SDK verification record](sdk-verification.md) and [historical foundation report](testnet-verification.md).
 
 ## Architecture
 
@@ -30,7 +30,7 @@ Actual source uses `BossHP`, `RoyToken`, `MockUSD`, and `BossCollectibles` under
 | Contract | Responsibilities and custody | Main interface |
 | --- | --- | --- |
 | `BossHook` | Canonical pool and stage rules, sold counters, enrollment, frozen eligible supply, prize/entry ledgers, starter ROY, permanently surrendered HP, and reward/NFT eligibility | `activate`, `enroll`, `claimReward(hpAmount)`, `claimVictoryNFT`, `expire`, expired-prize recovery; authenticated v4 callbacks and router-only transition methods |
-| `BossRouter` | User attack context, two-hop settlement, stage HP reserve, game-owned LP positions, recovered ROY, bounded refills and LP top-ups | `attackWithMockUSD`, PoolManager-only `unlockCallback`, hook-authorized setup; optional held-ROY route later |
+| `BossRouter` | User attack context, two-hop settlement, stage HP reserve, game-owned LP positions, recovered ROY, bounded refills and LP top-ups | Public `quoteAttackWithMockUSD`, authenticated `attackWithMockUSD`, PoolManager-only `unlockCallback`, hook-authorized setup; optional held-ROY route later |
 | `BossHPToken` | Standard fixed-supply ERC-20; initial allocation to the controlled reserve, ordinary player transfers, no public mint or burn extension | Standard ERC-20 interface |
 | `RoyToken` | Standard fixed-supply ERC-20 for LP and starter allocations | Standard ERC-20 interface |
 | `RoyCollectibles` | Entry and victory NFTs in one standard ERC-721 collection; minting authorized only by BossHook | Restricted entry/victory mint methods |
@@ -87,7 +87,7 @@ Preserve the existing approval, simulation, receipt, and stale-stage rules. Enro
 
 ## Deployment and proof gate
 
-The target is Robinhood testnet chain ID `46630`. The repository's Bun/viem client reaches the documented RPC and verifies the chain. The current deployment is a team fixture with its own PoolManager built from the pinned v4-core source. It is not an official Robinhood deployment. Local proof and testnet receipts remain separate evidence.
+The target is Base Sepolia chain ID `84532` at `https://sepolia.base.org`. The repository's read-only client reaches the chain. No Boss Pool Base Sepolia manifest or deployment exists yet. The team-deployed Robinhood fixture uses its own PoolManager built from pinned v4-core source. It is historical evidence, not an official Robinhood manager or Base Sepolia deployment.
 
 BP01 adapts the existing compact real-v4 scenario: both swaps, ordinary BossHP delivery, cumulative purchase accounting, current-stage completion, and the reserve-funded refill/LP addition with all deltas settled. Reuse existing upstream fixtures and settlement helpers. Then verify the real target-chain route after deployment.
 
@@ -207,4 +207,4 @@ Use one reusable two-wallet core/E2E fixture with real v4 core. Adapt the existi
 
 Assert unchanged BossHP supply, output delivery equal to eligible issuance, transfers moving reward rights without new damage, one-time surrender of each redeemed token amount, locked protocol HP including after the deadline, rejection of player sell-backs, no premature future liquidity, no same-attack stage spill, reserve/player fund separation, single release per stage, and zero unsettled deltas. Extend the shared claim journey with a token transfer and redemption rather than adding a separate suite. Keep the failed-release rollback and focused access-control/expiry checks where the browser cannot reliably exercise them.
 
-Do not add a separate simulator, exhaustive test matrix, or broad fuzz suite. Reuse focused evidence until relevant code changes. The `BossPoolCoreTest` fixture exercises the local no-burn path. Neither local nor team testnet evidence establishes production audit coverage or an official Robinhood PoolManager integration.
+Do not add a separate simulator, exhaustive test matrix, or broad fuzz suite. Reuse focused evidence until relevant code changes. The `BossPoolCoreTest` fixture exercises the local no-burn path. Neither local nor team testnet evidence establishes production audit coverage or an official Base PoolManager integration.

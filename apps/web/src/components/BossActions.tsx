@@ -267,7 +267,7 @@ export function BossActions({
   const attackBlockReason = !account
     ? "Connect a wallet before enrolling or attacking. The quote remains public."
     : arena.networkMismatch
-      ? `Switch the wallet to ${arena.network === "local" ? "local chain 31337" : "Robinhood testnet 46630"}.`
+      ? `Switch the wallet to ${arena.network === "local" ? "local chain 31337" : arena.network === "base-sepolia" ? "Base Sepolia 84532" : "historical Robinhood testnet 46630"}.`
       : !active
         ? round?.status === 3 ? "The boss has been defeated." : round?.status === 4 ? "This round has expired." : "Attack is unavailable outside an active round."
         : !enrolled

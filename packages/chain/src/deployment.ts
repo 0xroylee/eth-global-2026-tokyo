@@ -15,10 +15,12 @@ import {
 
 export const LOCAL_CHAIN_ID = 31337;
 export const ROBINHOOD_TESTNET_CHAIN_ID = 46630;
+export const BASE_SEPOLIA_CHAIN_ID = 84532;
 export const DEFAULT_LOCAL_RPC_URL = "http://127.0.0.1:8547";
 export const DEFAULT_ROBINHOOD_RPC_URL = "https://rpc.testnet.chain.robinhood.com/rpc";
+export const DEFAULT_BASE_SEPOLIA_RPC_URL = "https://sepolia.base.org";
 
-export type SupportedChainId = typeof LOCAL_CHAIN_ID | typeof ROBINHOOD_TESTNET_CHAIN_ID;
+export type SupportedChainId = typeof LOCAL_CHAIN_ID | typeof ROBINHOOD_TESTNET_CHAIN_ID | typeof BASE_SEPOLIA_CHAIN_ID;
 export type DeploymentAddresses = {
   hook: Address;
   router: Address;
@@ -46,7 +48,13 @@ export type RobinhoodDeploymentManifest = ManifestBase & {
   network: "robinhood-testnet";
   rpcUrl?: never;
 };
-export type DeploymentManifest = LocalDeploymentManifest | RobinhoodDeploymentManifest;
+export type BaseSepoliaDeploymentManifest = ManifestBase & {
+  chainId: typeof BASE_SEPOLIA_CHAIN_ID;
+  network: "base-sepolia";
+  rpcUrl?: never;
+};
+export type TestnetDeploymentManifest = RobinhoodDeploymentManifest | BaseSepoliaDeploymentManifest;
+export type DeploymentManifest = LocalDeploymentManifest | TestnetDeploymentManifest;
 export type VerifiedDeployment = {
   readonly manifest: DeploymentManifest;
   readonly chainId: SupportedChainId;
@@ -84,13 +92,25 @@ export function parseDeployment(value: unknown): DeploymentManifest {
     }
     return value as RobinhoodDeploymentManifest;
   }
+  if (manifest.chainId === BASE_SEPOLIA_CHAIN_ID) {
+    if (manifest.network !== "base-sepolia" || manifest.rpcUrl !== undefined) {
+      throw new Error("Base Sepolia deployment manifests require the base-sepolia label and must omit the RPC URL.");
+    }
+    return value as BaseSepoliaDeploymentManifest;
+  }
   void checkedAddresses;
-  throw new Error("Unsupported Boss Pool chain. Expected local 31337 or Robinhood testnet 46630.");
+  throw new Error("Unsupported Boss Pool chain. Expected local 31337, Base Sepolia 84532, or historical Robinhood testnet 46630.");
 }
 
 export function parseLocalDeployment(value: unknown): LocalDeploymentManifest {
   const manifest = parseDeployment(value);
   if (manifest.chainId !== LOCAL_CHAIN_ID) throw new Error("Deployment manifest is not for the local chain.");
+  return manifest;
+}
+
+export function parseBaseSepoliaDeployment(value: unknown): BaseSepoliaDeploymentManifest {
+  const manifest = parseDeployment(value);
+  if (manifest.chainId !== BASE_SEPOLIA_CHAIN_ID) throw new Error("Deployment manifest is not for Base Sepolia.");
   return manifest;
 }
 
@@ -106,18 +126,18 @@ export function isLocalRpcUrl(rpcUrl: unknown): rpcUrl is string {
 }
 
 export function createPublicClientForNetwork(chainId: SupportedChainId, rpcUrl: string): PublicClient {
-  const network = chainId === LOCAL_CHAIN_ID ? "Boss Pool Local" : "Robinhood Testnet";
+  const network = networkName(chainId);
   if (chainId === LOCAL_CHAIN_ID && !isLocalRpcUrl(rpcUrl)) {
     throw new Error("Local RPC URL must be a credential-free loopback HTTP URL.");
   }
-  if (chainId === ROBINHOOD_TESTNET_CHAIN_ID) {
+  if (chainId !== LOCAL_CHAIN_ID) {
     let url: URL;
     try {
       url = new URL(rpcUrl);
     } catch {
-      throw new Error("Robinhood RPC URL must be a valid HTTPS endpoint.");
+      throw new Error(`${network} RPC URL must be a valid HTTPS endpoint.`);
     }
-    if (url.protocol !== "https:" || !url.hostname) throw new Error("Robinhood RPC URL must use HTTPS.");
+    if (url.protocol !== "https:" || !url.hostname) throw new Error(`${network} RPC URL must use HTTPS.`);
   }
   const chain = defineChain({
     id: chainId,
@@ -137,6 +157,10 @@ export function createRobinhoodPublicClient(rpcUrl = DEFAULT_ROBINHOOD_RPC_URL):
   return createPublicClientForNetwork(ROBINHOOD_TESTNET_CHAIN_ID, rpcUrl);
 }
 
+export function createBaseSepoliaPublicClient(rpcUrl = DEFAULT_BASE_SEPOLIA_RPC_URL): PublicClient {
+  return createPublicClientForNetwork(BASE_SEPOLIA_CHAIN_ID, rpcUrl);
+}
+
 export async function fetchLocalDeployment(): Promise<LocalDeploymentManifest> {
   return fetchDeployment("/deployments/local.json", parseLocalDeployment);
 }
@@ -145,6 +169,14 @@ export async function fetchRobinhoodDeployment(): Promise<RobinhoodDeploymentMan
   const deployment = await fetchDeployment("/deployments/robinhood-testnet.json", parseDeployment);
   if (deployment.chainId !== ROBINHOOD_TESTNET_CHAIN_ID) {
     throw new Error("Deployment manifest is not for Robinhood testnet.");
+  }
+  return deployment;
+}
+
+export async function fetchBaseSepoliaDeployment(): Promise<BaseSepoliaDeploymentManifest> {
+  const deployment = await fetchDeployment("/deployments/base-sepolia.json", parseBaseSepoliaDeployment);
+  if (deployment.chainId !== BASE_SEPOLIA_CHAIN_ID) {
+    throw new Error("Deployment manifest is not for Base Sepolia.");
   }
   return deployment;
 }
@@ -222,7 +254,7 @@ export async function verifyDeployment(
 
   const chain = client.chain ?? defineChain({
     id: manifest.chainId,
-    name: manifest.chainId === LOCAL_CHAIN_ID ? "Boss Pool Local" : "Robinhood Testnet",
+    name: networkName(manifest.chainId),
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: { default: { http: [] } },
   });
@@ -260,6 +292,12 @@ export function isVerifiedDeployment(value: unknown, client?: PublicClient): val
 
 function managerAddress(manifest: DeploymentManifest): Address {
   return manifest.addresses.poolManager;
+}
+
+function networkName(chainId: SupportedChainId): string {
+  if (chainId === LOCAL_CHAIN_ID) return "Boss Pool Local";
+  if (chainId === BASE_SEPOLIA_CHAIN_ID) return "Base Sepolia";
+  return "Robinhood Testnet (historical)";
 }
 
 function isAddressValue(value: unknown): value is Address {

@@ -1,0 +1,13 @@
+Asset: Boss Pool RPG Hub environment atlas
+File: tiles.png
+Dimensions: 256x128 pixels
+Grid: 16x16 pixels, 16 columns x 8 rows, margin 0, spacing 0
+Origin: Original artwork created for Boss Pool
+Created: 2026-09-26
+
+The supplied RPG screenshot was used only as broad visual direction for palette,
+density, path treatment, environmental layering, and warmth. No screenshot tile
+or identifiable artwork was copied, traced, or included.
+
+This atlas is part of the Boss Pool project. Existing character and boss artwork
+in public/images is separate from this environment atlas.

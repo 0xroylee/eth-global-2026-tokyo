@@ -6,27 +6,34 @@ import {
 import { readState, type RoundSnapshot } from "./reads";
 
 export {
+  BASE_SEPOLIA_CHAIN_ID,
+  DEFAULT_BASE_SEPOLIA_RPC_URL,
   DEFAULT_LOCAL_RPC_URL,
   DEFAULT_ROBINHOOD_RPC_URL,
   LOCAL_CHAIN_ID,
   ROBINHOOD_TESTNET_CHAIN_ID,
+  createBaseSepoliaPublicClient,
   createLocalPublicClient,
   createPublicClientForNetwork,
   createRobinhoodPublicClient,
+  fetchBaseSepoliaDeployment,
   fetchLocalDeployment,
   fetchRobinhoodDeployment,
   isLocalRpcUrl,
   isVerifiedDeployment,
   parseDeployment,
+  parseBaseSepoliaDeployment,
   parseLocalDeployment,
   verifyDeployment,
 } from "./deployment";
 export type {
+  BaseSepoliaDeploymentManifest,
   DeploymentAddresses,
   DeploymentManifest,
   LocalDeploymentManifest,
   RobinhoodDeploymentManifest,
   SupportedChainId,
+  TestnetDeploymentManifest,
   VerifiedDeployment,
 } from "./deployment";
 export { readPlayer, readRound, readState } from "./reads";

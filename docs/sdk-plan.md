@@ -2,6 +2,8 @@
 
 Approved for implementation on 26 September 2026. This plan extends the existing private `@boss-pool/chain` workspace. The user accepted public pre-enrollment quotes and a router-native quote entry with a fresh testnet deployment. Use GPT-6 Luna at xhigh for implementation and GPT-6 Sol at high for independent review. The user later selected CLI testnet plus page testing for this delivery and will perform the real browser-wallet popup acceptance manually.
 
+The SDK and player UI are implemented. The later chain-target change (`4cecdb3`) makes Base Sepolia `84532` the active testnet target. Robinhood `46630` support and receipts remain historical. The Base RPC is reachable, but there is no Boss Pool Base Sepolia manifest or deployment.
+
 ## Confirmed scope
 
 The user selected these behaviors:
@@ -21,19 +23,19 @@ The supported attack is `MockUSD -> ROY -> BossHP`. There is no deployed held-RO
 | Quote access | Public preview before wallet connection or enrollment. Check player readiness separately before Attack. |
 | Quote implementation | Add a router-native quote entry, prove that it cannot persist game changes, and deploy a new testnet fixture. |
 
-The current testnet fixture is already Defeated and redeemed. Preserve its evidence and create a new active fixture for the updated ABI and full gameplay rehearsal. RPC storage overrides are not the shipping quote path.
+The historical Robinhood fixture is Defeated and redeemed. Preserve its receipts and do not reuse its manifest on Base Sepolia. Deploy a separate Base Sepolia fixture before running the full gameplay rehearsal. RPC storage overrides are not the shipping quote path.
 
 ## Existing code to reuse
 
 - [`packages/chain/src/index.ts`](../packages/chain/src/index.ts) already exports generated ABIs, local deployment parsing, local verification, and round reads. Extend it instead of recreating those operations in the app.
 - [`scripts/exercise-boss-pool.ts`](../scripts/exercise-boss-pool.ts) contains the proven enrollment, approval, attack simulation, receipt decoding, claim, and same-block snapshot sequence. Extract browser-safe functions, then make this script consume them.
 - [`scripts/testnet-common.ts`](../scripts/testnet-common.ts) contains testnet identity and wiring checks. Separate those from fresh-fixture assertions. A valid deployment remains valid after stage 0, defeat, or expiry.
-- [`apps/web/src/lib/useLocalRound.ts`](../apps/web/src/lib/useLocalRound.ts) is the current local reader. `GameShell` and `RoundStatePanel` each start a polling instance. Replace that duplication with one React owner of round state.
+- [`apps/web/src/lib/useBossPool.ts`](../apps/web/src/lib/useBossPool.ts) owns selected-network reads, wallet state, pending writes, and receipt recovery. Keep one poller and one React owner of round state.
 - [`apps/web/src/game/bridge.ts`](../apps/web/src/game/bridge.ts) already connects React and Phaser. Extend this bridge with confirmed game data instead of placing wallet or RPC calls inside scenes.
 
 Do not import CLI scripts into the SDK. They contain Node filesystem calls, environment loading, private-key handling, and executable entry points.
 
-The [testnet report](testnet-verification.md) proves the existing gameplay path. It does not prove the proposed preapproval quote path.
+The [historical testnet report](testnet-verification.md) records a Robinhood gameplay path. The [SDK verification report](sdk-verification.md) records the quote-capable SDK exercise and separates its 16-transaction gameplay run from the two-transaction NFT completion. Neither report is Base Sepolia deployment evidence.
 
 ## SDK and app responsibilities
 
@@ -50,7 +52,7 @@ flowchart LR
 
 The SDK accepts a public client, a verified deployment, and an optional wallet client for player writes. Public reads and previews work without a wallet. The app discovers the provider, requests accounts, switches networks, and owns React state. Private keys never enter browser imports.
 
-Use only chain `31337` for the local environment and `46630` for Robinhood testnet. Keep endpoint selection separate from deployment addresses. The public testnet manifest intentionally omits the RPC URL.
+Use chain `31337` for local Anvil and chain `84532` for Base Sepolia. The SDK retains chain `46630` for the historical Robinhood manifest. Keep RPC selection separate from deployment addresses. Public testnet manifests omit the RPC URL. No Base Sepolia manifest is present until a real, verified deployment occurs.
 
 Verify chain ID, deployment evidence, deployed code, and immutable contract wiring when loading a deployment. Do not require an Active round, zero counters, an untouched prize, or a future deadline during ordinary verification. Recheck wallet chain and account before each write.
 
@@ -58,7 +60,7 @@ Keep token values as `bigint`: MockUSD has 6 decimals, ROY and BossHP have 18. K
 
 ## Proposed player-facing operations
 
-These names describe the planned interface, not functions available today. Keep the existing generated ABI exports.
+These operations are implemented in `@boss-pool/chain`; use the package README for runnable setup and API examples. Keep the generated ABI exports as the contract authority.
 
 | Operation | Result needed by the frontend |
 | --- | --- |

@@ -4,10 +4,10 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { formatEther, type Hex } from "viem";
 import {
-  ROBINHOOD_CHAIN_ID,
+  BASE_SEPOLIA_CHAIN_ID,
   TESTNET_MANIFEST_PATH,
   assertCancunTransientStorage,
-  assertRobinhoodChain,
+  assertBaseSepoliaChain,
   assertCommittedDeploymentSources,
   loadTestnetConfig,
   loadTestnetPublicConfig,
@@ -22,7 +22,7 @@ import {
 } from "./testnet-common";
 
 const root = process.cwd();
-const pendingPath = path.join(root, ".scratch/deliver-code/contract-guide-testnet/pending-robinhood-deployment.json");
+const pendingPath = path.join(root, ".scratch/deliver-code/contract-guide-testnet/pending-base-sepolia-deployment.json");
 const completedPendingDir = path.join(root, ".scratch/deliver-code/contract-guide-testnet/verified-deployments");
 
 type DeploymentProvenance = {
@@ -38,8 +38,8 @@ type DeploymentProvenance = {
 };
 type DeploymentManifest = DeploymentSummary & {
   schemaVersion: 1;
-  network: "robinhood-testnet";
-  chainId: 46_630;
+  network: "base-sepolia";
+  chainId: 84_532;
   deployedAtBlock: number;
   verifiedAtBlock: number;
   deploymentTxHash: Hex;
@@ -49,8 +49,8 @@ type DeploymentManifest = DeploymentSummary & {
 type PendingDeploymentIntent = {
   schemaVersion: 1;
   state: "broadcasting" | "summary-recorded" | "receipts-recorded";
-  network: "robinhood-testnet";
-  chainId: 46_630;
+  network: "base-sepolia";
+  chainId: 84_532;
   startedAt: string;
   startingBlock: number;
   provenance: DeploymentProvenance;
@@ -75,13 +75,13 @@ async function deployTeamFixture(): Promise<void> {
   await refuseExistingPendingDeployment();
   const config = loadTestnetConfig();
   const frozenSourceCommit = assertCommittedDeploymentSources();
-  await assertRobinhoodChain(config.client);
+  await assertBaseSepoliaChain(config.client);
   await assertCancunTransientStorage(config.client);
   const dryRun = await runDeploymentScript(config, false);
   const estimate = parseForgeGas(dryRun);
   const deployBudget = estimate.requiredWei * 125n / 100n;
   const [freshHead, deployerBalance, currentGasPrice] = await Promise.all([
-    assertRobinhoodChain(config.client),
+    assertBaseSepoliaChain(config.client),
     config.client.getBalance({ address: config.deployerAddress }),
     config.client.getGasPrice(),
   ]);
@@ -96,8 +96,8 @@ async function deployTeamFixture(): Promise<void> {
   const intent: PendingDeploymentIntent = {
     schemaVersion: 1,
     state: "broadcasting",
-    network: "robinhood-testnet",
-    chainId: ROBINHOOD_CHAIN_ID,
+    network: "base-sepolia",
+    chainId: BASE_SEPOLIA_CHAIN_ID,
     startedAt: new Date().toISOString(),
     startingBlock: Number(freshHead),
     provenance,
@@ -141,7 +141,7 @@ async function deployTeamFixture(): Promise<void> {
   const manifest = makePublicManifest(summary, receipt, verifiedAtBlock, provenance);
   await publishVerifiedDeployment(manifest);
   await archivePendingDeployment(recordedIntent);
-  console.log(`Verified chain ${ROBINHOOD_CHAIN_ID} team deployment at final setup block ${verifiedAtBlock}.`);
+  console.log(`Verified chain ${BASE_SEPOLIA_CHAIN_ID} team deployment at final setup block ${verifiedAtBlock}.`);
   console.log(`Router creation receipt: ${receipt.transactionHash}`);
   console.log(`${receipt.receipts.length} successful deployment receipts were checked on chain.`);
   console.log(`Gas estimate: ${estimate.gas} units, ${formatEther(estimate.requiredWei)} testETH before buffer.`);
@@ -153,7 +153,7 @@ async function verifyPendingDeployment(): Promise<void> {
   let intent = parsePendingIntent(await readFile(pendingPath, "utf8"));
   if (!intent.summary) {
     throw new Error(
-      `Broadcast intent is incomplete. Inspect ${path.relative(root, pendingPath)} and contracts/broadcast/DeployBossPool.s.sol/46630/run-latest.json plus Robinhood receipts; do not rebroadcast.`,
+      `Broadcast intent is incomplete. Inspect ${path.relative(root, pendingPath)} and contracts/broadcast/DeployBossPool.s.sol/84532/run-latest.json plus Base Sepolia receipts; do not rebroadcast.`,
     );
   }
   const summary = parseDeploymentSummary(`BOSS_POOL_DEPLOYMENT_JSON=${JSON.stringify(intent.summary)}`);
@@ -201,7 +201,7 @@ async function verifyPendingDeployment(): Promise<void> {
   const manifest = makePublicManifest(summary, receipt, verifiedAtBlock, provenance);
   await publishVerifiedDeployment(manifest);
   await archivePendingDeployment(intent);
-  console.log(`Verified pending team deployment on chain ${ROBINHOOD_CHAIN_ID} at block ${verifiedAtBlock}.`);
+  console.log(`Verified pending team deployment on chain ${BASE_SEPOLIA_CHAIN_ID} at block ${verifiedAtBlock}.`);
   console.log(`Wrote public address/config metadata to ${path.relative(root, TESTNET_MANIFEST_PATH)}; no new transaction was sent.`);
 }
 
@@ -220,7 +220,7 @@ function makeProvenance(frozenSourceCommit: string): DeploymentProvenance {
     solidityVersion: foundryValue("solc_version"),
     evmVersion: foundryValue("evm_version"),
     deploymentScript: "DeployBossPool.s.sol:DeployBossPool",
-    poolManager: "Team deployed from the pinned v4-core source; no official Robinhood PoolManager is claimed.",
+    poolManager: "Team deployed from the pinned v4-core source; no official Base PoolManager is claimed.",
   };
 }
 
@@ -233,8 +233,8 @@ function makePublicManifest(
   return {
     ...summary,
     schemaVersion: 1,
-    network: "robinhood-testnet",
-    chainId: ROBINHOOD_CHAIN_ID,
+    network: "base-sepolia",
+    chainId: BASE_SEPOLIA_CHAIN_ID,
     deployedAtBlock: Number(receipt.blockNumber),
     verifiedAtBlock: Number(verifiedAtBlock),
     deploymentTxHash: receipt.transactionHash,
@@ -252,14 +252,14 @@ function parsePendingIntent(contents: string): PendingDeploymentIntent {
   }
   const item = value as Record<string, unknown>;
   if (
-    item.schemaVersion !== 1 || item.network !== "robinhood-testnet" || item.chainId !== ROBINHOOD_CHAIN_ID ||
+    item.schemaVersion !== 1 || item.network !== "base-sepolia" || item.chainId !== BASE_SEPOLIA_CHAIN_ID ||
     !["broadcasting", "summary-recorded", "receipts-recorded"].includes(String(item.state)) ||
     typeof item.startedAt !== "string" || typeof item.startingBlock !== "number" || !Number.isSafeInteger(item.startingBlock) ||
     !item.provenance || typeof item.provenance !== "object" || "rpcUrl" in item || "privateKey" in item
   ) throw new Error("Pending broadcast intent is malformed; inspect its file and do not rebroadcast.");
   if (item.summary !== undefined) {
     const summary = parseDeploymentSummary(`BOSS_POOL_DEPLOYMENT_JSON=${JSON.stringify(item.summary)}`);
-    if (summary.chainId !== ROBINHOOD_CHAIN_ID) throw new Error("Pending Forge summary is not for Robinhood testnet.");
+    if (summary.chainId !== BASE_SEPOLIA_CHAIN_ID) throw new Error("Pending Forge summary is not for Base Sepolia.");
   }
   if (item.state === "receipts-recorded") {
     if (
@@ -299,7 +299,7 @@ async function verifyRecordedReceipts(client: Awaited<ReturnType<typeof loadTest
       if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
-  throw new Error("Foundry's saved deployment receipts were not all visible on Robinhood testnet after bounded retries.", { cause: lastError });
+  throw new Error("Foundry's saved deployment receipts were not all visible on Base Sepolia after bounded retries.", { cause: lastError });
 }
 
 async function createExclusivePendingIntent(intent: PendingDeploymentIntent): Promise<void> {
@@ -338,7 +338,7 @@ async function archivePendingDeployment(intent: PendingDeploymentIntent): Promis
     await mkdir(completedPendingDir, { recursive: true });
     const verifiedAtBlock = intent.verifiedAtBlock ?? intent.startingBlock;
     const transaction = intent.deploymentTxHash ?? "incomplete";
-    const fileName = `robinhood-${verifiedAtBlock}-${transaction.slice(2, 10)}.json`;
+    const fileName = `base-sepolia-${verifiedAtBlock}-${transaction.slice(2, 10)}.json`;
     await rename(pendingPath, path.join(completedPendingDir, fileName));
   } catch {
     // The public manifest is already verified; preserving the pending file is safe and blocks accidental rebroadcast.

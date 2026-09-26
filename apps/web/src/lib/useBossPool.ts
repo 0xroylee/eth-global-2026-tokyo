@@ -3,10 +3,13 @@
 import {
   createBossPoolSdk,
   createPublicClientForNetwork,
+  DEFAULT_BASE_SEPOLIA_RPC_URL,
   DEFAULT_LOCAL_RPC_URL,
   DEFAULT_ROBINHOOD_RPC_URL,
+  fetchBaseSepoliaDeployment,
   fetchLocalDeployment,
   fetchRobinhoodDeployment,
+  BASE_SEPOLIA_CHAIN_ID,
   LOCAL_CHAIN_ID,
   parseDeployment,
   RequoteRequiredError,
@@ -27,7 +30,7 @@ import {
 import { createWalletClient, custom, defineChain, UserRejectedRequestError, type EIP1193Provider, type WalletClient } from "viem";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-export type NetworkKey = "local" | "robinhood-testnet";
+export type NetworkKey = "local" | "base-sepolia" | "robinhood-testnet";
 
 type VerifiedContext = {
   key: NetworkKey;
@@ -86,9 +89,9 @@ const REFRESH_MS = 5_000;
 const PENDING_STORAGE_KEY = "boss-pool.pending-write.v2";
 
 export function useBossPool() {
-  const [network, setNetwork] = useState<NetworkKey>("local");
+  const [network, setNetwork] = useState<NetworkKey>("base-sepolia");
   const [wallet, setWallet] = useState<WalletState>({ status: "checking" });
-  const [deployment, setDeployment] = useState<DeploymentState>({ kind: "loading", network: "local" });
+  const [deployment, setDeployment] = useState<DeploymentState>({ kind: "loading", network: "base-sepolia" });
   const [refreshVersion, setRefreshVersion] = useState(0);
   const contextRef = useRef<VerifiedContext | null>(null);
   const pendingRef = useRef<StoredPending | null>(null);
@@ -96,16 +99,13 @@ export function useBossPool() {
   const [pendingRecord, setPendingRecord] = useState<StoredPending | null>(null);
   const [writeState, setWriteState] = useState<WriteState>({ status: "idle" });
 
-  const selectedChainId: SupportedChainId = network === "local" ? LOCAL_CHAIN_ID : ROBINHOOD_TESTNET_CHAIN_ID;
-  const fallbackRpcUrl =
-    network === "local"
-      ? process.env.NEXT_PUBLIC_BOSS_POOL_LOCAL_RPC_URL ?? DEFAULT_LOCAL_RPC_URL
-      : process.env.NEXT_PUBLIC_BOSS_POOL_ROBINHOOD_RPC_URL ?? DEFAULT_ROBINHOOD_RPC_URL;
+  const selectedChainId: SupportedChainId = chainIdForNetwork(network);
+  const fallbackRpcUrl = rpcUrlForNetwork(network);
   const targetRpcUrl = deployment.kind === "live" && deployment.network === network ? deployment.rpcUrl : fallbackRpcUrl;
   const walletChain = useMemo(
     () => defineChain({
       id: selectedChainId,
-      name: network === "local" ? "Boss Pool Local" : "Robinhood Testnet",
+      name: networkName(network),
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       rpcUrls: { default: { http: [targetRpcUrl] } },
     }),
@@ -196,10 +196,8 @@ export function useBossPool() {
 
     const poll = async () => {
       try {
-        const manifest = network === "local" ? await fetchLocalDeployment() : await fetchRobinhoodDeployment();
-        const rpcUrl = network === "local"
-          ? process.env.NEXT_PUBLIC_BOSS_POOL_LOCAL_RPC_URL ?? (manifest.chainId === LOCAL_CHAIN_ID ? manifest.rpcUrl : DEFAULT_LOCAL_RPC_URL)
-          : process.env.NEXT_PUBLIC_BOSS_POOL_ROBINHOOD_RPC_URL ?? DEFAULT_ROBINHOOD_RPC_URL;
+        const manifest = await fetchDeploymentForNetwork(network);
+        const rpcUrl = deploymentRpcUrl(network, manifest.chainId === LOCAL_CHAIN_ID ? manifest.rpcUrl : undefined);
         let context = contextRef.current;
         if (!context || !sameDeployment(context, network, manifest, rpcUrl)) {
           const publicClient = createPublicClientForNetwork(selectedChainId, rpcUrl);
@@ -301,7 +299,7 @@ export function useBossPool() {
           method: "wallet_addEthereumChain",
           params: [{
             chainId: chainHex,
-            chainName: network === "local" ? "Boss Pool Local" : "Robinhood Testnet",
+            chainName: networkName(network),
             nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
             rpcUrls: [targetRpcUrl],
           }],
@@ -461,12 +459,10 @@ export function useBossPool() {
 }
 
 async function loadVerifiedContext(network: NetworkKey, originManifest?: DeploymentManifest): Promise<VerifiedContext> {
-  const manifest = originManifest ?? (network === "local" ? await fetchLocalDeployment() : await fetchRobinhoodDeployment());
-  const chainId = network === "local" ? LOCAL_CHAIN_ID : ROBINHOOD_TESTNET_CHAIN_ID;
+  const manifest = originManifest ?? await fetchDeploymentForNetwork(network);
+  const chainId = chainIdForNetwork(network);
   if (manifest.chainId !== chainId) throw new Error("Saved deployment identity does not match its originating network.");
-  const rpcUrl = network === "local"
-    ? process.env.NEXT_PUBLIC_BOSS_POOL_LOCAL_RPC_URL ?? (manifest.chainId === LOCAL_CHAIN_ID ? manifest.rpcUrl : DEFAULT_LOCAL_RPC_URL)
-    : process.env.NEXT_PUBLIC_BOSS_POOL_ROBINHOOD_RPC_URL ?? DEFAULT_ROBINHOOD_RPC_URL;
+  const rpcUrl = deploymentRpcUrl(network, manifest.chainId === LOCAL_CHAIN_ID ? manifest.rpcUrl : undefined);
   const publicClient = createPublicClientForNetwork(chainId, rpcUrl);
   const deployment = await verifyDeployment(publicClient, manifest);
   return {
@@ -477,6 +473,34 @@ async function loadVerifiedContext(network: NetworkKey, originManifest?: Deploym
     deployment,
     publicSdk: createBossPoolSdk({ publicClient, deployment }),
   };
+}
+
+async function fetchDeploymentForNetwork(network: NetworkKey): Promise<DeploymentManifest> {
+  if (network === "local") return fetchLocalDeployment();
+  if (network === "base-sepolia") return fetchBaseSepoliaDeployment();
+  return fetchRobinhoodDeployment();
+}
+
+function chainIdForNetwork(network: NetworkKey): SupportedChainId {
+  if (network === "local") return LOCAL_CHAIN_ID;
+  if (network === "base-sepolia") return BASE_SEPOLIA_CHAIN_ID;
+  return ROBINHOOD_TESTNET_CHAIN_ID;
+}
+
+function networkName(network: NetworkKey): string {
+  if (network === "local") return "Boss Pool Local";
+  if (network === "base-sepolia") return "Base Sepolia";
+  return "Robinhood Testnet (historical)";
+}
+
+function rpcUrlForNetwork(network: NetworkKey): string {
+  if (network === "local") return process.env.NEXT_PUBLIC_BOSS_POOL_LOCAL_RPC_URL ?? DEFAULT_LOCAL_RPC_URL;
+  if (network === "base-sepolia") return process.env.NEXT_PUBLIC_BOSS_POOL_BASE_SEPOLIA_RPC_URL ?? DEFAULT_BASE_SEPOLIA_RPC_URL;
+  return process.env.NEXT_PUBLIC_BOSS_POOL_ROBINHOOD_RPC_URL ?? DEFAULT_ROBINHOOD_RPC_URL;
+}
+
+function deploymentRpcUrl(network: NetworkKey, manifestRpcUrl?: string): string {
+  return network === "local" ? process.env.NEXT_PUBLIC_BOSS_POOL_LOCAL_RPC_URL ?? manifestRpcUrl ?? DEFAULT_LOCAL_RPC_URL : rpcUrlForNetwork(network);
 }
 
 function isSkippedApproval<T>(value: PendingOperation<T> | SkippedApproval): value is SkippedApproval {
@@ -491,7 +515,7 @@ function readStoredPending(): StoredPending | null {
     if (!value || typeof value !== "object") return null;
     const item = value as Partial<StoredPending>;
     if (
-      (item.network !== "local" && item.network !== "robinhood-testnet") ||
+      (item.network !== "local" && item.network !== "base-sepolia" && item.network !== "robinhood-testnet") ||
       !item.request || typeof item.request !== "object" || typeof item.submittedAt !== "number" || !item.manifest
     ) return null;
     const manifest = parseDeployment(item.manifest);
@@ -503,7 +527,7 @@ function readStoredPending(): StoredPending | null {
       !isAddressValue(request.account) || !isAddressValue(request.target) ||
       typeof request.calldata !== "string" || !/^0x[\da-fA-F]*$/.test(request.calldata)
     ) return null;
-    const expectedChainId = item.network === "local" ? LOCAL_CHAIN_ID : ROBINHOOD_TESTNET_CHAIN_ID;
+    const expectedChainId = chainIdForNetwork(item.network);
     if (request.chainId !== expectedChainId || manifest.chainId !== expectedChainId) return null;
     return { network: item.network, manifest, submittedAt: item.submittedAt, request: request as PendingRequest };
   } catch {

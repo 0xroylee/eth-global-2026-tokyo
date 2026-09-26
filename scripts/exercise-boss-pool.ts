@@ -28,6 +28,7 @@ import {
   createLocalPublicClient,
   createBossPoolSdk,
   DEFAULT_LOCAL_RPC_URL,
+  BASE_SEPOLIA_CHAIN_ID,
   isLocalRpcUrl,
   LOCAL_CHAIN_ID,
   parseDeployment,
@@ -43,6 +44,7 @@ import {
   RequoteRequiredError,
 } from "@boss-pool/chain";
 import {
+  assertBaseSepoliaChain,
   assertCancunTransientStorage,
   loadTestnetConfig,
   sanitizeSecrets,
@@ -60,7 +62,7 @@ const partialAttackUSD = 1_000_000n;
 const clearingAttackUSD = 1_000_000_000n;
 const firstClaimHP = 1n * 10n ** 18n;
 
-type NetworkName = "local" | "testnet";
+type NetworkName = "local" | "base-sepolia";
 type ExerciseAddresses = {
   hook: Address;
   router: Address;
@@ -204,12 +206,13 @@ async function localRuntime(): Promise<Runtime> {
 async function testnetRuntime(onConfig: (config: ReturnType<typeof loadTestnetConfig>) => void): Promise<Runtime> {
   const config = loadTestnetConfig();
   onConfig(config);
+  await assertBaseSepoliaChain(config.client);
   await assertCancunTransientStorage(config.client);
-  const manifestPath = path.join(root, "apps/web/public/deployments/robinhood-testnet.json");
+  const manifestPath = path.join(root, "apps/web/public/deployments/base-sepolia.json");
   const raw = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
   if (
-    raw.schemaVersion !== 1 || raw.network !== "robinhood-testnet" ||
-    raw.chainId !== 46_630 || typeof raw.deploymentTxHash !== "string" ||
+    raw.schemaVersion !== 1 || raw.network !== "base-sepolia" ||
+    raw.chainId !== BASE_SEPOLIA_CHAIN_ID || typeof raw.deploymentTxHash !== "string" ||
     typeof raw.deployedAtBlock !== "number" || !Number.isSafeInteger(raw.deployedAtBlock) || raw.deployedAtBlock < 0
   ) throw new Error("The testnet manifest is missing its verified chain and deployment receipt metadata.");
   const manifest = parseDeployment(raw);
@@ -220,7 +223,7 @@ async function testnetRuntime(onConfig: (config: ReturnType<typeof loadTestnetCo
   const deploymentBlockFromManifest = BigInt(raw.deployedAtBlock);
   const deployment = await verifyDeployment(config.client, manifest);
 
-  const chain = robinhoodChain(config.rpcUrl);
+  const chain = baseSepoliaChain(config.rpcUrl);
   const transport = http(config.rpcUrl, { retryCount: 0, timeout: 15_000 });
   const accountA = privateKeyToAccount(config.deployerKey);
   const accountB = privateKeyToAccount(config.playerBKey);
@@ -232,8 +235,8 @@ async function testnetRuntime(onConfig: (config: ReturnType<typeof loadTestnetCo
     B: makeWallet("B", accountB.address, walletClientB, publicSdk.withWallet(walletClientB)),
   };
   return {
-    network: "testnet",
-    chainId: 46_630,
+    network: "base-sepolia",
+    chainId: BASE_SEPOLIA_CHAIN_ID,
     client: config.client,
     wallets,
     sdk: { public: publicSdk, A: wallets.A.sdk, B: wallets.B.sdk },
@@ -254,10 +257,10 @@ function localChain(rpcUrl: string): Chain {
   });
 }
 
-function robinhoodChain(rpcUrl: string): Chain {
+function baseSepoliaChain(rpcUrl: string): Chain {
   return defineChain({
-    id: 46_630,
-    name: "Robinhood Testnet",
+    id: BASE_SEPOLIA_CHAIN_ID,
+    name: "Base Sepolia",
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: { default: { http: [rpcUrl] } },
   });

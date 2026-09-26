@@ -71,7 +71,7 @@ bun run contracts:test
 
 That Foundry suite uses its own ephemeral contracts. One HP0 case covers the full two-wallet round, all three stages, claims, and NFTs. A separate HP1 case covers normalized pricing and the first stage refill. Other cases check deadline setup rejection and expiry. Passing the suite does not create transactions in the Anvil node.
 
-Run the browser app with `bun run web:dev`. Select Local or Robinhood Testnet in the header. Public round reads and attack quotes work without a connected wallet. Connect a wallet to enroll, attack, redeem BossHP, or claim a victory NFT. Each write asks the wallet to sign and waits for a checked receipt before the app shows its result. The SDK also exposes BossHP transfer, but the current browser UI has no transfer form. See the [chain SDK guide](../packages/chain/README.md) for the public API.
+Run the browser app with `bun run web:dev`. It defaults to Base Sepolia. Select Local or historical Robinhood from the header to read those supported networks. Public round reads and quotes work without a connected wallet when a verified manifest exists. Base Sepolia currently has no manifest, so the app shows Not Deployed and disables quotes and writes. Connect a wallet to enroll, attack, redeem BossHP, or claim a victory NFT on a deployed round. The SDK also exposes BossHP transfer, but the browser has no transfer form. See the [chain SDK guide](../packages/chain/README.md) for the public API.
 
 ## Know the tokens and amounts
 
@@ -293,11 +293,11 @@ The contracts have no public BossHP sell-back route, held-ROY attack route, LP r
 
 The local Foundry suite runs the full two-wallet HP0 flow against a pinned real PoolManager, including three stages, claims, and NFTs. A focused HP1 test covers normalized price and the first stage refill. The local Anvil SDK exercise completed both wallets through all stages, rewards, and victory NFTs in 18 successful transactions. `local:seed` and `local:exercise` send transactions only to loopback Anvil; `local:smoke` is read-only. The browser uses the same SDK operations with an injected wallet.
 
-## Robinhood testnet status
+## Base Sepolia testnet target
 
-The repository's Bun/viem client reaches Robinhood testnet at chain `46630`. The current manifest points to a team-deployed, non-production fixture. The team deployed its own PoolManager from pinned v4-core source. It is not an official Robinhood manager. The older [foundation report](testnet-verification.md) preserves the first fixture's addresses and receipts; it does not describe the current SDK fixture. Never use an Anvil development key on Robinhood testnet.
+Base Sepolia is the active target, chain `84532`, with RPC `https://sepolia.base.org`. The repository's read-only viem probe reached this chain. No Boss Pool Base Sepolia deployment has been verified, and `apps/web/public/deployments/base-sepolia.json` is intentionally absent. The deploy script would create a team-owned PoolManager from pinned v4-core source. It does not assume an official Base PoolManager. Never use an Anvil development key on any public testnet.
 
-The root `package.json` provides all three testnet commands. `testnet:preflight` checks chain ID, Cancun transient-storage support, signer balances, and a Forge deployment dry run. It sends no transaction. `testnet:deploy` repeats those checks, broadcasts a team deployment, verifies contract code and receipts, then writes `apps/web/public/deployments/robinhood-testnet.json`. A deployment needs enough testETH for both deployment and the two-wallet exercise.
+The repository provides three Base Sepolia commands. `testnet:preflight` checks chain ID, Cancun transient-storage support, signer balances, and a pinned Forge deployment dry run. It sends no transaction. `testnet:deploy` repeats those checks, broadcasts only after an exclusive pending intent is saved, verifies every receipt and the final active stage-0 state, then writes the Base Sepolia manifest. `testnet:exercise` requires that verified manifest before it can send player transactions.
 
 | Command | Purpose |
 | --- | --- |
@@ -305,7 +305,7 @@ The root `package.json` provides all three testnet commands. `testnet:preflight`
 | `testnet:deploy` | Deploys the team fixture, verifies the contract code and receipts, and writes the public deployment manifest. |
 | `testnet:exercise` | Uses Player A (deployer) and Player B (separate key) to enroll, attack all three stages, verify refunds/refills, transfer BossHP, redeem rewards, and claim victory NFTs. It writes per-receipt evidence under ignored `.scratch/boss-pool-exercise/` and does not update the public manifest. |
 
-Set `ROBINHOOD_RPC_URL`, `TESTNET_DEPLOYER_PRIVATE_KEY`, and `TESTNET_PLAYER_PRIVATE_KEY` in the ignored `.env.testnet.local` file. Player A uses the deployer key; Player B uses the separate player key. Invoke the scripts through Bun's `--env-file` option:
+Set `BASE_SEPOLIA_RPC_URL`, `TESTNET_DEPLOYER_PRIVATE_KEY`, and `TESTNET_PLAYER_PRIVATE_KEY` in the ignored `.env.testnet.local` file. Player A uses the deployer key; Player B uses the separate player key. Invoke the scripts through Bun's `--env-file` option:
 
 ```sh
 bun --env-file=.env.testnet.local run testnet:preflight
@@ -313,6 +313,6 @@ bun --env-file=.env.testnet.local run testnet:deploy
 bun --env-file=.env.testnet.local run testnet:exercise
 ```
 
-The exercise confirms Player A matches the manifest deployer, verifies deployment receipts and code, checks chain `46630`, and uses each signer only inside the Bun process. Do not put key values or the RPC URL in command arguments, manifests, logs, or the web bundle. The current defeated fixture cannot run this journey again. Deploy a fresh team fixture before using `testnet:exercise`.
+The exercise confirms Player A matches the manifest deployer, verifies deployment receipts and code, checks chain `84532`, and uses each signer only inside the Bun process. Do not put key values or the RPC URL in command arguments, manifests, logs, or the web bundle. No Base Sepolia exercise can run until a verified deployment and funded test wallets exist.
 
-The latest SDK exercise recorded 16 successful player transactions through both prize claims. The process stopped before either NFT write when an RPC returned a block-not-found error for the pinned read. A separate completion run then sent and verified the two NFT claims. The two phases total 18 successful transactions, not one uninterrupted run. The [SDK verification report](sdk-verification.md) links the separate [gameplay evidence](evidence/robinhood-sdk-gameplay.json) and [NFT completion evidence](evidence/robinhood-sdk-nft-completion.json). Expiry and prize-refund behavior are covered by local Foundry checks only; neither has a Robinhood testnet receipt.
+The separate historical [Robinhood foundation report](testnet-verification.md) and [SDK verification report](sdk-verification.md) preserve prior deployment evidence. The SDK journey recorded 16 successful gameplay transactions, then stopped before NFT writes on a pinned-block RPC read error. A later run separately confirmed both NFTs. These phases total 18 successful transactions, not one uninterrupted run. The associated evidence files are [gameplay](evidence/robinhood-sdk-gameplay.json) and [NFT completion](evidence/robinhood-sdk-nft-completion.json). Expiry and prize-refund behavior have local Foundry coverage only; they have no Robinhood or Base Sepolia receipts.
