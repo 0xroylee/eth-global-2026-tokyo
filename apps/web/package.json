@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "map:build": "bun scripts/generate-hub-map.ts",
+    "map:check": "bun scripts/check-hub-map.ts"
   },
   "dependencies": {
     "@boss-pool/chain": "workspace:*",
