@@ -382,8 +382,6 @@ export function GameShell() {
           arena={arena}
           onClose={closeBoss}
           suspendInput={writeState.status === "prompting"}
-          onConnect={connectWallet}
-          onSwitch={switchWallet}
         />
       )}
       {openBoss && !isBattleGate(openBoss) && <BossRosterCard boss={findBoss(openBoss)} onClose={closeBoss} />}
