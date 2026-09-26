@@ -19,6 +19,7 @@ import { HubGuide, ReplayGuide } from "./HubGuide";
 import { HubHelp } from "./HubHelp";
 import { HubRouteNotice } from "./HubRouteNotice";
 import { HubSoundControl } from "./HubSoundControl";
+import { MarketBoard } from "./MarketBoard";
 import { RoundStatePanel } from "./RoundStatePanel";
 import { SageDialog } from "./SageDialog";
 import { WorldChannel } from "./WorldChannel";
@@ -36,12 +37,14 @@ export function GameShell() {
   const [showChain, setShowChain] = useState(false);
   const [nearRoute, setNearRoute] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
+  const [nearMarket, setNearMarket] = useState(false);
+  const [marketOpen, setMarketOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [canvasPhase, setCanvasPhase] = useState<CanvasPhase>("loading");
   const guide = useHubGuide(bridge, nearBoss);
   const welcomeOpen = guide.hydrated && guide.state.step === "welcome" && canvasPhase !== "error";
-  const gameDialogOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen || actionsOpen;
+  const gameDialogOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || marketOpen || helpOpen || actionsOpen;
   const overlayOpen = gameDialogOpen || sageOpen || Boolean(arena.wallet.busy);
   const sageScript = useMemo(() => sageLines(sageState), [sageState]);
 
@@ -60,6 +63,7 @@ export function GameShell() {
   // that rides on `openBoss`.
   const enterGate = useCallback((bossId: BossId) => setOpenBoss(bossId), []);
   const inspectRoute = useCallback(() => setRouteOpen(true), []);
+  const inspectMarket = useCallback(() => setMarketOpen(true), []);
 
   useEffect(() => {
     arena.selectDefaultEncounter(arena.network);
@@ -70,6 +74,8 @@ export function GameShell() {
     const offEnter = bridge.on("gate:enter", ({ bossId }) => enterGate(bossId));
     const offRouteNear = bridge.on("region:near", ({ exitId }) => setNearRoute(exitId !== null));
     const offRouteInspect = bridge.on("region:inspect", () => inspectRoute());
+    const offMarketNear = bridge.on("market:near", ({ marketId }) => setNearMarket(marketId !== null));
+    const offMarketInspect = bridge.on("market:inspect", () => inspectMarket());
     const offSageNear = bridge.on("npc:near", ({ npcId }) => setNearSage(npcId === "sage"));
     const offSageTalk = bridge.on("npc:talk", ({ npcId }) => {
       // Read the payload instead of assuming the sage: a second NPC lands here later.
@@ -80,10 +86,12 @@ export function GameShell() {
       offEnter();
       offRouteNear();
       offRouteInspect();
+      offMarketNear();
+      offMarketInspect();
       offSageNear();
       offSageTalk();
     };
-  }, [bridge, enterGate, inspectRoute, openSage]);
+  }, [bridge, enterGate, inspectRoute, inspectMarket, openSage]);
 
   useEffect(() => {
     guide.syncModal(overlayOpen);
@@ -104,6 +112,7 @@ export function GameShell() {
         setOpenBoss(null);
         setShowChain(false);
         setRouteOpen(false);
+        setMarketOpen(false);
         setHelpOpen(false);
         setActionsOpen(false);
         if (welcomeOpen) guide.start();
@@ -178,6 +187,7 @@ export function GameShell() {
 
   const closeBoss = useCallback(() => setOpenBoss(null), []);
   const closeRoute = useCallback(() => setRouteOpen(false), []);
+  const closeMarket = useCallback(() => setMarketOpen(false), []);
   const closeHelp = useCallback(() => setHelpOpen(false), []);
   const replayFromHelp = useCallback(() => {
     setHelpOpen(false);
@@ -199,6 +209,7 @@ export function GameShell() {
   const showBossPrompt = nearBoss !== null && !overlayOpen && !guideInspect;
   const showSagePrompt = nearSage && !overlayOpen && !showBossPrompt && !guideInspect;
   const showRoutePrompt = nearRoute && !showSagePrompt && !showBossPrompt && !overlayOpen && !guideInspect;
+  const showMarketPrompt = nearMarket && !showRoutePrompt && !showSagePrompt && !showBossPrompt && !overlayOpen && !guideInspect;
   const live = isHubEncounter(deployment);
   const chainLabel =
     deployment.kind === "loading" ? "CHECKING" : live ? "LIVE" : deployment.kind === "error" ? "RPC ERROR" : "NOT DEPLOYED";
@@ -361,6 +372,7 @@ export function GameShell() {
             <GatePrompt bossId={nearBoss} hidden={!showBossPrompt} onEnter={enterGate} />
             <SagePrompt hidden={!showSagePrompt} onTalk={openSage} />
             <RoutePrompt hidden={!showRoutePrompt} onInspect={inspectRoute} />
+            <MarketPrompt hidden={!showMarketPrompt} onInspect={inspectMarket} />
           </div>
           <div className="pointer-events-auto flex flex-wrap items-center gap-2">
             <button
@@ -399,6 +411,7 @@ export function GameShell() {
       )}
       {openBoss && !isBattleGate(openBoss) && <BossRosterCard boss={findBoss(openBoss)} onClose={closeBoss} />}
       {routeOpen && <HubRouteNotice onClose={closeRoute} />}
+      {marketOpen && <MarketBoard deployment={deployment} onClose={closeMarket} />}
       {helpOpen && <HubHelp onClose={closeHelp} onReplay={replayFromHelp} />}
       {sageOpen && <SageDialog lines={sageScript} onClose={closeSage} />}
       {showChain && (
@@ -496,6 +509,27 @@ function RoutePrompt({ hidden, onInspect }: { hidden: boolean; onInspect: () => 
       }`}
     >
       {hidden ? "" : "E · INSPECT ROUTE"}
+    </button>
+  );
+}
+
+/** The market opens the pool ledger, not a gate: the prompt says inspect, never enter. */
+function MarketPrompt({ hidden, onInspect }: { hidden: boolean; onInspect: () => void }) {
+  return (
+    <button
+      type="button"
+      disabled={hidden}
+      aria-live="polite"
+      aria-hidden={hidden}
+      onClick={(event) => {
+        blurOnMouseClick(event);
+        onInspect();
+      }}
+      className={`cursor-pointer rounded-md border border-[#2f7d6b]/60 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-[#91e7c5] transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
+        hidden ? "pointer-events-none absolute translate-y-1 opacity-0" : "pointer-events-auto translate-y-0 opacity-100"
+      }`}
+    >
+      {hidden ? "" : "E · INSPECT MARKET"}
     </button>
   );
 }
