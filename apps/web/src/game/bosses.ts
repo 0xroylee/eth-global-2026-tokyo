@@ -25,7 +25,11 @@ export type BossPresentation = {
   name: string;
   japaneseName?: string;
   stageImages: readonly [string, string, string];
+  stageVisibleBounds?: readonly [BossImageBounds, BossImageBounds, BossImageBounds];
 };
+
+/** Source canvas and exclusive alpha bounds for artwork rendered at a fixed visible height. */
+export type BossImageBounds = { sourceWidth: number; sourceHeight: number; x: number; y: number; width: number; height: number };
 
 /** Shared face for every gate that has no contract behind it. */
 export const HIDDEN_BOSS_PORTRAIT = "/images/boss-hidden-crowned-shadow-master.png";
@@ -40,6 +44,11 @@ export const POOL_UNIS_PRESENTATION: BossPresentation = {
     "/images/boss-cat-form-a.png?v=6",
     "/images/boss-cat-form-b.png?v=6",
     "/images/boss-cat-form-c.png?v=8",
+  ],
+  stageVisibleBounds: [
+    { sourceWidth: 819, sourceHeight: 1024, x: 203, y: 98, width: 510, height: 869 },
+    { sourceWidth: 1024, sourceHeight: 847, x: 364, y: 11, width: 344, height: 812 },
+    { sourceWidth: 374, sourceHeight: 667, x: 84, y: 19, width: 256, height: 606 },
   ],
 };
 

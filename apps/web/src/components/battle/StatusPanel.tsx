@@ -27,7 +27,7 @@ export function StatusPanel({ deployment }: { deployment: DeploymentState }) {
 
   return (
     <div className="space-y-2 font-pixel">
-      <BattleFrame><div className="flex flex-wrap items-center gap-2 p-2 lg:flex-nowrap lg:gap-3"><Label icon="◆">BOSS POOL</Label><span className="min-w-0 flex-1 text-[10px] leading-relaxed sm:text-xs lg:text-[clamp(16px,2.45vh,22px)] lg:leading-none">UNISWAP V4 HACKATHON DEMO</span></div></BattleFrame>
+      {/* <BattleFrame><div className="flex flex-wrap items-center gap-2 p-2 lg:flex-nowrap lg:gap-3"><Label icon="◆">BOSS POOL</Label><span className="min-w-0 flex-1 text-[10px] leading-relaxed sm:text-xs lg:text-[clamp(16px,2.45vh,22px)] lg:leading-none">UNISWAP V4 HACKATHON DEMO</span></div></BattleFrame> */}
       <BattleFrame>
         <div className="flex flex-wrap items-center gap-2 p-2 lg:flex-nowrap lg:gap-3">
           <Label icon="⚔">{factory ? "RAID PROGRESS" : "BOSS HP"}</Label>

@@ -150,7 +150,7 @@ export function FactoryWalk({ initiallyOpen = false }: { initiallyOpen?: boolean
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between p-3">
         <header className="flex items-start justify-between gap-2">
           <div>
-            <p className="font-mono text-[10px] tracking-[0.22em] text-dim">BOSS POOL</p>
+            <p className="font-mono text-[10px] tracking-[0.22em] text-dim">BOSS BOOSTPAD</p>
             <h1 className="text-sm font-semibold tracking-[0.14em]">BLACKSMITH</h1>
             <button
               type="button"

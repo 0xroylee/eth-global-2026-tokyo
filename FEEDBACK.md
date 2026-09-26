@@ -1,10 +1,10 @@
 # Uniswap developer feedback
 
-Status: local-implementation draft, updated 26 September 2026. BP01 has four passing real-v4 core cases, an actual Anvil deployment and a verified read-only arena. The complete browser attack/claim journey and Robinhood deployment are not verified. Historical burn proofs are separate evidence. The feedback form has not been submitted.
+Status: local-implementation draft, updated 27 September 2026. BP01 has four passing real-v4 core cases, an actual Anvil deployment and a verified read-only arena. The complete browser attack/claim journey and Robinhood deployment are not verified. Historical burn proofs are separate evidence. The feedback form has not been submitted.
 
 ## What we are building
 
-Boss Pool routes MockUSD through a Attack Token supply pool into a Attack Token/BossHP battle pool. The battle hook counts actual BossHP output as stage damage. Tokens go to players without burning and represent reward rights. After stage clearance, a separate router/controller performs a reserve-funded price reset and incremental LP addition in the same unlock. The candidate fee is fixed. After final defeat, the proposed claim path permanently locks surrendered HP and pays a fixed share of the sponsor prize.
+Boss Pool routes MockUSD through the Attack Token supply pool to the Attack Token/BossHP battle pool. The battle hook counts actual BossHP output as stage damage. Tokens go to players without burning and represent reward rights. After stage clearance, the router performs a reserve-funded price reset and incremental LP addition in the same unlock. The candidate fee is fixed. After final defeat, Factory claims use recorded attack credit to pay a proportional share of the sponsor prize.
 
 ## Observations so far
 

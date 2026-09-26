@@ -28,7 +28,7 @@ export function sageLines(state: SageState): string[] {
   const challengers = challengerCount();
   if (state.firstVisit) {
     return [
-      `Young one, welcome to the Boss Pool garden. ${challengers} challengers from Base are waiting ahead, and they will take everyone's sweetest dreams.`,
+      `Young one, welcome to the Boss BoostPad garden. ${challengers} challengers from Base are waiting ahead, and they will take everyone's sweetest dreams.`,
       "Follow the stone road north. Only Roy has awakened so far. Go cross blades with him first.",
     ];
   }

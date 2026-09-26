@@ -65,7 +65,7 @@ export function BossEntryPanel({
           type="button"
           onClick={onClose}
           aria-label="Close boss actions"
-          className="min-h-11 shrink-0 border border-white/60 px-3 text-xs hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff]"
+          className="min-h-11 shrink-0 border border-white/60 px-3 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff]"
         >
           CLOSE
         </button>
@@ -95,7 +95,7 @@ export function BossEntryPanel({
           <div className="mt-6">
             <div className="mb-5 border-y-2 border-[#2b4a8b]/20 py-3">
               <dl className="flex flex-wrap items-baseline justify-between gap-2">
-                <dt className="font-pixel text-xs">POOL PRIZE</dt>
+                <dt className="font-pixel text-xs">EXTRA POOL PRIZE</dt>
                 <dd className="font-pixel text-xl [overflow-wrap:anywhere]">
                   {displayAmount(live.round.originalPrize, live.round.rewardToken.decimals)} {live.round.rewardToken.symbol}
                 </dd>
@@ -108,7 +108,7 @@ export function BossEntryPanel({
               ref={entryRef}
               href={`/battle/${live.hookAddress}?network=${arena.network}`}
               aria-describedby="boss-entry-cost"
-              className="flex min-h-16 w-full items-center justify-center gap-3 border-2 border-[#092b61] bg-[#092b61] px-4 py-4 font-pixel text-xl text-[#fff9e9] shadow-[0_4px_0_#041833] hover:bg-[#2b4a8b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#2b4a8b] active:bg-[#2b4a8b]"
+              className="flex min-h-16 w-full items-center justify-center gap-3 border-2 border-[#092b61] bg-[#092b61] px-4 py-4 font-pixel text-xl text-[#fff9e9] shadow-[0_4px_0_#041833] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#2b4a8b] active:bg-[#2b4a8b]"
             >
               <span aria-hidden="true">▶</span>
               ENTER BATTLE
