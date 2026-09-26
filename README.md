@@ -80,6 +80,14 @@ The optional local Mock Token Oracle uses an owner-controlled testnet reference 
 
 The creator can add or remove a separate LP position to change depth. The initial position, its fees, Router residue, player credit, and Hook prize escrow stay separate. The locked initial liquidity is a position-size floor, not a price floor.
 
+### Swap fees
+
+Current Base Sepolia Roy charges **0.3% per swap**. The MockUSD → Attack Token supply swap charges in MockUSD; the Attack Token → BHP Boss swap charges in Attack Token. Fees are included in the swap input and quoted output, not added as a separate bill. v4 represents 0.3% as `3,000 / 1,000,000`.
+
+For a fully spent two-hop input, ignoring price impact and integer rounding, fee-only output retention is `0.997 × 0.997 = 0.994009`. The combined fee effect is approximately **0.5991%**, not a single 0.3% charge. The actual token quote also depends on both AMM prices, liquidity, execution bounds, and refunds. ETH gas is separate. LP fees accrue to pool liquidity; the Factory has no launch fee, and the creator-funded prize is separate from swap fees.
+
+The optional Mock Token Oracle changes only the Boss fee using `max(0, 1,000,000 - floor(997,000 × poolPrice / referencePrice))` millionths. Equal prices give 0.3%; a pool price at one-quarter of the reference gives 75.075%; a sufficiently higher pool price gives 0%. Supply remains 0.3%, and a required Boss fee above the demo's 90% maximum rejects the attack. Current public Roy has no fee controller and uses the fixed fees above. See [fee settlement and worked examples](docs/boss-factory.md#swap-fees) and the [mock price calculation](docs/boss-factory.md#testnet-mock-price-and-fees).
+
 ### Claim the prize
 
 Each Factory encounter records reward credit from the tokens a player actually bought through attacks. After victory, a player consumes that credit to claim a proportional share of the creator-funded prize, paid in the same token. Players keep their purchased tokens. Existing balances and token transfers do not create or transfer Factory reward credit.
