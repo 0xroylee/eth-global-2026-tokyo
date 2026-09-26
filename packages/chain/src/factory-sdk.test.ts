@@ -117,8 +117,14 @@ function sdkWith(client: Record<string, unknown>) {
 }
 
 describe("factory SDK pending operations", () => {
-  test("keeps a launch unresolved on timeout, then recovers and validates its config event", async () => {
+  test.each([0n, 2_000_000_000n])("recovers a persisted launch with deadline %s after timeout", async (deadline) => {
     const operation = launchOperation();
+    operation.config.deadline = deadline.toString();
+    operation.calldata = encodeFunctionData({
+      abi: bossFactoryAbi,
+      functionName: "launchBoss",
+      args: [{ ...launchConfig, deadline }, userSalt, hookSalt, "0x01", "0x02"],
+    });
     let waitCount = 0;
     let client = sdkWith({
       getChainId: async () => 84532,
@@ -127,7 +133,7 @@ describe("factory SDK pending operations", () => {
         if (waitCount === 1) throw new WaitForTransactionReceiptTimeoutError({ hash });
         return launchReceipt();
       },
-      getTransaction: async () => transaction(),
+      getTransaction: async () => transaction(operation.calldata),
     });
     let pending: FactoryOperationPendingError | undefined;
     try {

@@ -1,0 +1,23 @@
+{
+  "chainId": 84532,
+  "factory": "0x353749ffa9640c4152dd28068c416adfc2eb168e",
+  "previousFactory": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
+  "transactionHash": "0x8bbf9e9fcd76cf817c925c7513d22ebaaa3b0b01195aed33040c8c2ae8d4477f",
+  "blockNumber": 47334087,
+  "gasUsed": "4008015",
+  "deployer": "0x45d4e78c6ac2df422f02f3b9cf3a8271cd6c2262",
+  "routerCodeHash": "0xbb7be00bd329b2c956a14385249ea3b62580d07eefd42940b64b642916949ef2",
+  "hookCodeHash": "0x4c1c5a3bdd738476ede649c0a5d65d0740abfa27f53cfd5d3bdcb78d3cfa121b",
+  "factoryCreationCodeHash": "0x7e79265543638c211d9621e66a4610d8f86005ac4d49d62c1bb2faf18e25d286",
+  "runtimeCodeHash": "0xc2ad1f7f8a4be6a228c0a2b1630c115c479528a83c6433a0a01ba6ecb243838d",
+  "buildCompatibility": "compatible",
+  "bossCount": "0",
+  "sourceBaseCommit": "750b4bddc98b58eecf091a93587e06144b1fd924",
+  "sourceDiffHash": "0xcb72debbb92174f4d1fd184419ea524e19432bc21ec50548336a4d4a53daaf4a",
+  "rules": {
+    "deadline": "0",
+    "creatorWithdrawals": false,
+    "cancellation": false,
+    "playerClaimsExpire": false
+  }
+}

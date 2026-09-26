@@ -39,7 +39,7 @@ Add other mappings when their actual Hook addresses and intended Boss presentati
 
 The mapping controls presentation only. Read tokens, progress, deadlines, rewards, and transaction targets from the verified encounter. A mapping entry is not proof that a contract is valid. Display the Hook address and network in battle details.
 
-A verified Factory boss without a presentation entry shows “Boss appearance not configured” instead of another Boss's name or artwork. Its verified chain data and action rules remain available. An invalid or unregistered Hook still fails encounter verification and cannot enable writes.
+New perpetual Factory bosses use the default three-cat presentation chosen in the [BoostPad migration](specs/boostpad-launch.md). A verified timed Factory boss without a presentation entry shows “Boss appearance not configured” instead of another Boss's name or artwork. Its verified chain data and action rules remain available. An invalid or unregistered Hook still fails encounter verification and cannot enable writes.
 
 No creator metadata storage, backend, or browser-local artwork settings are needed. Adding or changing a Boss presentation requires updating the checked-in mapping.
 

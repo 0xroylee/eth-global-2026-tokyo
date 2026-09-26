@@ -1,5 +1,5 @@
-import { BossFactoryLaunchPage } from "@/components/BossFactoryLaunchPage";
+import { permanentRedirect } from "next/navigation";
 
 export default function LaunchPage() {
-  return <BossFactoryLaunchPage />;
+  permanentRedirect("/boostpad");
 }

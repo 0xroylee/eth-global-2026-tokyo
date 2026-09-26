@@ -109,7 +109,7 @@ async function main() {
       tokenAllocation: memeAllocation,
       prizeBps: 1_000,
       volumeTargetMockUSD: 6n * 10n ** 6n,
-      deadline: BigInt(Math.floor(Date.now() / 1_000) + 86_400),
+      deadline: 0n,
       maxAttackTokenPerMockUSDX128: 0n,
     } as const;
     const launches: Array<{ approvalHash: Hex | null; result: FactoryLaunchResult; acceptedRate: bigint }> = [];
@@ -141,6 +141,20 @@ async function main() {
     ]);
     assertResolved(deploymentA, launchA.hook, launchA.router, launchA.bossId, factory);
     assertResolved(deploymentB, launchB.hook, launchB.router, launchB.bossId, factory);
+    const replacement = await deployArtifact(factoryArtifact, [
+      standalone.addresses.poolManager, standalone.addresses.mockUSD, standalone.addresses.roy,
+      keccak256(bossRouterCreationCode), keccak256(bossHookCreationCode),
+    ], makerWallet, client);
+    const replacementReceipt = await client.getTransactionReceipt({ hash: replacement.hash });
+    const upgradedManifest = {
+      ...routingManifest,
+      bossFactory: replacement.address,
+      bossFactoryDeployedAtBlock: Number(replacementReceipt.blockNumber),
+      previousBossFactories: [{ address: factory, deployedAtBlock: Number(factoryReceipt.blockNumber) }],
+    };
+    const preservedBoss = await resolveBossDeployment(client, upgradedManifest, launchA.hook);
+    assertResolved(preservedBoss, launchA.hook, launchA.router, launchA.bossId, factory);
+
     assert(!same(deploymentA.hookAddress, deploymentB.hookAddress), "direct-link contexts must retain separate Hook identity");
     assert(deploymentA.hpToken?.decimals === 6 && same(deploymentA.hpToken.address, sixDecimalToken.address), "resolved Factory MEME metadata must preserve the six-decimal token");
 

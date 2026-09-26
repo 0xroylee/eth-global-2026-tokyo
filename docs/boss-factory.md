@@ -22,7 +22,7 @@ The factory has no administrator, token allowlist, upgrade function, or launch f
 | `tokenAllocation` | Total MEME amount the creator deposits, in the token's base units. |
 | `prizeBps` | Prize percentage in basis points. For example, 1,000 means 10%. |
 | `volumeTargetMockUSD` | Required eligible purchase volume, in MockUSD base units. |
-| `deadline` | Immutable future Unix timestamp. |
+| `deadline` | Must be `0`. New Factory bosses never expire. |
 | `maxAttackTokenPerMockUSDX128` | Zero for a discovery quote. Before mining or launching, freeze the returned `maxRoyPerMockUSDX128` here as the accepted upper attack-token rate. |
 
 For total allocation `N` and prize rate `r` basis points, the quote reserves `P = floor(N × r / 10,000)` MEME for rewards. The remaining battle capital is `B = N - P`.
@@ -47,7 +47,7 @@ The discovery quote derives the rate from the live pool. A positive `maxAttackTo
 
 `predictAddresses(maker, userSalt, token, routerCode)` returns the router and collectibles addresses. `hookInitCode(maker, userSalt, config, routerCode, hookCode)` returns the hook creation code with its constructor arguments. These reads do not reserve an ID or move funds.
 
-The existing `HookMiner.find` can mine a salt locally using that init code, `address(factory)`, and permission flags `0x2ac0`. The factory is the CREATE2 deployer. The code parameters are the creation bytecode from the exact build pinned by `routerCodeHash` and `hookCodeHash`, excluding constructor arguments. Changing the creator, user salt, selected token, allocation, prize rate, volume target, accepted attack-token rate, or deadline invalidates the previous calculation. Mining is an off-chain operation. See the [official Uniswap hook deployment guide](https://developers.uniswap.org/docs/protocols/v4/guides/hooks/hook-deployment).
+The existing `HookMiner.find` can mine a salt locally using that init code, `address(factory)`, and permission flags `0x2ac0`. The factory is the CREATE2 deployer. The code parameters are the creation bytecode from the exact build pinned by `routerCodeHash` and `hookCodeHash`, excluding constructor arguments. Changing the creator, user salt, selected token, allocation, prize rate, volume target, or accepted attack-token rate invalidates the previous calculation. Mining is an off-chain operation. See the [official Uniswap hook deployment guide](https://developers.uniswap.org/docs/protocols/v4/guides/hooks/hook-deployment).
 
 The caller determines the creator identity. Copying another creator's call uses a different boss ID, router, and hook constructor arguments. A successful boss ID cannot be reused.
 
@@ -75,11 +75,13 @@ Victory NFTs remain optional. Attacks and prize claims do not mint one. Only wal
 
 The standalone BossHP round retains its separate mode. It measures stage completion by token sales and requires eligible HP redemption into permanent custody. It does not use the factory's volume target or MEME prize.
 
-## Expiry and creator withdrawals
+## Permanent creator commitment
 
-Attacks stop at the deadline. An undefeated round can expire and return its unawarded prize to its original creator once. Defeated-round prizes remain available for earned-credit claims.
+New Factory bosses have a zero deadline and stay active until defeated. Creators cannot cancel a boss or withdraw its prize, LP assets, fees, or unused battle reserves, even after victory. `recoverAfterDeadline()` remains in the ABI but always reverts. The Hook rejects every liquidity removal. The predefined stage refill still uses battle reserves internally.
 
-For a factory round, the router owner can call `recoverAfterDeadline()` once. It expires an active round, removes its registered boss LP positions, collects their proceeds and fees, and returns unused router reserves. This call cannot withdraw the hook's prize escrow. Winner claims remain available after LP recovery. The original standalone BossHP mode keeps its existing LP custody restrictions.
+`expire()` rejects perpetual bosses, so the creator cannot reach the expired-prize refund path. Players retain their earned prize claims indefinitely after victory. Attack purchases remain nonrefundable.
+
+Existing deployed Factory bosses retain the rules of their original contracts. The standalone BossHP demo keeps its fixed deadline and prize-refund behavior.
 
 ## Supported tokens and activity reporting
 
@@ -87,15 +89,23 @@ The accounting expects ordinary ERC-20 transfers with stable balances. Funding a
 
 Damage is the purchased meme-token amount. Actual traded input and output appear in `AttackExecuted`; they are not USD notional volume without an independent conversion. Maintenance appears in `StageRefilled` and earns no player credit. The contracts create no automated trades or self-trading loops, and purchases occur in the boss's own v4 pool. They do not create volume in an unrelated existing market for the same meme token.
 
+## Battle discovery across Factory versions
+
+The current Factory and `bossFactoryDeployedAtBlock` select new launches. `previousBossFactories` retains explicitly trusted older Factories, and their deployment blocks. The SDK pins the audited older Router/Hook creation-code hashes for player encounter verification. New launches still require the current compiled build. Existing timed bosses remain discoverable after a Factory replacement. Receipt, registry, wiring, and pool-key verification apply to both versions.
+
 ## Base Sepolia deployment
 
 The factory deployment script is `contracts/script/DeployBossFactory.s.sol:DeployBossFactory`. It reads `BOSS_POOL_MANAGER`, `BOSS_MOCK_USD_TOKEN`, and `BOSS_ATTACK_TOKEN`, and pins hashes from the current compiled artifacts. It supports local chain 31337 and Base Sepolia 84532. Base Sepolia uses `TESTNET_DEPLOYER_PRIVATE_KEY`, as the standalone deployment does. It creates no tokens, market liquidity, or boss encounters.
 
-The creator form is available at `/launch`. The form loads the Factory from the verified Base Sepolia manifest unless `NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_ADDRESS` overrides it. The chain SDK reads the submitted token's metadata and wallet balance, quotes the launch, freezes the accepted rate, checks the compiled Router and Hook bytecode against the factory, mines a valid hook salt, requests the required MEME approval, and submits the launch. Submitted operations are persisted before receipt waiting. Read-only recovery validates the original call and events, and a root provider keeps the write lock across navigation and both approval steps. Token choices are entered by contract address; ERC-20 does not provide wallet-wide token discovery.
+The creator form is available at `/boostpad`; `/launch` permanently redirects there. Direct visits open the Blacksmith form immediately. The game entry retains walking and the E interaction. There are three fixed stages with the default cat portraits. The form loads the Factory from the verified Base Sepolia manifest unless `NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_ADDRESS` overrides it. The chain SDK reads the submitted token's metadata and wallet balance, quotes the launch, freezes the accepted rate, checks the compiled Router and Hook bytecode against the factory, mines a valid hook salt, requests the required MEME approval, and submits the launch. Submitted operations are persisted before receipt waiting. Read-only recovery uses the saved transaction's original Factory address and validates the original call and events, and a root provider keeps the write lock across navigation and both approval steps. Token choices are entered by contract address; ERC-20 does not provide wallet-wide token discovery. Verified Factory battles are available at `/battle/<hook-address>?network=base-sepolia`.
 
-Confirmed launches link to `/battle/<hook-address>?network=base-sepolia`. The player SDK resolves that Hook from the configured Factory's confirmed launch history, verifies the registration and contract wiring, and reads volume progress and reward credit for that encounter. `bossFactoryDeployedAtBlock` supplies the discovery baseline. When overriding the Factory address, configure the corresponding `NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_DEPLOYED_AT_BLOCK` as well. Names and stage images are selected by a checked-in network/Hook mapping; presentation is separate from contract verification.
+The perpetual Factory is deployed on Base Sepolia at `0x353749ffa9640c4152dd28068c416adfc2eb168e`, block `47334087`. Its constructor transaction, infrastructure wiring, and immutable Router/Hook build hashes are verified. The app manifest selects this Factory. No public boss was created during this migration. See the [deployment evidence](evidence/base-sepolia-perpetual-factory.json).
 
-The corrected Factory was deployed at block `47332647` from commit `4efa8f01e73dbabdc3383d444ab03079f6c63493`. Its creation transaction matches the compiled artifact, its Router and Hook hashes match the SDK, and its infrastructure wiring is verified. The public Base Sepolia manifest now selects this Factory. See the [current Factory evidence](evidence/base-sepolia-boss-factory-current.json).
+The real-v4 core suite passes all twelve scenarios, including attacks after ten years, creator withdrawal rejection before and after victory, and later player claims. SDK checks cover zero-deadline and historical transaction recovery, plus short quote expiry for perpetual rounds. A local Anvil SDK smoke completed token approval, launch, read-only receipt recovery, and a ten-year-later attack quote.
+
+### Earlier timed Factory deployments
+
+The earlier timed Factory was deployed at block `47332647` from commit `4efa8f01e73dbabdc3383d444ab03079f6c63493`. Its creation transaction matches the compiled artifact, its Router and Hook hashes match the SDK, and its infrastructure wiring is verified. This timed deployment remains historical. See the [current Factory evidence](evidence/base-sepolia-boss-factory-current.json).
 
 The first demo boss was created by the Factory at block `47332745`. It uses a fresh fixed-supply `BossHP` token as its selected ERC-20, with 10,000 BHP deposited, a 10% prize of 1,000 BHP, a 60 MockUSD volume target, and a deadline of 3 October 2026 at 14:42:42 UTC. This encounter uses Factory reward credit, so players keep purchased BHP when claiming the BHP prize.
 

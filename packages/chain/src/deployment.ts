@@ -74,6 +74,11 @@ type ManifestBase = {
   deployer?: Address;
   bossFactory?: Address;
   bossFactoryDeployedAtBlock?: number;
+  /** Trusted historical builds for battle reads/actions; never used for new launches. */
+  previousBossFactories?: Array<{
+    address: Address;
+    deployedAtBlock: number;
+  }>;
   /** Factory launch proof retained with a resolved encounter so recovery can re-verify its original origin. */
   bossOrigin?: FactoryBossOrigin;
   addresses: DeploymentAddresses;
@@ -140,6 +145,15 @@ export function parseDeployment(value: unknown): DeploymentManifest {
   if (manifest.bossFactoryDeployedAtBlock !== undefined &&
       (!isNonnegativeSafeInteger(manifest.bossFactoryDeployedAtBlock) || manifest.bossFactory === undefined)) {
     throw new Error("Deployment manifest has an invalid Boss Factory deployment baseline.");
+  }
+  if (manifest.previousBossFactories !== undefined &&
+      (!Array.isArray(manifest.previousBossFactories) || manifest.previousBossFactories.some((entry: unknown) => {
+        if (!entry || typeof entry !== "object") return true;
+        const factory = entry as Record<string, unknown>;
+        return !isAddressValue(factory.address) || !isNonnegativeSafeInteger(factory.deployedAtBlock) ||
+          String(factory.address).toLowerCase() === String(manifest.bossFactory).toLowerCase();
+      }))) {
+    throw new Error("Deployment manifest has an invalid historical Factory build.");
   }
   if (manifest.bossOrigin !== undefined) {
     if (!manifest.bossOrigin || typeof manifest.bossOrigin !== "object") {
@@ -463,9 +477,24 @@ async function resolveFactoryBoss(
   if (chainId !== baseManifest.chainId || (client.chain && client.chain.id !== baseManifest.chainId)) {
     throw new DeploymentResolutionError("CHAIN_MISMATCH", `RPC chain is ${chainId}; expected ${baseManifest.chainId}.`);
   }
-  await assertFactoryBuild(client, factory);
+  await assertFactoryBuild(client, baseManifest);
   const head = await client.getBlockNumber({ cacheTime: 0 });
-  const launch = await findFactoryLaunch(client, baseManifest, hook, BigInt(head));
+  let launch = await findFactoryLaunch(client, baseManifest, hook, BigInt(head));
+  if (!launch) {
+    for (const previous of baseManifest.previousBossFactories ?? []) {
+      const previousManifest = {
+        ...baseManifest,
+        bossFactory: previous.address,
+        bossFactoryDeployedAtBlock: previous.deployedAtBlock,
+        previousBossFactories: undefined,
+      };
+      launch = await findFactoryLaunch(client, previousManifest, hook, BigInt(head));
+      if (!launch) continue;
+      await assertFactoryBuild(client, previousManifest);
+      baseManifest = previousManifest;
+      break;
+    }
+  }
   if (!launch) {
     throw new DeploymentResolutionError("BOSS_NOT_FOUND", "No Factory launch for this Hook address was found in the configured deployment history.");
   }
@@ -510,7 +539,7 @@ async function verifyFactoryOrigin(
   if (receipt.status !== "success" || receipt.blockNumber !== BigInt(origin.launchBlockNumber)) {
     throw new DeploymentResolutionError("FACTORY_RECEIPT_MISMATCH", "Recorded Factory launch receipt is missing or does not match its block.");
   }
-  if (!factoryBuildAlreadyChecked) await assertFactoryBuild(client, factory);
+  if (!factoryBuildAlreadyChecked) await assertFactoryBuild(client, manifest);
 
   const event = decodeFactoryLaunchReceipt(receipt, origin, factory);
   assertLaunchMatchesManifest(event.args, manifest, origin);
@@ -629,12 +658,19 @@ async function verifyFactoryOrigin(
   return verified;
 }
 
-async function assertFactoryBuild(client: PublicClient, factory: Address): Promise<void> {
+async function assertFactoryBuild(client: PublicClient, manifest: DeploymentManifest): Promise<void> {
+  const factory = manifest.bossFactory!;
   const status = await createBossFactorySdk({ publicClient: client, factory }).checkFactoryBuild();
   if (status.status === "not-deployed") {
     throw new DeploymentResolutionError("FACTORY_NOT_DEPLOYED", "No Boss Factory contract exists at the configured address.");
   }
   if (status.status === "incompatible") {
+    // Audited timed Factory already used by the app. Creation still requires the current build.
+    // Pins come from docs/evidence/base-sepolia-boss-factory-current.json, never caller input.
+    if (manifest.chainId === BASE_SEPOLIA_CHAIN_ID &&
+        sameAddress(factory, "0x9039F58150F1fFDFB301A3D7218D47A44406a269") &&
+        sameHex(status.routerCodeHash, "0x02091b890ff922b5f2493012b76a2993e6dd33a1aa7cdccd5da4e2545a67157c") &&
+        sameHex(status.hookCodeHash, "0xb26ab06541a7d6b2c04a84f01e865a2244fea4f031b87f4c453af475a76e92b5")) return;
     throw new DeploymentResolutionError("FACTORY_BUILD_MISMATCH", "This Boss Factory does not match the supported Hook and Router build.");
   }
 }
@@ -792,6 +828,7 @@ function manifestIdentity(manifest: DeploymentManifest): string {
   const origin = manifest.bossOrigin;
   return [manifest.chainId, manifest.deploymentTxHash.toLowerCase(), manifest.deployedAtBlock,
     manifest.bossFactory?.toLowerCase() ?? "", manifest.bossFactoryDeployedAtBlock ?? "",
+    JSON.stringify(manifest.previousBossFactories ?? []),
     origin?.factoryAddress.toLowerCase() ?? "", origin?.bossId.toLowerCase() ?? "",
     origin?.launchTxHash.toLowerCase() ?? "", origin?.launchLogIndex ?? "", origin?.launchBlockNumber ?? "",
     addresses.hook.toLowerCase(), addresses.router.toLowerCase(), addresses.bossHP.toLowerCase(),

@@ -59,7 +59,7 @@ export function BattleMeta({ deployment, now }: { deployment: DeploymentState; n
   const live = deployment.kind === "live" ? deployment : null;
   const round = live?.round;
   const seconds = live ? roundSecondsLeft(live.round, live.readAt, now) : null;
-  const time = seconds === null ? "—" : `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+  const time = round?.deadline === 0n ? "NO LIMIT" : seconds === null ? "—" : `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
   const network = deployment.network === "local" ? "LOCAL CHAIN" : deployment.network === "base-sepolia" ? "BASE SEPOLIA" : "HISTORICAL · READ ONLY";
   const status = round ? roundStatusLabel(round.status) : deployment.kind === "loading" ? "CHECKING" : deployment.kind === "not-deployed" ? "NOT DEPLOYED" : "DATA UNAVAILABLE";
   const hookAddress = deployment.hookAddress;

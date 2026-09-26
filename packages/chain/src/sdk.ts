@@ -431,7 +431,7 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     const ttl = input.validitySeconds ?? DEFAULT_QUOTE_TTL_SECONDS;
     if (ttl <= 0n) throw new BossPoolSdkError("INVALID_QUOTE_TTL", "Quote validity must be positive.");
     const requestedExpiry = round.blockTimestamp + ttl;
-    const expiresAt = requestedExpiry < round.deadline ? requestedExpiry : round.deadline - 1n;
+    const expiresAt = round.deadline === 0n || requestedExpiry < round.deadline ? requestedExpiry : round.deadline - 1n;
     if (expiresAt <= round.blockTimestamp) throw new RequoteRequiredError("expired", "The round deadline is too close to quote an attack.");
     return {
       chainId: deployment.chainId,
@@ -471,12 +471,12 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
       !sameAddress(quote.router, router) || !sameAddress(quote.hook, hook)
     ) throw new RequoteRequiredError("deployment-changed", "Quote belongs to a different chain or deployment.");
     const round = await readRound(publicClient, deployment);
-    if (round.blockTimestamp >= quote.expiresAt || round.blockTimestamp >= round.deadline) {
+    if (round.blockTimestamp >= quote.expiresAt || (round.deadline !== 0n && round.blockTimestamp >= round.deadline)) {
       throw new RequoteRequiredError("expired", "Attack quote or round deadline has expired.");
     }
     if (round.status !== ACTIVE_STATUS) throw new RequoteRequiredError("round-not-active", "The round is no longer Active.");
     if (round.currentStage !== quote.stage) throw new RequoteRequiredError("stage-changed", "The active stage changed; get a fresh quote.");
-    const callDeadline = quote.expiresAt < round.deadline ? quote.expiresAt : round.deadline - 1n;
+    const callDeadline = round.deadline === 0n || quote.expiresAt < round.deadline ? quote.expiresAt : round.deadline - 1n;
     const args = [quote.maxMockUSD, quote.minRoyOut, quote.minBossHPOut, quote.stage, callDeadline] as const;
     let simulationResult: readonly [bigint, bigint, bigint, bigint];
     try {
@@ -501,7 +501,7 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
         if (fresh.status !== ACTIVE_STATUS) {
           throw new RequoteRequiredError("round-not-active", "The round changed state during final simulation.");
         }
-        if (fresh.blockTimestamp >= fresh.deadline || fresh.blockTimestamp >= quote.expiresAt) {
+        if ((fresh.deadline !== 0n && fresh.blockTimestamp >= fresh.deadline) || fresh.blockTimestamp >= quote.expiresAt) {
           throw new RequoteRequiredError("expired", "The round or quote expired during final simulation.");
         }
       }
@@ -1015,7 +1015,7 @@ export { maxUint256 };
 
 function assertActiveBeforeDeadline(round: RoundSnapshot): void {
   if (round.status !== ACTIVE_STATUS) throw new BossPoolSdkError("ROUND_NOT_ACTIVE", "The round is not Active.");
-  if (round.blockTimestamp >= round.deadline) throw new BossPoolSdkError("ROUND_EXPIRED", "The round deadline has passed.");
+  if ((round.deadline !== 0n && round.blockTimestamp >= round.deadline)) throw new BossPoolSdkError("ROUND_EXPIRED", "The round deadline has passed.");
 }
 
 function minimumOutput(value: bigint, slippageBps: number): bigint {

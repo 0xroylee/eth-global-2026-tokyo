@@ -31,6 +31,7 @@ export type FactoryLaunchConfig = {
   tokenAllocation: bigint;
   prizeBps: number;
   volumeTargetMockUSD: bigint;
+  /** Zero for new Factory bosses. The tuple field also permits decoding historical transactions. */
   deadline: bigint;
   maxAttackTokenPerMockUSDX128: bigint;
 };

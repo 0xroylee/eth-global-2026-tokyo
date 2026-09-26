@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { confirmedBattleAttack, roundSecondsLeft, writeStateMatchesEncounter, type ConfirmedBattleAttack } from "@/lib/battle";
 import { displayAmount } from "@/lib/format";
-import { findBossPresentation } from "@/game/bosses";
+import { findBossPresentation, POOL_UNIS_PRESENTATION } from "@/game/bosses";
 import type { useBossPool, NetworkKey } from "@/lib/useBossPool";
 import { useArena } from "../BossPoolProvider";
 import { BossActions } from "../BossActions";
@@ -57,6 +57,7 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
   const visibleEffect = effect?.hookAddress.toLowerCase() === hookAddress?.toLowerCase() ? effect : null;
   const presentation = hookAddress
     ? findBossPresentation(arena.selectedChainId, hookAddress, arena.network === "local" && live ? live.context.baseManifest.addresses.hook : undefined)
+      ?? (round?.encounterMode === "factory" && round.deadline === 0n ? POOL_UNIS_PRESENTATION : undefined)
     : undefined;
   const identity = `${arena.network}:${hookAddress?.toLowerCase() ?? "unavailable"}:${manifest?.deploymentTxHash ?? "unavailable"}:${account ?? "public"}`;
   const hit = useMemo(
@@ -94,7 +95,7 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
   const defeated = round?.status === 3;
   const expired = Boolean(round && !defeated && (round.status === 4 || secondsLeft === 0));
   const busy = arena.writeState.status === "prompting" || arena.writeState.status === "pending" || arena.writeState.status === "unresolved" || Boolean(arena.pendingRecord);
-  const canAttack = round?.status === 1 && secondsLeft > 0 && !busy;
+  const canAttack = round?.status === 1 && (secondsLeft === null || secondsLeft > 0) && !busy;
   const stage = round ? STAGES[round.currentStage] : undefined;
   const visualStage = visibleEffect ? STAGES[visibleEffect.stage] : stage;
   const openActions = () => actionsDialog.current?.showModal();

@@ -81,6 +81,7 @@ test("boss presentation is address and chain scoped, with casing-insensitive kno
 });
 
 test("the displayed deadline advances from chain time without restarting on mount or going negative", () => {
+  expect(roundSecondsLeft({ blockTimestamp: 100n, deadline: 0n }, 0, 1_000_000)).toBeNull();
   const round = { blockTimestamp: 100n, deadline: 120n };
   expect(roundSecondsLeft(round, 5_000, 5_000)).toBe(20);
   expect(roundSecondsLeft(round, 5_000, 12_000)).toBe(13);

@@ -238,7 +238,7 @@ contract BossPoolCoreTest is Test {
         // Existing supply is held outside the game and is never reward credit.
         meme.transfer(BOB, 3_000e18);
         BossFactory.LaunchConfig memory launchConfig =
-            BossFactory.LaunchConfig(meme, 1_800e18, 1_000, 24e6, roundDeadline, 0);
+            BossFactory.LaunchConfig(meme, 1_800e18, 1_000, 24e6, 0, 0);
         assertLt(factory.quoteLaunch(launchConfig).hpPriceTick, 0, "18-decimal quote exercises negative-tick search");
         HP1Round memory first = _launch(factory, meme, 1_800e18, 1_000, 24e6, bytes32(uint256(1)), address(this));
         HP1Round memory second = _launch(factory, meme, 1_800e18, 1_000, 24e6, bytes32(uint256(1)), BOB);
@@ -252,6 +252,12 @@ contract BossPoolCoreTest is Test {
         vm.expectRevert(BossRouter.InvalidAttack.selector);
         first.router.attackWithRoy(1e18, 1, 0, block.timestamp + 1 hours);
 
+        assertEq(first.hook.deadline(), 0, "Factory bosses have no expiry");
+        _assertFactoryFundsLocked(first);
+        vm.warp(block.timestamp + 10 * 365 days);
+        _assertFactoryFundsLocked(first);
+        vm.expectRevert(BossRouter.InvalidAttack.selector);
+        first.router.attackWithMockUSD(1e6, 1, 1, 0, block.timestamp - 1);
         _attackForRound(first, ALICE, 1e6, 0);
         assertEq(first.hook.stageVolume(0), 1e6);
         assertGt(first.hook.remainingSellableHP(), 0, "volume gates advance before the current HP position empties");
@@ -319,23 +325,16 @@ contract BossPoolCoreTest is Test {
         first.hook.claimVictoryNFT();
         assertEq(first.collectibles.balanceOf(ALICE), 1);
 
-        vm.expectRevert(BossRouter.InvalidSetup.selector);
-        first.router.recoverAfterDeadline();
-        vm.warp(first.deadline);
-        uint256 prizeBalance = meme.balanceOf(address(first.hook));
-        first.router.recoverAfterDeadline();
-        assertEq(meme.balanceOf(address(first.hook)), prizeBalance, "LP recovery cannot withdraw outstanding prizes");
-        assertEq(meme.balanceOf(address(first.router)), 0);
-        assertEq(roy.balanceOf(address(first.router)), 0);
+        _assertFactoryFundsLocked(first);
+        vm.warp(block.timestamp + 10 * 365 days);
+        _assertFactoryFundsLocked(first);
         uint256 bobCredit = first.hook.rewardCredit(BOB);
         vm.prank(BOB);
         first.hook.claimReward(bobCredit);
-        second.hook.expire();
-        vm.prank(BOB);
-        second.hook.refundExpiredPrize();
-        vm.prank(BOB);
-        second.router.recoverAfterDeadline();
-        assertEq(meme.balanceOf(address(second.hook)), 0);
+        assertEq(first.hook.rewardCredit(BOB), 0, "prize claims have no time limit");
+        _assertFactoryFundsLocked(second);
+        _attackForRound(second, ALICE, 1e6, 0);
+        assertEq(uint8(second.hook.status()), uint8(BossHook.RoundStatus.Active));
         assertEq(meme.totalSupply(), 10_000e18);
         assertEq(manager.getNonzeroDeltaCount(), 0);
     }
@@ -345,10 +344,10 @@ contract BossPoolCoreTest is Test {
         BossFactory factory = _factory();
         SixDecimalMeme meme = new SixDecimalMeme(address(this), 10_000e6);
         BossFactory.LaunchConfig memory config =
-            BossFactory.LaunchConfig(meme, 10_000e6, 1_000, 24e6, roundDeadline, 0);
+            BossFactory.LaunchConfig(meme, 10_000e6, 1_000, 24e6, 0, 0);
         bytes32 userSalt = bytes32(uint256(3));
         vm.expectRevert(BossFactory.InvalidLaunch.selector);
-        factory.quoteLaunch(BossFactory.LaunchConfig(meme, 10_000e6, 1_000, 5, roundDeadline, 0));
+        factory.quoteLaunch(BossFactory.LaunchConfig(meme, 10_000e6, 1_000, 5, 0, 0));
         BossFactory.LaunchQuote memory quote = factory.quoteLaunch(config);
         config.maxAttackTokenPerMockUSDX128 = quote.maxRoyPerMockUSDX128;
         assertEq(quote.prizeAmount, 1_000e6);
@@ -420,7 +419,7 @@ contract BossPoolCoreTest is Test {
         BossFactory factory = _factory();
         RoyToken meme = new RoyToken(address(this), 10_000e18);
         bytes32 userSalt = bytes32(uint256(31));
-        BossFactory.LaunchConfig memory config = BossFactory.LaunchConfig(meme, 1_800e18, 1_000, 24e6, roundDeadline, 0);
+        BossFactory.LaunchConfig memory config = BossFactory.LaunchConfig(meme, 1_800e18, 1_000, 24e6, 0, 0);
         config.maxAttackTokenPerMockUSDX128 = factory.quoteLaunch(config).maxRoyPerMockUSDX128;
         bytes memory routerCode = _routerCode();
         bytes memory hookCode = _hookCode();
@@ -500,7 +499,7 @@ contract BossPoolCoreTest is Test {
         TaxedMemeToken meme = new TaxedMemeToken();
         meme.approve(address(factory), type(uint256).max);
         BossFactory.LaunchConfig memory config =
-            BossFactory.LaunchConfig(meme, 2_000e18, 1_000, 24e6, roundDeadline, 0);
+            BossFactory.LaunchConfig(meme, 2_000e18, 1_000, 24e6, 0, 0);
         bytes memory routerCode = _routerCode();
         bytes memory hookCode = _hookCode();
         vm.expectRevert(BossFactory.InvalidLaunch.selector);
@@ -517,6 +516,11 @@ contract BossPoolCoreTest is Test {
         assertEq(predictedRouter.code.length, 0);
         assertEq(predictedCollectibles.code.length, 0);
 
+        config.deadline = block.timestamp + 1 days;
+        vm.expectRevert(BossFactory.InvalidLaunch.selector);
+        factory.quoteLaunch(config);
+        config.deadline = 0;
+
         // Reject a target too small to split across all three stage gates.
         RoyToken tiny = new RoyToken(address(this), 100);
         config.token = tiny;
@@ -527,6 +531,25 @@ contract BossPoolCoreTest is Test {
         factory.quoteLaunch(config);
         assertEq(tiny.balanceOf(address(this)), 100);
         assertEq(factory.bossCount(), 0);
+    }
+
+    function _assertFactoryFundsLocked(HP1Round memory round) private {
+        address maker = round.hook.maker();
+        address owner = round.router.owner();
+        uint256 prizeBefore = round.bossHP.balanceOf(address(round.hook));
+        uint256 reserveBefore = round.bossHP.balanceOf(address(round.router));
+        uint128 liquidityBefore = manager.getLiquidity(round.router.bossPoolKey().toId());
+        vm.expectRevert(BossHook.InvalidRound.selector);
+        round.hook.expire();
+        vm.expectRevert(BossHook.Unauthorized.selector);
+        vm.prank(maker);
+        round.hook.refundExpiredPrize();
+        vm.expectRevert(BossRouter.InvalidSetup.selector);
+        vm.prank(owner);
+        round.router.recoverAfterDeadline();
+        assertEq(round.bossHP.balanceOf(address(round.hook)), prizeBefore);
+        assertEq(round.bossHP.balanceOf(address(round.router)), reserveBefore);
+        assertEq(manager.getLiquidity(round.router.bossPoolKey().toId()), liquidityBefore);
     }
 
     function _factory() private returns (BossFactory) {
@@ -553,7 +576,7 @@ contract BossPoolCoreTest is Test {
         private returns (HP1Round memory round)
     {
         BossFactory.LaunchConfig memory config =
-            BossFactory.LaunchConfig(token, tokenAllocation, prizeBps, targetVolume, roundDeadline, 0);
+            BossFactory.LaunchConfig(token, tokenAllocation, prizeBps, targetVolume, 0, 0);
         config.maxAttackTokenPerMockUSDX128 = factory.quoteLaunch(config).maxRoyPerMockUSDX128;
         bytes memory code = factory.hookInitCode(maker, userSalt, config, _routerCode(), _hookCode());
         (address expectedHook, bytes32 salt) = HookMiner.find(address(factory), HOOK_FLAGS, code, bytes(""));

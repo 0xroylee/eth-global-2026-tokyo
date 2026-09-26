@@ -32,7 +32,7 @@ contract BossFactory is ReentrancyGuard {
         uint256 tokenAllocation;
         uint16 prizeBps;
         uint256 volumeTargetMockUSD;
-        uint256 deadline;
+        uint256 deadline; // Must be zero: Factory bosses never expire.
         uint256 maxAttackTokenPerMockUSDX128;
     }
 
@@ -95,7 +95,7 @@ contract BossFactory is ReentrancyGuard {
         if (
             address(config.token).code.length == 0 || config.token == mockUSD || config.token == attackToken
                 || config.tokenAllocation < 6 || config.prizeBps == 0 || config.prizeBps >= PRIZE_RATE_DENOMINATOR
-                || config.volumeTargetMockUSD < 6 || config.deadline <= block.timestamp
+                || config.volumeTargetMockUSD < 6 || config.deadline != 0
         ) revert InvalidLaunch();
 
         quote.prizeAmount = FullMath.mulDiv(config.tokenAllocation, config.prizeBps, PRIZE_RATE_DENOMINATOR);

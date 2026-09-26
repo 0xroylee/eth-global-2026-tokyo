@@ -565,7 +565,8 @@ function sameDeployment(
     current.rpcUrl !== rpcUrl || current.manifest.chainId !== next.chainId ||
     current.baseManifest.deploymentTxHash.toLowerCase() !== next.deploymentTxHash.toLowerCase() ||
     current.baseManifest.bossFactory?.toLowerCase() !== next.bossFactory?.toLowerCase() ||
-    current.baseManifest.bossFactoryDeployedAtBlock !== next.bossFactoryDeployedAtBlock
+    current.baseManifest.bossFactoryDeployedAtBlock !== next.bossFactoryDeployedAtBlock ||
+    JSON.stringify(current.baseManifest.previousBossFactories) !== JSON.stringify(next.previousBossFactories)
   ) return false;
   const oldAddresses = current.baseManifest.addresses;
   return Object.keys(oldAddresses).every((name) => {

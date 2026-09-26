@@ -78,7 +78,7 @@ export function BossActions({
   const observedTimestamp = round && live
     ? round.blockTimestamp + BigInt(Math.max(0, Math.floor((now - live.readAt) / 1_000)))
     : chainTimestamp;
-  const active = Boolean(round && round.status === 1 && observedTimestamp < round.deadline);
+  const active = Boolean(round && round.status === 1 && (round.deadline === 0n || observedTimestamp < round.deadline));
   const quoteTimestamp = quoteState
     ? quoteState.quote.quotedAt + BigInt(Math.max(0, Math.floor((now - quoteState.receivedAt) / 1_000)))
     : chainTimestamp;
@@ -272,7 +272,7 @@ export function BossActions({
             {factory && player && <p className="mt-1 text-xs text-muted">Purchased {displayAmount(player.bossHPBalance, hpToken?.decimals ?? 18)} {hpToken?.symbol ?? "MEME"}</p>}
           </div>}
         </div>
-        {round && <p className="mt-2 font-mono text-[9px] text-faint">ON-CHAIN DEADLINE · {formatUtc(round.deadline)}</p>}
+        {round && <p className="mt-2 font-mono text-[9px] text-faint">{round.deadline === 0n ? "ROUND DURATION · UNTIL DEFEATED" : `ON-CHAIN DEADLINE · ${formatUtc(round.deadline)}`}</p>}
         </>
       )}
 
@@ -301,7 +301,7 @@ export function BossActions({
           <p className="mt-2 text-xs text-muted" role="status">
             {round.status === 3
               ? "This deployment's round is already defeated; an attack quote is unavailable."
-              : round.status === 4 || chainTimestamp >= round.deadline
+              : round.status === 4 || (round.deadline !== 0n && chainTimestamp >= round.deadline)
                 ? "This round has expired by its on-chain deadline; attack quotes are closed."
                 : `Attack quotes require an Active round. Current status: ${roundStatusLabel(round.status)}.`}
           </p>
@@ -487,7 +487,7 @@ export function BossActions({
       {round && !active && !defeated && round.status === 4 && (
         <p className="hairline mt-4 border-t pt-3 text-xs text-muted">Round expired at its on-chain deadline. Attacks are closed.</p>
       )}
-      {round && round.status !== 3 && round.status !== 4 && chainTimestamp >= round.deadline && (
+      {round && round.status !== 3 && round.status !== 4 && (round.deadline !== 0n && chainTimestamp >= round.deadline) && (
         <p className="hairline mt-4 border-t pt-3 text-xs text-danger">The on-chain deadline has passed. Attacks are disabled.</p>
       )}
     </div>

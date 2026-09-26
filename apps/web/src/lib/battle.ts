@@ -4,7 +4,8 @@ import type { NetworkKey, WriteState } from "./useBossPool";
 export type BossVisualState = "idle" | "hit" | "transition" | "defeated";
 export const STAGE_HUES = ["#95a7f6", "#b685ff", "#f08cff"] as const;
 
-export function roundSecondsLeft(round: Pick<RoundSnapshot, "deadline" | "blockTimestamp">, readAt: number, now: number): number {
+export function roundSecondsLeft(round: Pick<RoundSnapshot, "deadline" | "blockTimestamp">, readAt: number, now: number): number | null {
+  if (round.deadline === 0n) return null;
   const elapsed = Math.max(0, Math.floor((now - readAt) / 1_000));
   return Math.max(0, Number(round.deadline - round.blockTimestamp) - elapsed);
 }

@@ -9,7 +9,7 @@ export type BossPresentation = {
   stageImages: readonly [string, string, string];
 };
 
-const POOL_UNIS_PRESENTATION: BossPresentation = {
+export const POOL_UNIS_PRESENTATION: BossPresentation = {
   name: "Pool Unis",
   japaneseName: "プール・ユニス",
   stageImages: [
