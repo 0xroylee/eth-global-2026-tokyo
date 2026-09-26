@@ -28,16 +28,16 @@ export function sageLines(state: SageState): string[] {
   const challengers = challengerCount();
   if (state.firstVisit) {
     return [
-      `年輕人，歡迎來到 Boss Pool 花園。前方有 ${challengers} 位從 Robinhood 來的挑戰者，他們會奪走每個人的好夢。`,
-      "沿著石路向上，一座神社就是一位 Boss。只有 Roy 已經甦醒——先去找祂練手吧。",
+      `Young one, welcome to the Boss Pool garden. ${challengers} challengers from Base are waiting ahead, and they will take everyone's sweetest dreams.`,
+      "Follow the stone road north. Only Roy has awakened so far. Go cross blades with him first.",
     ];
   }
   if (state.defeated) {
     return [
-      `你擊敗了 Roy。剩下的 ${BOSSES.length - 1} 位還在等他們的合約降臨。名單之後還會換，改天再來看看吧。`,
+      `You bested Roy. The other ${BOSSES.length - 1} are still waiting for their contracts to come down. The roster changes again, so visit another day.`,
     ];
   }
   return [
-    `還是那 ${challengers} 位。名單會變，就像城裡的流言。記住那隻叫 ROO 的——只有牠不守規矩，會在路上遊蕩。`,
+    `Still those ${challengers} names. The roster shifts like rumours in town. Watch for SOL, the only one that will not behave. It wanders the road.`,
   ];
 }
