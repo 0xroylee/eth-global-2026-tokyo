@@ -21,6 +21,7 @@ import { HubRouteNotice } from "./HubRouteNotice";
 import { HubSoundControl } from "./HubSoundControl";
 import { RoundStatePanel } from "./RoundStatePanel";
 import { SageDialog } from "./SageDialog";
+import { WorldChannel } from "./WorldChannel";
 
 export function GameShell() {
   const bridge = useMemo(() => new GameBridge(), []);
@@ -354,6 +355,7 @@ export function GameShell() {
         )}
 
         <div className="mt-auto flex flex-col gap-2">
+          <WorldChannel deployment={deployment} />
           <div className="flex flex-wrap items-end justify-center gap-2">
             <span className="rounded-md bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.14em] text-dim">WASD / ARROWS · MOVE</span>
             <GatePrompt bossId={nearBoss} hidden={!showBossPrompt} onEnter={enterGate} />
