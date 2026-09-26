@@ -44,6 +44,21 @@
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+/* Boss entry panel: enters from slightly below and scaled, never from nothing. */
+@utility panel-enter {
+  animation: panel-enter 180ms var(--ease-out-strong) both;
+}
+@keyframes panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* Reduced motion: keep opacity/color feedback, drop movement. */
 @media (prefers-reduced-motion: reduce) {
   *,
