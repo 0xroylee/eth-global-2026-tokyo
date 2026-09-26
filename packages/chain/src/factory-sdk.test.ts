@@ -17,6 +17,7 @@ import {
   type FactoryPendingOperation,
 } from "./factory-sdk";
 import { bossFactoryAbi } from "./generated/abi";
+import { bossHookCreationCode, bossRouterCreationCode } from "./generated/bytecode";
 
 const factory = "0x0000000000000000000000000000000000000010" as Address;
 const token = "0x0000000000000000000000000000000000000020" as Address;
@@ -264,7 +265,11 @@ describe("factory SDK pending operations", () => {
     const localClient = createBossFactorySdk({
       publicClient: {
         ...sdkPublicClient(),
-        readContract: async () => 0n,
+        readContract: async ({ functionName }: { functionName: string }) => {
+          if (functionName === "routerCodeHash") return keccak256(bossRouterCreationCode);
+          if (functionName === "hookCodeHash") return keccak256(bossHookCreationCode);
+          return 0n;
+        },
         simulateContract: async ({ account }: { account: Address }) => {
           simulatedAccount = account;
           throw new Error("stop before signing");
@@ -280,6 +285,52 @@ describe("factory SDK pending operations", () => {
     await expect(localClient.approveToken(token, 1n)).rejects.toThrow("stop before signing");
     expect(simulatedAccount).toBe(maker);
   });
+
+  test("blocks quote and approval against a Factory with different immutable bytecode hashes", async () => {
+    const calls: string[] = [];
+    let simulated = 0;
+    let writes = 0;
+    const client = createBossFactorySdk({
+      publicClient: {
+        ...sdkPublicClient(),
+        readContract: async ({ functionName }: { functionName: string }) => {
+          calls.push(functionName);
+          if (functionName === "routerCodeHash") return `0x${"ff".repeat(32)}`;
+          if (functionName === "hookCodeHash") return `0x${"ee".repeat(32)}`;
+          return 0n;
+        },
+        simulateContract: async () => { simulated++; throw new Error("should not simulate"); },
+        waitForTransactionReceipt: async () => launchReceipt(),
+        getTransaction: async () => transaction(),
+      } as unknown as PublicClient,
+      factory,
+      walletClient: {
+        getChainId: async () => 84532,
+        getAddresses: async () => [maker],
+        writeContract: async () => { writes++; return hash; },
+      } as never,
+    });
+    const config = {
+      token,
+      tokenAllocation: 1000n,
+      prizeBps: 1000,
+      volumeTargetMockUSD: 6000n,
+      deadline: 2_000_000_000n,
+      maxAttackTokenPerMockUSDX128: 0n,
+    };
+
+    await expect(client.checkFactoryBuild()).resolves.toMatchObject({ status: "incompatible" });
+    await expect(client.quoteLaunch(config)).rejects.toMatchObject({ code: "FACTORY_BUILD_MISMATCH" });
+    await expect(client.approveToken(token, 1n)).rejects.toMatchObject({ code: "FACTORY_BUILD_MISMATCH" });
+    expect(calls).not.toContain("quoteLaunch");
+    expect(calls).not.toContain("allowance");
+    expect(simulated).toBe(0);
+    expect(writes).toBe(0);
+    await expect(client.resumeOperation(launchOperation())).resolves.toMatchObject({
+      kind: "launch",
+      result: { bossId, maker, token },
+    });
+  });
 });
 
 function sdkPublicClient() {
@@ -287,6 +338,10 @@ function sdkPublicClient() {
     chain: { id: 84532 },
     getCode: async () => "0x01",
     getChainId: async () => 84532,
-    readContract: async () => 0n,
+    readContract: async ({ functionName }: { functionName: string }) => {
+      if (functionName === "routerCodeHash") return keccak256(bossRouterCreationCode);
+      if (functionName === "hookCodeHash") return keccak256(bossHookCreationCode);
+      return 0n;
+    },
   };
 }

@@ -1,6 +1,6 @@
 # Boss Pool chain SDK
 
-`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses generated Foundry ABIs and pinned Router/Hook creation bytecode. Standalone round deployment and maker administration remain CLI operations. A verified Base Sepolia manifest is published under `apps/web/public/deployments/base-sepolia.json`; no Factory address is configured there yet.
+`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses generated Foundry ABIs and pinned Router/Hook creation bytecode. Standalone round deployment and maker administration remain CLI operations. The Base Sepolia deployment manifest includes the original Boss Factory address. That deployment predates the review fixes and is incompatible with the corrected bundled build; deploy and configure a matching Factory to enable new launches.
 
 The attack currency is named **Attack Token** in the UI and documentation. SDK fields such as `royBought`, `roySpent`, `royRefunded`, `minRoyOut`, and `royBalance`, plus the manifest key `roy` and contract `RoyToken`, retain their existing names for deployment compatibility. All refer to Attack Token. See [domain language](../../CONTEXT.md).
 
@@ -60,7 +60,9 @@ const launched = await writer.launchBoss(acceptedConfig, undefined, onSubmitted)
 localStorage.removeItem("factory.pending");
 ```
 
-The launch SDK checks that its generated Router and Hook creation code matches the configured Factory hashes, derives the hook init code from the accepted frozen rate, mines a permission-correct CREATE2 salt, simulates the launch, and validates the `BossLaunched` event from the confirmed receipt. The Factory separately checks the live supply rate against the accepted bound. Supply-price changes within that bound do not invalidate the mined address.
+Before quotes, approvals, or launches, the Factory SDK checks that its generated Router and Hook creation code matches the configured Factory hashes. The launch flow then derives the hook init code from the accepted frozen rate, mines a permission-correct CREATE2 salt, simulates the launch, and validates the `BossLaunched` event from the confirmed receipt. The Factory separately checks the live supply rate against the accepted bound. Supply-price changes within that bound do not invalidate the mined address.
+
+`checkFactoryBuild()` is a public read that returns `compatible`, `incompatible`, or `not-deployed`. An incompatible result includes the actual and expected creation-code hashes. RPC failures throw. Use this result to explain unavailable launch actions; saved receipt recovery remains available independently of build compatibility.
 
 `approveToken` and `launchBoss` accept an `onSubmitted` callback. Persist its JSON-safe `FactoryPendingOperation` synchronously. `resumeOperation(operation)` checks the saved transaction without sending another one and works with a public SDK client. A receipt timeout raises `FactoryOperationPendingError` and keeps the request unresolved. The app must retain its write lock until a validated success, a proven revert, or a different/cancelled replacement. RPC errors and mismatched successful receipts do not authorize a retry. Replacement transactions must match the sender, destination, calldata, value, chain, and expected events; launch recovery also checks the boss ID and configuration.
 

@@ -46,6 +46,17 @@ export type FactoryLaunchQuote = {
   maxRoyPerMockUSDX128: bigint;
 };
 
+export type FactoryBuildStatus =
+  | { status: "not-deployed" }
+  | { status: "compatible" }
+  | {
+      status: "incompatible";
+      routerCodeHash: Hex;
+      hookCodeHash: Hex;
+      expectedRouterCodeHash: Hex;
+      expectedHookCodeHash: Hex;
+    };
+
 export type Erc20TokenInfo = {
   address: Address;
   symbol: string;
@@ -206,9 +217,28 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
     throw new BossFactorySdkError("CLIENT_CHAIN_MISMATCH", "Factory reader and wallet are configured for different chains.");
   }
 
-  async function ensureFactory(): Promise<void> {
+  async function checkFactoryBuild(): Promise<FactoryBuildStatus> {
     const code = await publicClient.getCode({ address: factory });
-    if (!code || code === "0x") throw new BossFactorySdkError("FACTORY_NOT_DEPLOYED", "No Boss Factory is deployed at the configured address.");
+    if (!code || code === "0x") return { status: "not-deployed" };
+    const [routerCodeHash, hookCodeHash] = await Promise.all([
+      publicClient.readContract({ address: factory, abi: bossFactoryAbi, functionName: "routerCodeHash" }) as Promise<Hex>,
+      publicClient.readContract({ address: factory, abi: bossFactoryAbi, functionName: "hookCodeHash" }) as Promise<Hex>,
+    ]);
+    const expectedRouterCodeHash = keccak256(routerCode);
+    const expectedHookCodeHash = keccak256(hookCode);
+    return sameHex(routerCodeHash, expectedRouterCodeHash) && sameHex(hookCodeHash, expectedHookCodeHash)
+      ? { status: "compatible" }
+      : { status: "incompatible", routerCodeHash, hookCodeHash, expectedRouterCodeHash, expectedHookCodeHash };
+  }
+
+  async function ensureFactory(): Promise<void> {
+    const status = await checkFactoryBuild();
+    if (status.status === "not-deployed") {
+      throw new BossFactorySdkError("FACTORY_NOT_DEPLOYED", "No Boss Factory is deployed at the configured address.");
+    }
+    if (status.status === "incompatible") {
+      throw new BossFactorySdkError("FACTORY_BUILD_MISMATCH", "This Boss Factory uses different Router/Hook bytecode. Deploy the Factory build that matches this app before quoting or approving a launch.");
+    }
   }
 
   async function requireWallet(): Promise<{
@@ -244,6 +274,10 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
 
   async function quoteLaunch(config: FactoryLaunchConfig): Promise<FactoryLaunchQuote> {
     await ensureFactory();
+    return readLaunchQuote(config);
+  }
+
+  async function readLaunchQuote(config: FactoryLaunchConfig): Promise<FactoryLaunchQuote> {
     return await publicClient.readContract({
       address: factory,
       abi: bossFactoryAbi,
@@ -341,18 +375,9 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
     if (await tokenAllowance(config.token, account) < config.tokenAllocation) {
       throw new BossFactorySdkError("TOKEN_APPROVAL_REQUIRED", "Approve the selected MEME allocation to the Boss Factory first.");
     }
-    const expectedQuote = await quoteLaunch(config);
+    const expectedQuote = await readLaunchQuote(config);
     if (expectedQuote.maxRoyPerMockUSDX128 !== config.maxAttackTokenPerMockUSDX128) {
       throw new BossFactorySdkError("ACCEPTED_RATE_MISMATCH", "The accepted attack-token rate no longer matches the Factory quote. Request a fresh quote.");
-    }
-
-    const [expectedRouterHash, expectedHookHash] = await Promise.all([
-      publicClient.readContract({ address: factory, abi: bossFactoryAbi, functionName: "routerCodeHash" }),
-      publicClient.readContract({ address: factory, abi: bossFactoryAbi, functionName: "hookCodeHash" }),
-    ]);
-    if (keccak256(routerCode).toLowerCase() !== expectedRouterHash.toLowerCase() ||
-        keccak256(hookCode).toLowerCase() !== expectedHookHash.toLowerCase()) {
-      throw new BossFactorySdkError("FACTORY_BUILD_MISMATCH", "This app's contract bytecode does not match the configured Factory build.");
     }
 
     const userSalt = await uniqueUserSalt(account);
@@ -446,6 +471,7 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
 
   return {
     factory,
+    checkFactoryBuild,
     readToken: (token: Address, account?: Address) => readErc20TokenInfo(publicClient, token, account),
     quoteLaunch,
     tokenAllowance,

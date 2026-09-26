@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "network": "base-sepolia",
+  "chainId": 84532,
+  "contractName": "BossFactory",
+  "factoryAddress": "0x77794cD6099e9d676bd1DC378308d86344A66962",
+  "deployer": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+  "transactionHash": "0xf9f15e3858636914ace7b23da41eefe1c9cf2476b1a717cc26e2f9530b4535d5",
+  "blockNumber": 47330324,
+  "gasUsed": "3961518",
+  "status": "success",
+  "addresses": {
+    "poolManager": "0x1EF1e7e79B14AFB530d9671A79B7B173FE41a1c3",
+    "mockUSD": "0x184B037F95A8E7a6E956AACad2244E5ded40d487",
+    "attackToken": "0x6e5390D3231beb061c1E49916806F2f26B3Feb22"
+  },
+  "pinnedCreationCodeHashes": {
+    "router": "0x6e9fff0011912d8f33a941acc53cf8ddf2d5074158a02f873774093adc013d00",
+    "hook": "0x574675c8b95dc0d60eac5efff7ec128d1cece2127ca46391c42d733ed729ec48"
+  }
+}

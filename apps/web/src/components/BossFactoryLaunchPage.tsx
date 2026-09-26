@@ -8,11 +8,14 @@ import {
   createBaseSepoliaPublicClient,
   createBaseSepoliaWalletClient,
   createBossFactorySdk,
+  fetchBaseSepoliaDeployment,
   formatUnits,
   isAddress,
   readErc20TokenInfo,
+  verifyDeployment,
   type Address,
   type Erc20TokenInfo,
+  type FactoryBuildStatus,
   type FactoryLaunchConfig,
   type FactoryLaunchProgress,
   type FactoryLaunchQuote,
@@ -26,11 +29,12 @@ import { WalletProvider, useWallet } from "@/wallet/WalletProvider";
 const BASE_SEPOLIA_RPC_URL =
   process.env.NEXT_PUBLIC_BOSS_POOL_BASE_SEPOLIA_RPC_URL ?? "https://sepolia.base.org";
 const rawFactoryAddress = process.env.NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_ADDRESS;
-const factoryAddress = rawFactoryAddress && isAddress(rawFactoryAddress, { strict: false })
+const configuredFactoryAddress = rawFactoryAddress && isAddress(rawFactoryAddress, { strict: false })
   ? rawFactoryAddress as Address
   : undefined;
 
 type LaunchQuoteState = { config: FactoryLaunchConfig; quote: FactoryLaunchQuote };
+type FactoryBuildState = FactoryBuildStatus | { status: "checking" | "unconfigured" } | { status: "error"; message: string };
 
 export function BossFactoryLaunchPage() {
   return (
@@ -44,11 +48,40 @@ function LaunchForm() {
   const { state: walletState } = useWallet();
   const account = walletState.status === "connected" ? walletState.account : undefined;
   const provider = walletState.status === "connected" ? walletState.selected.provider : undefined;
+  const [factoryAddress, setFactoryAddress] = useState(configuredFactoryAddress);
+  const [factoryBuild, setFactoryBuild] = useState<FactoryBuildState>(
+    configuredFactoryAddress ? { status: "checking" } : { status: "unconfigured" },
+  );
   const publicClient = useMemo(() => createBaseSepoliaPublicClient(BASE_SEPOLIA_RPC_URL), []);
+  useEffect(() => {
+    if (configuredFactoryAddress) return;
+    let active = true;
+    void fetchBaseSepoliaDeployment().then(async (manifest) => {
+      await verifyDeployment(publicClient, manifest);
+      if (active && manifest.bossFactory) setFactoryAddress(manifest.bossFactory);
+    }).catch((cause) => {
+      if (active) setError(errorMessage(cause));
+    });
+    return () => { active = false; };
+  }, [publicClient]);
   const reader = useMemo(
     () => factoryAddress ? createBossFactorySdk({ publicClient, factory: factoryAddress }) : undefined,
-    [publicClient],
+    [factoryAddress, publicClient],
   );
+  useEffect(() => {
+    if (!reader) {
+      setFactoryBuild({ status: factoryAddress ? "checking" : "unconfigured" });
+      return;
+    }
+    let active = true;
+    setFactoryBuild({ status: "checking" });
+    void reader.checkFactoryBuild().then((status) => {
+      if (active) setFactoryBuild(status);
+    }).catch((cause) => {
+      if (active) setFactoryBuild({ status: "error", message: errorMessage(cause) });
+    });
+    return () => { active = false; };
+  }, [factoryAddress, reader]);
   const sdk = useMemo(() => {
     if (!reader || !provider || !account) return undefined;
     return reader.withWallet(createBaseSepoliaWalletClient(provider, account));
@@ -178,7 +211,7 @@ function LaunchForm() {
   }
 
   async function requestQuote() {
-    if (!reader) return;
+    if (!reader || factoryBuild.status !== "compatible") return;
     const request = ++quoteRequestRef.current;
     const requestedAccount = account;
     setBusy("quote");
@@ -207,7 +240,7 @@ function LaunchForm() {
   }
 
   async function approveAllocation() {
-    if (!sdk || !quoteState) return;
+    if (!sdk || !quoteState || factoryBuild.status !== "compatible") return;
     if (busyLockRef.current) return;
     const attempt = factoryOperation.begin("approval", account);
     if (!attempt) return;
@@ -233,7 +266,7 @@ function LaunchForm() {
   }
 
   async function createBoss() {
-    if (!sdk || !quoteState) return;
+    if (!sdk || !quoteState || factoryBuild.status !== "compatible") return;
     if (busyLockRef.current) return;
     const attempt = factoryOperation.begin("launch", account);
     if (!attempt) return;
@@ -295,9 +328,12 @@ function LaunchForm() {
   const hasEnoughBalance = matchingTokenInfo?.balance !== undefined && allocationAmount !== undefined && matchingTokenInfo.balance >= allocationAmount;
   const approvalNeeded = quoteState !== undefined && allowance !== undefined && allowance < quoteState.config.tokenAllocation;
   const factoryLocked = !factoryOperation.ready || factoryOperation.active !== undefined;
-  const canContinue = Boolean(account && sdk && quoteState && hasEnoughBalance && allowance !== undefined && !factoryLocked);
+  const factoryBuildReady = factoryBuild.status === "compatible";
+  const canContinue = Boolean(account && sdk && quoteState && hasEnoughBalance && allowance !== undefined && !factoryLocked && factoryBuildReady);
   const actionLabel = !account
     ? "CONNECT WALLET TO CONTINUE"
+    : !factoryBuildReady
+      ? factoryBuild.status === "checking" ? "VERIFYING FACTORY BUILD" : "FACTORY BUILD MISMATCH"
     : !quoteState
       ? "GET FUNDING QUOTE FIRST"
       : !hasEnoughBalance
@@ -347,6 +383,24 @@ function LaunchForm() {
             {factoryAddress && (
               <p className="mt-3 break-all font-mono text-[9px] tracking-[0.06em] text-faint">
                 FACTORY CONTRACT · {factoryAddress}
+              </p>
+            )}
+            {factoryBuild.status === "checking" && (
+              <p className="mt-3 text-xs text-muted" role="status">Checking the deployed Factory bytecode against this app…</p>
+            )}
+            {factoryBuild.status === "not-deployed" && (
+              <p className="mt-3 rounded-lg border border-danger/25 bg-danger/[0.05] px-3 py-2.5 text-xs leading-relaxed text-danger" role="alert">
+                No Boss Factory contract exists at the configured address. Update the Factory address or deployment manifest before quoting or approving.
+              </p>
+            )}
+            {factoryBuild.status === "incompatible" && (
+              <p className="mt-3 rounded-lg border border-danger/25 bg-danger/[0.05] px-3 py-2.5 text-xs leading-relaxed text-danger" role="alert">
+                This Factory was deployed with different Router/Hook bytecode and an older launch config. Deploy a Factory build that matches this app, then update the configured address or manifest.
+              </p>
+            )}
+            {factoryBuild.status === "error" && (
+              <p className="mt-3 rounded-lg border border-danger/25 bg-danger/[0.05] px-3 py-2.5 text-xs leading-relaxed text-danger" role="alert">
+                Could not verify the configured Factory build: {factoryBuild.message}
               </p>
             )}
 
@@ -483,7 +537,7 @@ function LaunchForm() {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   type="submit"
-                  disabled={!reader || !matchingTokenInfo || busy !== undefined || factoryLocked}
+                  disabled={!reader || !factoryBuildReady || !matchingTokenInfo || busy !== undefined || factoryLocked}
                   className="min-h-12 flex-1 rounded-lg bg-accent-soft px-4 py-3 font-mono text-[10px] font-medium tracking-[0.13em] text-ink transition-[opacity,transform] hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-opacity motion-reduce:active:scale-100"
                 >
                   {busy === "quote" ? "CALCULATING FUNDING…" : "QUOTE LAUNCH"}
@@ -491,7 +545,7 @@ function LaunchForm() {
                 <button
                   type="button"
                   onClick={() => void continueLaunch()}
-                  disabled={!canContinue || busy !== undefined || !hasEnoughBalance || factoryLocked}
+                  disabled={!canContinue || busy !== undefined || !hasEnoughBalance || factoryLocked || !factoryBuildReady}
                   className="min-h-12 flex-1 rounded-lg border border-[#f5b04a]/45 px-4 py-3 font-mono text-[10px] font-medium tracking-[0.13em] text-[#ffd28a] transition-[opacity,transform] hover:bg-[#f5b04a]/[0.06] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-opacity motion-reduce:active:scale-100"
                 >
                   {busyLabel ?? actionLabel}

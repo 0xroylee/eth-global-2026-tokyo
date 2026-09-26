@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Address, type DeploymentManifest } from "@boss-pool/chain";
 import { confirmedBattleAttack } from "@/lib/battle";
-
 import { findBoss, type BossId } from "@/game/bosses";
 import { GameBridge } from "@/game/bridge";
 import { useHubGuide } from "@/lib/useHubGuide";
@@ -167,6 +166,12 @@ export function GameShell() {
             >
               BOSS ACTIONS
             </button>
+            <Link
+              href="/boostpad?from=game"
+              className="rounded-lg border border-[#c48a45]/50 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-[#f3e2c4] transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97]"
+            >
+              BOOSTPAD
+            </Link>
             <label className="rounded-lg border border-white/10 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-dim">
               NETWORK
               <select

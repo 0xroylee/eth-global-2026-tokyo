@@ -93,6 +93,7 @@ export type {
   BossFactorySdk,
   BossFactorySdkOptions,
   Erc20TokenInfo,
+  FactoryBuildStatus,
   FactoryOperationResult,
   FactoryPendingOperation,
   FactoryLaunchConfig,
