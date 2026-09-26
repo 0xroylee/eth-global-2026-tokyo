@@ -7,9 +7,9 @@ export const STAGE_IMAGES: Record<StageImageId, { label: string; src: string }> 
   "form-b": { label: "Form B", src: "/images/boss-cat-form-b.png" },
   "form-c": { label: "Form C", src: "/images/boss-cat-form-c.png" },
   whale: { label: "Macro Whale", src: "/images/boss-macro-whale-portrait.png" },
-  "little-roy": { label: "Little ETH", src: "/images/little-roy-slime.png" },
-  "roy-king": { label: "Little ETH King", src: "/images/little-roy-king-a.png" },
-  "roy-tide": { label: "Little ETH Tide", src: "/images/little-roy-king-b.png" },
+  "little-roy": { label: "Little ETH", src: "/images/little-eth-slime.png" },
+  "roy-king": { label: "Little ETH King", src: "/images/little-eth-king-a.png" },
+  "roy-tide": { label: "Little ETH Tide", src: "/images/little-eth-king-b.png" },
 };
 
 export type BossFormInput = {
