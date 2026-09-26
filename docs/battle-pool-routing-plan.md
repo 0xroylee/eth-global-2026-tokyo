@@ -1,6 +1,8 @@
 # Battle routing by boss address
 
-Status: implemented and locally verified, 26 September 2026. The user confirmed Hook-address routing, Factory and standalone support, and hardcoded Boss presentation mappings. [Verification evidence](evidence/battle-hook-routing-verification.json) records the SDK journeys, desktop browser checks, and review result.
+Status: implemented and locally verified, with the retired Base Sepolia standalone boss removed from the live app on 27 September 2026. Factory battles, local standalone regression support, and hardcoded Boss presentation mappings remain. [Verification evidence](evidence/battle-hook-routing-verification.json) records the SDK journeys, desktop browser checks, and review result.
+
+[Retirement verification](evidence/retired-boss-removal-verification.json) records the old Hook rejection and the absence of reads to retired Boss contracts.
 
 ## Confirmed outcome
 
@@ -8,10 +10,10 @@ Use `/battle/<hook-address>?network=base-sepolia` to open one specific boss. The
 
 The route parameter can remain named `pool_id`, but its value is an EVM Hook address. It is neither the Uniswap v4 `bytes32` pool ID nor the Factory's `bossId`. The selected encounter is identified by chain ID and normalized Hook address.
 
-Example for the existing demo:
+Example for the current Factory demo:
 
 ```text
-/battle/0xe217b4840049f928d4392030ac86aCe6b3766AC0?network=base-sepolia
+/battle/0xc11D07448948AC4757592E91D8f5155907Ef6AC0?network=base-sepolia
 ```
 
 An unknown address must never display or transact with the default demo. The existing quote review, explicit wallet approval, attack confirmation, and receipt recovery remain. The player UI continues to have no faucet.
@@ -32,7 +34,6 @@ Initial known mapping:
 
 | Network | Hook address | Presentation |
 | --- | --- | --- |
-| Base Sepolia, 84532 | `0xe217b4840049f928d4392030ac86aCe6b3766AC0` | Pool Unis, cat forms A/B/C |
 | Base Sepolia, 84532 | `0xc11D07448948AC4757592E91D8f5155907Ef6AC0` | Pool Unis, cat forms A/B/C |
 
 Add other mappings when their actual Hook addresses and intended Boss presentations are known. The local demo's verified manifest supplies its current Hook address and explicitly maps it to the same Pool Unis presentation. Do not invent deployed addresses or assign art from the token symbol.
@@ -79,7 +80,7 @@ Update `useBossPool.ts`, `BossPoolProvider.tsx`, and the battle controller while
 - Clear old displayed round/player data and quotes when the requested encounter changes. Ignore late reads from the previous selection and block actions until the requested boss is verified.
 - Include Hook identity in quote freshness, confirmed-hit filtering, state caches, and component reset keys. Do not rely solely on a deployment transaction hash, which may contain multiple launch events.
 - Keep pending transactions bound to their original verified encounter. Navigating to another boss must not redirect recovery, duplicate submission, release the existing write lock, or apply the old boss's damage to the new boss.
-- Returning to the hub must restore each gate's registered encounter. A Pool Unis gate must not display the last visited Factory boss's state. Include Hook identity in the hub's confirmed-hit matching as well as the battle's.
+- Returning to the hub must restore each gate's configured default encounter. A Pool Unis gate must not display a different previously visited boss's state. Include Hook identity in the hub's confirmed-hit matching as well as the battle's.
 - Preserve compatibility with saved standalone operations and retain Factory launch-operation handling.
 
 Acceptance: navigate from A to B with a quote, wallet prompt, or pending receipt for A. B must never reuse A's quote or apply its result. Returning to A or refreshing must retain receipt recovery.
@@ -90,7 +91,7 @@ Add `apps/web/src/app/battle/[pool_id]/page.tsx` and update battle components an
 
 - Resolve the route address and network before displaying actionable battle content. Public inspection remains available without a wallet.
 - Update `BossEntryPanel` and the confirmed Factory launch result to link to the correct Hook address. Add an **ENTER BATTLE** link after a confirmed launch.
-- Redirect bare `/battle` and legacy `/mock-battle` links to the configured standalone boss on the selected network. If that default deployment is missing, show an unavailable state rather than inventing an address.
+- Redirect bare `/battle` and legacy `/mock-battle` links to the configured default boss on the selected network. The Base Sepolia manifest selects the active Factory Hook through `defaultBossHook`; manifests without that setting retain their standalone Hook. If that default deployment is missing, show an unavailable state rather than inventing an address.
 - Keep explicit pool URLs fixed to their requested Hook. Changing network must update the URL and verify that Hook on the selected chain; it must not silently replace it with another boss.
 - Render Factory identity, token units, stage-volume progress, and reward credit from its verified state. Show purchased MEME separately from the stage's volume-based completion condition. Keep the standalone HP-based display.
 - Look up the hardcoded presentation by chain ID and Hook address, then pass its name and stage images into `BattleView`, `NamePlate`, and `BossStage`. Show the explicit unconfigured appearance state when no entry exists. Update `StatusPanel`, `VictoryCard`, and `BossActions` for the correct progress and reward mode.
@@ -116,4 +117,4 @@ Follow the current `docs/agents/models.md` routing: GPT-6 Luna at xhigh for impl
 
 No contract accounting changes were required. Main now includes the corrected Base Sepolia Factory at block `47332647` and an active demo boss at block `47332745`. The user selected Pool Unis for the new Hook `0xc11D07448948AC4757592E91D8f5155907Ef6AC0`. The original Factory remains historical and incompatible. Public-chain player transactions remain a separate verification step.
 
-The existing standalone Base Sepolia round has expired and its deadline is immutable. Address routing does not reopen it. Any new public deployment, deadline choice, or prize funding remains a separate rollout action.
+The expired Base Sepolia standalone round is retired from live configuration and presentation. Its old address does not resolve through the live battle selector. Historical evidence, generic local regression support, and recovery of already submitted operations remain. No contract was modified or redeployed for this removal.

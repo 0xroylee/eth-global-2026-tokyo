@@ -67,9 +67,10 @@ describe("confirmed battle effects", () => {
 });
 
 test("boss presentation is address and chain scoped, with casing-insensitive known lookups", () => {
-  const baseHook = "0xe217b4840049f928d4392030ac86aCe6b3766AC0";
+  const retiredHook = "0xe217b4840049f928d4392030ac86aCe6b3766AC0";
   const newBaseHook = "0xc11D07448948AC4757592E91D8f5155907Ef6AC0";
-  expect(findBossPresentation(84532, baseHook.toUpperCase().replace("0X", "0x"))?.name).toBe("Pool Unis");
+  expect(findBossPresentation(84532, retiredHook)).toBeUndefined();
+  expect(findBossPresentation(84532, newBaseHook.toUpperCase().replace("0X", "0x"))?.name).toBe("Pool Unis");
   expect(findBossPresentation(84532, newBaseHook)?.stageImages).toEqual([
     "/images/boss-cat-form-a.png?v=6",
     "/images/boss-cat-form-b.png?v=6",

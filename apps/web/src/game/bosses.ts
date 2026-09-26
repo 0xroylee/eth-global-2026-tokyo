@@ -39,7 +39,6 @@ export const POOL_UNIS_PRESENTATION: BossPresentation = {
 
 /** A presentation is a checked-in choice for one chain and Hook; it never verifies a contract. */
 const BOSS_PRESENTATIONS: Readonly<Record<string, BossPresentation>> = {
-  "84532:0xe217b4840049f928d4392030ac86ace6b3766ac0": POOL_UNIS_PRESENTATION,
   "84532:0xc11d07448948ac4757592e91d8f5155907ef6ac0": POOL_UNIS_PRESENTATION,
 };
 

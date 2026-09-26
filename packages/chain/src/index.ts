@@ -26,6 +26,7 @@ export {
   parseLocalDeployment,
   verifyDeployment,
   resolveBossDeployment,
+  getDefaultBossHook,
   DeploymentResolutionError,
 } from "./deployment";
 export type {

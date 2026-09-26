@@ -1,4 +1,5 @@
 import type { BossId } from "./bosses";
+import type { RoundSnapshot } from "@boss-pool/chain";
 
 /**
  * The only channel between React and the Phaser game.
@@ -35,8 +36,8 @@ export type GameCommands = {
   "round:state": {
     status: number;
     currentStage: number;
-    stageSold: readonly [bigint, bigint, bigint];
-    stageCapacity: readonly [bigint, bigint, bigint];
+    stageProgress: readonly [bigint, bigint, bigint];
+    stageTarget: readonly [bigint, bigint, bigint];
   };
   /** Avoid presenting a stale stage label while the selected deployment is unavailable. */
   "round:unavailable": { label: string };
@@ -47,6 +48,15 @@ export type GameCommands = {
   /** Which part of the beginner guide the scene should track. */
   "guide:step": { step: GuideSceneStep };
 };
+
+/** Values for the hub's stage gauge: HP sold for standalone rounds, volume for Factory rounds. */
+export function hubStageProgress(round: Pick<RoundSnapshot,
+  "encounterMode" | "stageSold" | "stageCapacity" | "stageVolume" | "stageVolumeTarget"
+>): Pick<GameCommands["round:state"], "stageProgress" | "stageTarget"> {
+  return round.encounterMode === "factory"
+    ? { stageProgress: round.stageVolume, stageTarget: round.stageVolumeTarget }
+    : { stageProgress: round.stageSold, stageTarget: round.stageCapacity };
+}
 
 type Listener<T> = (payload: T) => void;
 

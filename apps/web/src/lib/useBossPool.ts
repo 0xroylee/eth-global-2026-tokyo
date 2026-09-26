@@ -7,6 +7,7 @@ import {
   DEFAULT_LOCAL_RPC_URL,
   fetchBaseSepoliaDeployment,
   fetchLocalDeployment,
+  getDefaultBossHook,
   resolveBossDeployment,
   BASE_SEPOLIA_CHAIN_ID,
   LOCAL_CHAIN_ID,
@@ -149,7 +150,7 @@ export function useBossPool() {
     const sameRequestedEncounter = (value: VerifiedContext | null) => Boolean(value && value.key === network &&
       (requestedHookAddress
         ? value.hookAddress.toLowerCase() === requestedHookAddress.toLowerCase()
-        : value.hookAddress.toLowerCase() === value.baseManifest.addresses.hook.toLowerCase()));
+        : value.hookAddress.toLowerCase() === getDefaultBossHook(value.baseManifest).toLowerCase()));
     contextRef.current = sameRequestedEncounter(contextRef.current) ? contextRef.current : null;
     setDeployment((current) => {
       if (current.kind === "live" && current.selectionId === selectionId && current.network === network && sameRequestedEncounter(current.context)) {
@@ -171,7 +172,7 @@ export function useBossPool() {
         const manifest = await fetchDeploymentForNetwork(network);
         if (!active) return;
         const rpcUrl = deploymentRpcUrl(network, manifest.chainId === LOCAL_CHAIN_ID ? manifest.rpcUrl : undefined);
-        const targetHook = requestedHookAddress ? getAddress(requestedHookAddress.toLowerCase()) : manifest.addresses.hook;
+        const targetHook = requestedHookAddress ? getAddress(requestedHookAddress.toLowerCase()) : getDefaultBossHook(manifest);
         resolvedHookAddress = targetHook;
         const encounterManifest = withFactoryOverride(manifest);
         let context = contextRef.current;
@@ -238,7 +239,7 @@ export function useBossPool() {
   const selectedHookMatches = deployment.kind === "live" && deployment.selectionId === selectionId && deployment.network === network &&
     (requestedHookAddress
       ? deployment.hookAddress.toLowerCase() === requestedHookAddress.toLowerCase()
-      : deployment.hookAddress.toLowerCase() === deployment.context.baseManifest.addresses.hook.toLowerCase());
+      : deployment.hookAddress.toLowerCase() === getDefaultBossHook(deployment.context.baseManifest).toLowerCase());
   const selectedDeployment: DeploymentState = deployment.selectionId === selectionId
     ? deployment
     : { kind: "loading", network, selectionId, hookAddress: requestedHookAddress };
@@ -566,7 +567,8 @@ function sameDeployment(
     current.baseManifest.deploymentTxHash.toLowerCase() !== next.deploymentTxHash.toLowerCase() ||
     current.baseManifest.bossFactory?.toLowerCase() !== next.bossFactory?.toLowerCase() ||
     current.baseManifest.bossFactoryDeployedAtBlock !== next.bossFactoryDeployedAtBlock ||
-    JSON.stringify(current.baseManifest.previousBossFactories) !== JSON.stringify(next.previousBossFactories)
+    JSON.stringify(current.baseManifest.previousBossFactories) !== JSON.stringify(next.previousBossFactories) ||
+    current.baseManifest.defaultBossHook?.toLowerCase() !== next.defaultBossHook?.toLowerCase()
   ) return false;
   const oldAddresses = current.baseManifest.addresses;
   return Object.keys(oldAddresses).every((name) => {

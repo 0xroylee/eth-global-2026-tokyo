@@ -4,6 +4,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { getDefaultBossHook } from "@boss-pool/chain";
 import type { BossDefinition } from "@/game/bosses";
 import { displayAmount, roundStatusLabel } from "@/lib/format";
 import { type useBossPool } from "@/lib/useBossPool";
@@ -29,8 +30,7 @@ export function BossEntryPanel({
   const closeRef = useRef<HTMLButtonElement>(null);
   const actionRef = useRef<HTMLButtonElement>(null);
   const candidate = arena.deployment.kind === "live" ? arena.deployment : null;
-  const live = candidate && candidate.context.deployment.encounterMode === "standalone" &&
-    candidate.hookAddress.toLowerCase() === candidate.context.baseManifest.addresses.hook.toLowerCase()
+  const live = candidate && candidate.hookAddress.toLowerCase() === getDefaultBossHook(candidate.context.baseManifest).toLowerCase()
     ? candidate
     : null;
   const stage = live?.round.currentStage ?? 0;
@@ -165,14 +165,18 @@ function BossHealth({ boss, deployment }: { boss: BossDefinition; deployment: Ar
   }
   const { round } = deployment;
   const stage = round.currentStage;
-  const cap = round.stageCapacity[stage] ?? 0n;
-  const remaining = round.remainingSellableHP;
+  const factory = round.encounterMode === "factory";
+  const cap = factory ? round.stageVolumeTarget[stage] ?? 0n : round.stageCapacity[stage] ?? 0n;
+  const sold = factory ? round.stageVolume[stage] ?? 0n : round.stageSold[stage] ?? 0n;
+  const remaining = factory ? (cap > sold ? cap - sold : 0n) : round.remainingSellableHP;
   const fraction = cap > 0n ? Number((remaining * 1000n) / cap) / 1000 : 0;
   return (
     <Row label={`STAGE ${stage + 1} / 3 · ${roundStatusLabel(round.status).toUpperCase()}`} badge="LIVE">
       <Bar fraction={fraction} />
       <p className="mt-1.5 font-mono text-[10px] text-dim">
-        {displayAmount(remaining, 18)} / {displayAmount(cap, 18)} HP remaining
+        {factory
+          ? `${displayAmount(sold, 6)} / ${displayAmount(cap, 6)} mUSD volume`
+          : `${displayAmount(remaining, round.hpToken.decimals)} / ${displayAmount(cap, round.hpToken.decimals)} ${round.hpToken.symbol} remaining`}
       </p>
     </Row>
   );

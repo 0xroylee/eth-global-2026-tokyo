@@ -96,7 +96,9 @@ console.log(round.status, round.currentStage, round.bossCurrentSqrtPriceX96, pla
 
 ### Select a boss by Hook address
 
-`resolveBossDeployment(publicClient, baseManifest, hookAddress)` resolves either the configured standalone demo or a boss launched by the configured Factory. Factory discovery starts at `bossFactoryDeployedAtBlock`, which must accompany `bossFactory` in the base manifest. It verifies launch provenance and contract wiring before returning a deployment usable by `createBossPoolSdk`.
+`getDefaultBossHook(manifest)` returns the configured `defaultBossHook`, falling back to the standalone `addresses.hook` for older and local manifests. Local standalone manifests keep their direct-creation proof. The live Base Sepolia manifest instead contains the current Factory encounter and its launch proof.
+
+`resolveBossDeployment(publicClient, baseManifest, hookAddress)` resolves either the configured standalone demo or a boss launched by the configured Factory. Factory discovery starts at `bossFactoryDeployedAtBlock`, which must accompany `bossFactory` in the base manifest. It verifies launch provenance and contract wiring before returning a deployment usable by `createBossPoolSdk`. Launch origin may be the current Factory or an explicitly trusted previous Factory with a matching recorded deployment block; it is independent of which Factory handles new launches.
 
 ```ts
 import { createBossPoolSdk, resolveBossDeployment } from "@boss-pool/chain";
