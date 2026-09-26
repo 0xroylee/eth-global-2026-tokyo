@@ -478,7 +478,7 @@ flowchart LR
 
 - 記錄範圍：`feat/boss-roster-hub`（HEAD `d8458bc`）｜merge-base（`main`）＝`0b6739d`｜分支共 **55** commits（docs 13 + 實作/修復 42）
 - 本節為**附錄式新增**，不改動 §1–§13 內容；任務定義見 §10、分期見 §9。表中每個短 hash 均已逐筆以 `git log --oneline` 核對存在且訊息相符。
-- 一句話結論：**Phase 1 與 Phase 2 全數完成（T1–T11 ＋ 計畫外必要的 T14）**；T15–T17 為 2026-09-27 的 vNext 調整（Base 名單轉向 ＋ 全英文 ＋ 互動修復），亦已完成。**未完成者僅 T12／T13 兩項 Phase 3 可選項。**
+- 一句話結論：**Phase 1 與 Phase 2 全數完成（T1–T11 ＋ 計畫外必要的 T14）**；T15–T17 為 2026-09-27 的 vNext 調整（Base 名單轉向 ＋ 全英文 ＋ 互動修復），亦已完成；**PR 衝突已解決並已併入 `main` 全量（§14.4）**，可無衝突合併。**未完成者僅 T12／T13 兩項 Phase 3 可選項。**
 
 ### 14.1 原任務進度（T1–T13 ＋ 追加 T14）
 
@@ -510,7 +510,7 @@ flowchart LR
 - **T15 全英文**（`3e6b1e7`＋`3770f92`）：sage 三段台詞改英文（ASCII 標點）；全庫可見 CJK 清零，遊戲可見文字只剩英文。
 - **T16 Base 轉向**（`0b49ec6`, `3282404`, `2a67628`, `535d032`）：roster 換成 Base trending 實時精選 10 名（AERO／BRETT／SOL／VVV／TIBBIR／MORPHO／AVNT／BNKR／DRB／B3；source＝GeckoTerminal `networks/base/trending_pools` @2026-09-26）；gate caption `LB #N · BASE`、卡片 eyebrow `LAUNCH BOOST · BASE`、CHAIN＝Base；**遊蕩者重綁 `sol`（Solana (Bridged)）**；網路選單標籤去品牌（`46630 · HISTORICAL`／`Historical Testnet (46630)`）；技術性歷史字串（BossActions／RoundStatePanel／manifest）保留事實（邊界決策）。
 - **T17 互動修復**（`91669bc`, `b0f5e14`, `32fb5ad`, `d8458bc`）：四根因——① `domControlFocused` 過度抑制（含 WelcomeDialog 掃尾 focus 到 SOUND 按鈕 → 關閉指引後凍結）② prompts 是 span 不可點 ③ roamer 零互動（新增 22px 互動 radius）④ `ESC · CLOSE` 死 span。修後驗收：點 HUD 按鈕不再凍結、E／Enter／點擊三路皆通、roamer 可挑戰、鍵盤 a11y 保留。
-- **驗證狀態**：四檢查全綠（`typecheck`／`web:build`／`map:check`／`bun test` 34 pass）；瀏覽器驗收 6/6；smith 複審與 QA 重點實測**進行中**。
+- **驗證狀態（終態）**：smith 全 diff 審查 **96/100 PASS** → F3／F4 修復（`e0ceb30`…`a7d1bb3`）→ delta 複審 **96/100 PASS**；四檢查全綠（當時 `bun test` 34 pass）；瀏覽器驗收 6/6。後續 Loop 4（§14.4）另完成 smith **90/100 PASS** 與 QA **10/10 GO**。
 
 ### 14.3 待決事項（owner 跟進）
 
@@ -518,6 +518,25 @@ flowchart LR
 2. HUD `12 CHALLENGERS` 與 sage 的「10 challengers」同詞不同義（12 門 vs 10 roster）。
 3. Phase 3 可選（T12／T13）是否啟動。
 4. `npc-thesis-wizard.png` 授權記錄（延續未決）。
+5. **cat 命名三分歧**：同一門在三個地方三個名字——`bosses.ts` `name: "Pool Unis"`（`battle.test.ts` 已凍結該值）× 名牌 ticker `ROY`（HubScene 畫 `boss.ticker.toUpperCase()`）× sage 台詞 "Roy"（`sageLines.ts` 兩句）。如需統一（建議）改 3 處即可：ticker／sageLines 兩句／sage 測試斷言。
+6. **demo 前換 keyed Base RPC**：公共 `sepolia.base.org` 有 429 節流（hub 已顯示 `CHAIN · LIVE`，讀取仍貼著節流邊界）。
+7. **row 27 東西走廊淨空僅 ~8px**（body 貼腳卡點；交地圖擁有者處理）。
+8. **`BossEntryPanel` HP 浮點顯示** `299.999999999999999999 / 300`（W-01，partner 檔，cosmetic）。
+9. **錢包連上後的 entry panel 互動路徑**：源頭修已覆蓋該路徑、本機無法 e2e（無錢包可連），demo 前建議手動一驗。
+
+### 14.4 PR 衝突解決與 main 合併（2026-09-27）
+
+- **背景**：owner 開 PR → GitHub 報 **5 檔衝突**；`main` 在 `0b6739d` 之後已大幅前進（PR #34–#56：battle-by-hook、BoostPad、Factory、黑鐵匠、Robinhood 網路移除、Pool Unis 品牌、hub keyboard 修復），`git diff --shortstat 0b6739d ca9f606` ＝ **138 檔、+25,742/−1,510**。commit 量以 merge 當時 evidence 記為 +55；本次覆核 `git rev-list --count 0b6739d..ca9f606` ＝ 62。
+- **合併**：`cf2189f`（parents `a7d1bb3` ＋ `ca9f606`）——`git merge origin/main` 入本分支，**15 衝突 hunk／5 檔**（GameShell 9、HubScene 2、bosses 2、useBossPool 1、HubGuide 1），逐 hunk 依「保留雙方意圖」解法，MERGE_MSG 未改：
+  - HubScene `ui:modal`：main 的 guarded keyboard toggle × 我方 roamer hold／release × `resetKeyboardState`。
+  - HubScene label：main 的錨點 × 我方字型 token 解法（`labelFontFamily()`）。
+  - GameShell：main 的 battle-by-hook 接線（`confirmedBattleAttack`／`selectDefaultEncounter`／`wallet.busy`／`isHubEncounter`／`AttackOrigin.hookAddress`）× 我方 sage 接線、prompts、`12 CHALLENGERS` chip。
+  - bosses：main 的 `Pool Unis` 改名 × 我方 roster import 與 `ticker: "ROY"`；useBossPool 取 main（Robinhood 移除取代我方標籤）；HubGuide 取我方（canvas-refocus）。
+  - 合併後四檢查全綠（**57 pass / 11 files**）。
+- **修復（interact 鍵閃關缺陷族）**：`278e08c`（BossRosterCard 焦點改 dialog root，對齊 SageDialog）＋ `4cad0ff`（`HubScene` interact handler 在所有 guard 之後，對 handled 的 `Enter`／`Space` `preventDefault`）——三處病灶（roster 卡、route notice、entry panel）全關；陽性對照證明修正 load-bearing。
+- **驗證**：smith **90/100 PASS**（雙向不丟失檢查 0 損失；`useBossPool.ts` 最終 blob 與 main 相同）；QA **10/10 TC GO**（含 cat／route／sage 三條走位實測、四種觸發鍵皆不閃關、main 三頁存活、network 清單無 Robinhood）。
+- **證據**：`docs/evidence/2026-09-27-main-merge-and-focus-fix.json`（舊檔 `2026-09-27-hub-interaction-fix.json` 已標 `supersededBy`）。
+- **結果**：本分支已含 main 全量 → PR 應可**無衝突合併**（待 push）。
 
 
 
