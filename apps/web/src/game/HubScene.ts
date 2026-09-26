@@ -16,6 +16,19 @@ export function integerCameraZoom(viewWidth: number, viewHeight: number, worldWi
 }
 const PLAYER_SPEED = 80;
 const GATE = { width: 48, height: 32 } as const;
+/**
+ * The hub's one NPC. The map marker owns the position; everything about how the
+ * sage looks is data here so the scene code stays layout-only.
+ */
+const SAGE = {
+  marker: "sage",
+  masterKey: "portrait-master-sage",
+  textureKey: "npc-sage",
+  image: "/images/npc-thesis-wizard.png",
+  label: "THE SAGE",
+  /** Upper body down to the robe hem: drops the boots and the art's name plate. */
+  crop: { x: 233, y: 83, w: 697, h: 960, targetHeight: 30 },
+} as const;
 /** Overhead tiles (fences, canopies) draw above every y-sorted sprite. */
 const OVERHEAD_DEPTH = 5_000;
 /** Labels sit above every y-sorted prop and the overhead layer. */
@@ -87,6 +100,11 @@ export class HubScene extends Phaser.Scene {
   private hintArrow: Phaser.GameObjects.Triangle | null = null;
   private regionZone: Phaser.Geom.Rectangle | null = null;
   private nearRegion = false;
+  private sage: Phaser.GameObjects.Image | null = null;
+  private sageBob: Phaser.Tweens.Tween | null = null;
+  private sageBaseY = 0;
+  private sageZone: Phaser.Geom.Rectangle | null = null;
+  private nearSage = false;
   private unsubscribe: (() => void)[] = [];
   private atmosphere!: HubAtmosphere;
   private crispLabels: Phaser.GameObjects.Text[] = [];
@@ -108,6 +126,7 @@ export class HubScene extends Phaser.Scene {
     for (const boss of BOSSES) {
       if (boss.portrait) this.load.image(`portrait-master-${boss.id}`, boss.portrait);
     }
+    this.load.image(SAGE.masterKey, SAGE.image);
   }
 
   create() {
@@ -115,6 +134,10 @@ export class HubScene extends Phaser.Scene {
     this.nearGate = null;
     this.regionZone = null;
     this.nearRegion = false;
+    this.sage = null;
+    this.sageBob = null;
+    this.sageZone = null;
+    this.nearSage = false;
     this.crispLabels = [];
     this.registerWalk();
     // Crop specs live on the boss definition, so adding a portrait needs no scene edit.
@@ -123,6 +146,7 @@ export class HubScene extends Phaser.Scene {
         makeCroppedTexture(this, `portrait-${boss.id}`, `portrait-master-${boss.id}`, boss.crop, boss.crop.targetHeight);
       }
     }
+    makeCroppedTexture(this, SAGE.textureKey, SAGE.masterKey, SAGE.crop, SAGE.crop.targetHeight);
 
     const map = this.make.tilemap({ key: "hub" });
     const tileset = map.addTilesetImage(HUB_TILESET.name, "tiles");
@@ -154,6 +178,7 @@ export class HubScene extends Phaser.Scene {
     this.buildPlayer(spawn.x, spawn.y);
     this.physics.add.collider(this.player, collision);
     this.physics.add.collider(this.player, gateBodies);
+    this.buildSage(map);
 
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.cameras.main.setRoundPixels(true);
@@ -215,6 +240,11 @@ export class HubScene extends Phaser.Scene {
       this.hintArrow = null;
       this.regionZone = null;
       this.nearRegion = false;
+      this.sageBob?.stop();
+      this.sageBob = null;
+      this.sage = null;
+      this.sageZone = null;
+      this.nearSage = false;
       this.unsubscribe.forEach((u) => u());
       this.unsubscribe = [];
       document.removeEventListener("focusin", handleFocusIn);
@@ -246,6 +276,20 @@ export class HubScene extends Phaser.Scene {
       guideDistance: this.guideDistance,
       hintVisible: this.hintArrow?.visible ?? false,
       nearRegion: this.nearRegion,
+      nearSage: this.nearSage,
+      sage: this.sage && this.sage.body
+        ? {
+            x: this.sage.x,
+            y: this.sage.y,
+            bob: Math.round((this.sage.y - this.sageBaseY) * 10) / 10,
+            body: {
+              x: (this.sage.body as Phaser.Physics.Arcade.StaticBody).position.x,
+              y: (this.sage.body as Phaser.Physics.Arcade.StaticBody).position.y,
+              w: (this.sage.body as Phaser.Physics.Arcade.StaticBody).width,
+              h: (this.sage.body as Phaser.Physics.Arcade.StaticBody).height,
+            },
+          }
+        : null,
       cameraZoom: this.cameras.main.zoom,
       gates: this.gates.map((g) => ({ id: g.boss.id, zone: { x: g.zone.x, y: g.zone.y, w: g.zone.width, h: g.zone.height } })),
     });
@@ -259,6 +303,7 @@ export class HubScene extends Phaser.Scene {
     this.atmosphere.update(time, this.reduceMotion);
     this.updateMovement();
     this.updateGateProximity();
+    this.updateSageProximity();
     this.updateRegionProximity();
     this.updateGuideHint(time);
   }
@@ -456,6 +501,44 @@ export class HubScene extends Phaser.Scene {
     this.add.ellipse(0, 0, 14, 4, 0x000000, 0.3).setDepth(2).setName("player-shadow");
   }
 
+  /**
+   * The sage stands on its map marker and blocks the path, so walking into the
+   * NPC is already a hint about where the conversation starts.
+   */
+  private buildSage(map: Phaser.Tilemaps.Tilemap) {
+    const marker = map.findObject(HUB_LAYERS.markers, (o) => o.name === SAGE.marker);
+    if (!marker || marker.x === undefined || marker.y === undefined) {
+      throw new Error(`hub.json is missing the ${SAGE.marker} marker`);
+    }
+    const x = marker.x;
+    const y = marker.y;
+    this.sageBaseY = y;
+
+    const sage = this.add.image(x, y, SAGE.textureKey).setOrigin(0.5, 1).setDepth(y);
+    this.sage = sage;
+    // Static feet collider, same 12x8 vocabulary as the player.
+    this.physics.add.existing(sage, true);
+    const body = sage.body as Phaser.Physics.Arcade.StaticBody;
+    body.setSize(12, 8);
+    body.setOffset(sage.displayWidth / 2 - body.halfWidth, sage.displayHeight - body.height);
+    this.physics.add.collider(this.player, sage);
+
+    const label = this.add
+      .text(x, y + 2, SAGE.label, {
+        fontFamily: "var(--font-dm-mono), monospace",
+        fontSize: "6px",
+        color: "#f3f3f8",
+        letterSpacing: 1,
+        resolution: ZOOM,
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(LABEL_DEPTH + 1);
+    this.crispLabels.push(label);
+
+    this.sageZone = new Phaser.Geom.Rectangle(x - 10, y - 8, 28, 28);
+    this.applySageBob();
+  }
+
   private setupInput() {
     const keyboard = this.input.keyboard;
     if (!keyboard) return;
@@ -492,6 +575,7 @@ export class HubScene extends Phaser.Scene {
       this.player.setScale(1);
       this.showIdle();
       if (this.nearGate) this.startGatePulse(this.nearGate);
+      this.applySageBob();
       this.applyTileAnimation();
     };
     apply();
@@ -536,6 +620,26 @@ export class HubScene extends Phaser.Scene {
       ...(this.reduceMotion ? {} : { scale: { from: 1, to: 1.18 } }),
       alpha: { from: lo, to: hi },
       duration: this.reduceMotion ? 1100 : 650,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  /** Idle bob. Reduced motion leaves the sage planted, keeping the cue non-moving. */
+  private applySageBob() {
+    if (!this.sage) return;
+    this.sageBob?.stop();
+    this.sageBob = null;
+    if (this.reduceMotion) {
+      this.sage.setY(this.sageBaseY);
+      return;
+    }
+    this.sage.setY(this.sageBaseY + 2);
+    this.sageBob = this.tweens.add({
+      targets: this.sage,
+      y: { from: this.sageBaseY + 2, to: this.sageBaseY - 2 },
+      duration: 900,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
@@ -783,6 +887,14 @@ export class HubScene extends Phaser.Scene {
     this.nearGate = hit;
     if (hit) this.startGatePulse(hit);
     this.bridge.emit("gate:near", { bossId: hit?.boss.id ?? null });
+  }
+
+  private updateSageProximity() {
+    if (!this.sageZone) return;
+    const inside = Phaser.Geom.Rectangle.Contains(this.sageZone, this.player.x, this.player.y);
+    if (inside === this.nearSage) return;
+    this.nearSage = inside;
+    this.bridge.emit("npc:near", { npcId: inside ? "sage" : null });
   }
 }
 
