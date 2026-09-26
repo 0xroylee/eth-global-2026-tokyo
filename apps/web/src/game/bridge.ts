@@ -51,6 +51,7 @@ export class GameBridge {
   private commandListeners = new Map<keyof GameCommands, Set<Listener<unknown>>>();
   private latestCommands = new Map<keyof GameCommands, unknown>();
   private confirmedEffects = new Set<string>();
+  private queuedConfirmedEffects: GameCommands["attack:confirmed"][] = [];
 
   on<K extends keyof GameEvents>(event: K, listener: Listener<GameEvents[K]>): () => void {
     const set = this.eventListeners.get(event) ?? new Set();
@@ -69,6 +70,11 @@ export class GameBridge {
     this.commandListeners.set(command, set);
     const latest = this.latestCommands.get(command);
     if (latest !== undefined) listener(latest as GameCommands[K]);
+    if (command === "attack:confirmed" && this.queuedConfirmedEffects.length > 0) {
+      const queued = this.queuedConfirmedEffects;
+      this.queuedConfirmedEffects = [];
+      for (const effect of queued) listener(effect as GameCommands[K]);
+    }
     return () => set.delete(listener as Listener<unknown>);
   }
 
@@ -78,6 +84,13 @@ export class GameBridge {
       const key = `${event.transactionHash.toLowerCase()}:${event.logIndex}`;
       if (this.confirmedEffects.has(key)) return;
       this.confirmedEffects.add(key);
+      const listeners = this.commandListeners.get(command);
+      if (!listeners?.size) {
+        this.queuedConfirmedEffects.push(event);
+        return;
+      }
+      listeners.forEach((l) => l(event));
+      return;
     } else {
       if (command === "round:state") this.latestCommands.delete("round:unavailable");
       if (command === "round:unavailable") this.latestCommands.delete("round:state");
@@ -91,5 +104,6 @@ export class GameBridge {
     this.commandListeners.clear();
     this.latestCommands.clear();
     this.confirmedEffects.clear();
+    this.queuedConfirmedEffects = [];
   }
 }
