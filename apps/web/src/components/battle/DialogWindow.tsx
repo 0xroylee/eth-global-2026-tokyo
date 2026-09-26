@@ -1,11 +1,13 @@
 import { displayAmount, displayEstimate } from "@/lib/format";
 import type { ReactNode } from "react";
+import { attackCapAmount, type AttackCap } from "@/lib/attackCommand";
 import type { AttackQuotePreview } from "../BossActions";
 
 export function DialogWindow({
   title,
   detail,
   preview,
+  selectedCap,
   showAttackQuote,
   walletConnected,
   networkMismatch,
@@ -16,6 +18,7 @@ export function DialogWindow({
   title: string;
   detail: string;
   preview: AttackQuotePreview;
+  selectedCap: AttackCap;
   showAttackQuote: boolean;
   walletConnected: boolean;
   networkMismatch: boolean;
@@ -23,7 +26,8 @@ export function DialogWindow({
   children?: ReactNode;
   showMessage?: boolean;
 }) {
-  const quote = preview.quote;
+  const selectedMaxMockUSD = attackCapAmount(selectedCap);
+  const quote = preview.quote?.maxMockUSD === selectedMaxMockUSD ? preview.quote : null;
   const outputUnit = preview.outputSymbol;
   const status = !walletConnected
     ? "Connect a wallet to attack. The public quote works without one."
@@ -32,16 +36,16 @@ export function DialogWindow({
       : writeBusy
         ? "Waiting for the wallet action or confirmed receipt."
         : !quote
-          ? preview.loading ? "Calculating the public attack quote…" : "Quote unavailable · retrying automatically."
+          ? preview.loading ? "Calculating the public attack quote…" : preview.quote ? "Refreshing the quote for this cap…" : "Quote unavailable · retrying automatically."
           : !preview.fresh
             ? "Quote expired or changed · refreshing bounds."
             : !preview.playerReady || !preview.allowanceReady
               ? preview.allowanceLoading ? "Checking wallet balance and allowance…" : "Allowance read unavailable · retrying."
               : !preview.hasInputBalance
-                ? "At least 1 MockUSD is needed for the maximum input cap."
+                ? `At least ${selectedCap} MockUSD is needed for this maximum input cap.`
                 : preview.allowanceMissing
-                  ? "Approval needed · choose SWAP ATTACK to continue."
-                  : "Ready · choose SWAP ATTACK to submit.";
+                  ? "Approval needed · choose this attack again to continue."
+                  : "Ready · choose this attack to submit.";
 
   return (
     <div className="h-full bg-[#092B61] p-1 font-pixel shadow-[4px_4px_0_#041833]">
@@ -54,7 +58,7 @@ export function DialogWindow({
 
         {showAttackQuote && <section aria-label="Attack quote preview" className="mt-2 min-w-0 shrink-0 border-t border-[#2b4a8b]/30 pt-1.5 font-mono">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="font-pixel text-[9px]">AUTO QUOTE · 1 MockUSD MAX</h2>
+            <h2 className="font-pixel text-[9px]">AUTO QUOTE · UP TO {selectedCap} MockUSD</h2>
             <span className={`shrink-0 text-[9px] ${quote && preview.fresh ? "text-[#286f43]" : "text-[#8c443e]"}`}>
               {quote && preview.fresh ? "FRESH" : preview.loading ? "REFRESHING" : "WAITING"}
             </span>
@@ -62,7 +66,7 @@ export function DialogWindow({
           {quote ? (
             <>
               <div className="mt-1 grid grid-cols-3 gap-2">
-                <Metric label="EXPECTED DAMAGE" value={`≈ ${displayEstimate(quote.bossHPOut, preview.outputDecimals)} ${outputUnit}`} title={`${displayAmount(quote.bossHPOut, preview.outputDecimals)} ${outputUnit}`} />
+                <Metric label="DAMAGE ESTIMATE" value={`≈ ${displayEstimate(quote.bossHPOut, preview.outputDecimals)} ${outputUnit}`} title={`${displayAmount(quote.bossHPOut, preview.outputDecimals)} ${outputUnit}`} />
                 <Metric label="MAX SPEND" value={`${displayAmount(quote.maxMockUSD, 6)} MockUSD`} title={`${displayAmount(quote.maxMockUSD, 6)} MockUSD`} />
                 <Metric label={`MIN. ${outputUnit.toUpperCase()} OUTPUT`} value={`≥ ${displayFloor(quote.minBossHPOut, preview.outputDecimals)} ${outputUnit}`} title={`${displayAmount(quote.minBossHPOut, preview.outputDecimals)} ${outputUnit}`} />
               </div>
@@ -71,7 +75,7 @@ export function DialogWindow({
               </p>
             </>
           ) : (
-            <p className="mt-1 font-mono text-[10px] leading-snug">Expected damage and spend appear here as soon as the public read is available.</p>
+            <p className="mt-1 font-mono text-[10px] leading-snug">The live damage estimate and spend appear here as soon as the public read for this cap is available.</p>
           )}
           {!quote && preview.error && <p className="mt-1 truncate font-mono text-[9px] leading-snug text-[#8c443e]" role="status" title={preview.error}>Quote error: {preview.error.length > 100 ? `${preview.error.slice(0, 97)}…` : preview.error}</p>}
           <p className="mt-1 break-words font-mono text-[9px] leading-snug" role="status">{status}</p>

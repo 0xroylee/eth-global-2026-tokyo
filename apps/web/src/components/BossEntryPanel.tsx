@@ -102,7 +102,7 @@ export function BossEntryPanel({
               <span aria-hidden="true">▶</span>
               ENTER BATTLE
             </Link>
-            <p id="boss-entry-cost" className="mt-4 text-center font-mono text-xs leading-relaxed">Each attack spends up to 1 MockUSD.</p>
+            <p id="boss-entry-cost" className="mt-4 text-center font-mono text-xs leading-relaxed">Each attack uses a cap of up to 1, 5, or 10 MockUSD.</p>
           </div>
         )}
         {!supported && (

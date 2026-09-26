@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { attackPlaybackChoice, attackWaitPhase, confirmedBattleAttack, roundSecondsLeft, writeStateMatchesEncounter, type ConfirmedBattleAttack, type SeenAttackMemory } from "@/lib/battle";
+import { attackCapAmount, type AttackCap } from "@/lib/attackCommand";
 import { displayAmount } from "@/lib/format";
 import { findBossPresentation, POOL_UNIS_PRESENTATION } from "@/game/bosses";
 import type { useBossPool, NetworkKey } from "@/lib/useBossPool";
@@ -98,6 +99,9 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
       ?? (round?.encounterMode === "factory" && round.deadline === 0n ? POOL_UNIS_PRESENTATION : undefined)
     : undefined;
   const identity = `${arena.network}:${hookAddress?.toLowerCase() ?? "unavailable"}:${manifest?.deploymentTxHash ?? "unavailable"}:${account ?? "public"}`;
+  const [attackSelection, setAttackSelection] = useState<{ identity: string; cap: AttackCap } | null>(null);
+  const selectedCap = attackSelection?.identity === identity ? attackSelection.cap : 1;
+  const selectedCapRef = useRef<{ identity: string; cap: AttackCap }>({ identity, cap: 1 });
   const sound = useBattleSound(identity);
   const soundRef = useRef(sound);
   soundRef.current = sound;
@@ -224,6 +228,8 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
   useEffect(() => {
     if (previousIdentity.current === identity) return;
     previousIdentity.current = identity;
+    selectedCapRef.current = { identity, cap: 1 };
+    setAttackSelection({ identity, cap: 1 });
     if (approvalOnly) closeActions();
   }, [identity, approvalOnly, closeActions]);
 
@@ -246,9 +252,17 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
   const connectOrSwitch = () => {
     void (account && arena.networkMismatch ? arena.switchToSelectedNetwork() : arena.connect()).catch(() => undefined);
   };
-  const attackFromCommand = () => {
+  const attackFromCommand = (cap: AttackCap) => {
+    const currentCap = selectedCapRef.current.identity === identity ? selectedCapRef.current.cap : 1;
+    if (cap !== currentCap) {
+      selectedCapRef.current = { identity, cap };
+      setAttackSelection({ identity, cap });
+      return;
+    }
+    if (selectedCapRef.current.identity !== identity) selectedCapRef.current = { identity, cap };
+    if (busy || arena.wallet.busy) return;
     if (!account || arena.networkMismatch) connectOrSwitch();
-    else bossActions.current?.attackOrRequestApproval();
+    else bossActions.current?.attackOrRequestApproval(cap);
   };
   const changeNetwork = (nextNetwork: NetworkKey) => {
     if (hookAddress) {
@@ -263,20 +277,19 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
   const action = visibleEffect ? "HIT CONFIRMED" : busy ? writeMatches ? arena.writeState.status === "prompting" ? "PREPARING" : "PENDING" : "OTHER TRANSACTION" : defeated ? "DEFEATED" : expired ? "ROUND ENDED" : canAttack ? "SWAP ATTACK" : "WAITING";
   const commandChecking = Boolean(account && live && (!attackPreview.playerReady || (!attackPreview.allowanceReady && attackPreview.allowanceLoading)));
   const allowanceUnavailable = Boolean(account && live && attackPreview.playerReady && !attackPreview.allowanceReady && !attackPreview.allowanceLoading);
+  const capMatchesPreview = attackPreview.quote?.maxMockUSD === attackCapAmount(selectedCap);
   const commandWaitingForQuote = Boolean(account && !arena.networkMismatch && round?.status === 1 &&
-    (!attackPreview.quote || !attackPreview.fresh || attackPreview.loading));
-  const commandLabel = !account
-    ? arena.wallet.status === "checking" ? "CHECKING WALLET" : arena.wallet.status === "missing" ? "WALLET UNAVAILABLE" : "SWAP ATTACK"
+    (!capMatchesPreview || !attackPreview.fresh || attackPreview.loading));
+  const commandStatus = !account
+    ? arena.wallet.status === "checking" ? "CHECKING WALLET" : arena.wallet.status === "missing" ? "WALLET UNAVAILABLE" : "CONNECT WALLET"
     : arena.networkMismatch ? "SWITCH NETWORK"
       : busy ? "WAIT FOR RECEIPT"
         : commandChecking ? "CHECKING WALLET"
           : allowanceUnavailable ? "ALLOWANCE UNAVAILABLE"
           : commandWaitingForQuote ? attackPreview.loading ? "QUOTING ATTACK" : "REFRESHING QUOTE"
-            : !attackPreview.hasInputBalance ? "NEED 1 MockUSD"
-              : "SWAP ATTACK";
-  const commandDisabled = !canAttack || arena.wallet.busy || (!account && (arena.wallet.status === "checking" || arena.wallet.status === "missing")) ||
-    commandChecking || allowanceUnavailable || commandWaitingForQuote || Boolean(account && !arena.networkMismatch && !attackPreview.hasInputBalance) ||
-    Boolean(account && !arena.networkMismatch && !attackPreview.ready && !attackPreview.allowanceMissing);
+            : !attackPreview.hasInputBalance ? `NEED ${selectedCap} MockUSD`
+              : attackPreview.allowanceMissing ? "APPROVAL NEEDED" : "READY";
+  const commandDisabled = !canAttack;
 
   useEffect(() => {
     if (!restoreAttackFocus) return;
@@ -318,7 +331,7 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
   const effectLabel = visibleEffect ? `+${displayAmount(visibleEffect.bossHPOut, hpDecimals)} ${hpSymbol}` : "";
   let title = presentation ? `${presentation.name} appeared.` : "BOSS APPEARANCE NOT CONFIGURED";
   let detail = presentation
-    ? "Each swap attack spends up to 1 MockUSD; review the expected damage first."
+    ? `Selected cap: up to ${selectedCap} MockUSD. The live quote estimates damage at current pool prices.`
     : "This verified Hook has no configured stage artwork. Its on-chain encounter remains available.";
   if (!round) {
     title = arena.deployment.kind === "loading" ? "CHECKING THE ROUND…" : "ROUND UNAVAILABLE";
@@ -401,12 +414,13 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
               : visualStage && <BossStage stage={visualStage} stageImages={presentation.stageImages} state={bossState} reducedMotion={reducedMotion} />}
           </div>
         </div>
-        {!defeated && <div className="min-w-0 self-end md:col-start-1 md:row-start-4 lg:absolute lg:col-auto lg:row-auto lg:bottom-8 lg:left-6 lg:z-20 lg:h-[min(40vh,360px)] lg:w-[36vw]"><CommandWindow label={commandLabel} disabled={commandDisabled} onAction={attackFromCommand} onClose={onClose} attackButtonRef={attackButtonRef} /></div>}
+        {!defeated && <div className="min-w-0 self-end md:col-start-1 md:row-start-4 lg:absolute lg:col-auto lg:row-auto lg:bottom-8 lg:left-6 lg:z-20 lg:h-[min(40vh,360px)] lg:w-[36vw]"><CommandWindow selectedCap={selectedCap} status={commandStatus} disabled={commandDisabled} onAction={attackFromCommand} onClose={onClose} attackButtonRef={attackButtonRef} /></div>}
         <div className="h-[320px] min-w-0 self-end md:col-start-2 md:row-start-4 lg:absolute lg:col-auto lg:row-auto lg:bottom-8 lg:left-[54%] lg:right-4 lg:z-20 lg:h-[300px]">
           <DialogWindow
             title={title}
             detail={detail}
             preview={attackPreview}
+            selectedCap={selectedCap}
             showAttackQuote={round?.status === 1 && (secondsLeft === null || secondsLeft > 0)}
             walletConnected={Boolean(account)}
             networkMismatch={arena.networkMismatch}
@@ -453,6 +467,7 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
             key={identity}
             ref={bossActions}
             arena={arena}
+            selectedCap={selectedCap}
             approvalOnly={approvalOnly}
             onApprovalRequired={openApproval}
             onApprovalReady={returnToAttack}
