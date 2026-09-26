@@ -1,4 +1,5 @@
 import { displayAmount, displayEstimate } from "@/lib/format";
+import type { ReactNode } from "react";
 import type { AttackQuotePreview } from "../BossActions";
 
 export function DialogWindow({
@@ -9,6 +10,8 @@ export function DialogWindow({
   walletConnected,
   networkMismatch,
   writeBusy,
+  children,
+  showMessage = true,
 }: {
   title: string;
   detail: string;
@@ -17,6 +20,8 @@ export function DialogWindow({
   walletConnected: boolean;
   networkMismatch: boolean;
   writeBusy: boolean;
+  children?: ReactNode;
+  showMessage?: boolean;
 }) {
   const quote = preview.quote;
   const outputUnit = preview.outputSymbol;
@@ -39,15 +44,15 @@ export function DialogWindow({
                   : "Ready · choose SWAP ATTACK to submit.";
 
   return (
-    <div aria-live="polite" className="h-full bg-[#092B61] p-1 font-pixel shadow-[4px_4px_0_#041833]">
+    <div className="h-full bg-[#092B61] p-1 font-pixel shadow-[4px_4px_0_#041833]">
       <div className="flex h-full min-h-[150px] flex-col border-2 border-white bg-[#FFF9E9] px-3 py-2 text-[#092B61] sm:px-4">
-        <div className="min-w-0">
+        {showMessage && <div aria-live="polite" className="min-w-0 shrink-0">
           <div className="window-title mb-1 inline-block px-2 py-1 text-[9px]">BATTLE MESSAGE</div>
           <p className="break-words text-xs leading-snug sm:text-sm">{title}</p>
           <p className="mt-0.5 break-words font-mono text-[10px] leading-snug sm:text-xs">{detail}</p>
-        </div>
+        </div>}
 
-        {showAttackQuote && <section aria-label="Attack quote preview" className="mt-2 min-w-0 border-t border-[#2b4a8b]/30 pt-1.5 font-mono">
+        {showAttackQuote && <section aria-label="Attack quote preview" className="mt-2 min-w-0 shrink-0 border-t border-[#2b4a8b]/30 pt-1.5 font-mono">
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-pixel text-[9px]">AUTO QUOTE · 1 MockUSD MAX</h2>
             <span className={`shrink-0 text-[9px] ${quote && preview.fresh ? "text-[#286f43]" : "text-[#8c443e]"}`}>
@@ -71,6 +76,7 @@ export function DialogWindow({
           {!quote && preview.error && <p className="mt-1 truncate font-mono text-[9px] leading-snug text-[#8c443e]" role="status" title={preview.error}>Quote error: {preview.error.length > 100 ? `${preview.error.slice(0, 97)}…` : preview.error}</p>}
           <p className="mt-1 break-words font-mono text-[9px] leading-snug" role="status">{status}</p>
         </section>}
+        {children}
       </div>
     </div>
   );

@@ -12,11 +12,12 @@ import { useArena } from "../BossPoolProvider";
 import { BossActions, type AttackQuotePreview, type BossActionsHandle } from "../BossActions";
 import { AttackEffects, type AttackEffectPhase } from "./AttackEffects";
 import { BossStage } from "./BossStage";
+import { BattleActivityLog } from "./BattleActivityLog";
 import { CommandWindow } from "./CommandWindow";
 import { CroppedSprite } from "./CroppedSprite";
 import { DialogWindow } from "./DialogWindow";
 import { NamePlate } from "./NamePlate";
-import { BattleMeta, StatusPanel } from "./StatusPanel";
+import { StatusPanel } from "./StatusPanel";
 import { useBattleSound } from "./useBattleSound";
 import { VictoryCard } from "./VictoryCard";
 
@@ -388,22 +389,35 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
         <div className="w-full min-w-0 max-w-[480px] justify-self-end md:col-start-2 md:row-start-2 lg:absolute lg:col-auto lg:row-auto lg:right-4 lg:top-16 lg:z-20 lg:w-auto lg:max-w-none"><NamePlate stage={stage} action={action} presentation={presentation} /></div>
         <div className="grid min-w-0 grid-cols-[minmax(100px,0.85fr)_minmax(0,1.15fr)] items-end gap-3 md:contents">
           <div className="flex min-w-0 flex-col items-start gap-3 self-end md:col-start-1 md:row-start-3 lg:absolute lg:col-auto lg:row-auto lg:bottom-[calc(min(40vh,360px)+48px)] lg:left-6 lg:z-20 lg:gap-2">
-            <BattleMeta deployment={arena.deployment} now={now} />
             <div ref={playerRef} className={`relative w-[108px] rounded-lg border-[3px] border-[#f3ead2] bg-[#16356e] p-1.5 shadow-[3px_3px_0_#041833] ${attackWait === "charging" && !reducedMotion ? "player-charging" : ""}`}>
               {attackWait === "charging" && !reducedMotion && <span aria-hidden className="player-spark absolute -right-1 top-2 size-2 bg-[#f6e7b2] shadow-[1px_1px_0_#041833]" />}
               <div className="mx-auto h-[84px] w-[70px] overflow-hidden"><CroppedSprite className="h-[140px]" /></div>
               <p className="mt-1 text-center text-base leading-none text-[#f6e7b2]">YOU</p>
             </div>
           </div>
-          <div ref={bossRef} className="relative h-[260px] min-w-0 self-end sm:h-[300px] md:col-start-2 md:row-start-3 md:h-[clamp(180px,30vh,360px)] lg:pointer-events-none lg:absolute lg:col-auto lg:row-auto lg:left-1/2 lg:top-[max(20%,194px)] lg:z-[18] lg:h-[min(50vh,calc(80vh-272px))] lg:w-[35%]">
+          <div ref={bossRef} className="relative h-[260px] min-w-0 self-end sm:h-[300px] md:col-start-2 md:row-start-3 md:h-[clamp(180px,30vh,360px)] lg:pointer-events-none lg:absolute lg:col-auto lg:row-auto lg:left-1/2 lg:top-[max(20%,194px)] lg:z-[18] lg:h-[min(50vh,calc(80vh-372px))] lg:w-[35%]">
             {!presentation
               ? <div className="grid h-full place-items-center p-4"><p className="window-chrome max-w-sm px-5 py-4 text-center font-pixel text-sm leading-relaxed text-[#2b4a8b]">Boss appearance not configured</p></div>
               : visualStage && <BossStage stage={visualStage} stageImages={presentation.stageImages} state={bossState} reducedMotion={reducedMotion} />}
           </div>
         </div>
         {!defeated && <div className="min-w-0 self-end md:col-start-1 md:row-start-4 lg:absolute lg:col-auto lg:row-auto lg:bottom-8 lg:left-6 lg:z-20 lg:h-[min(40vh,360px)] lg:w-[36vw]"><CommandWindow label={commandLabel} disabled={commandDisabled} onAction={attackFromCommand} onClose={onClose} attackButtonRef={attackButtonRef} /></div>}
-        {(!defeated || visibleEffect) && <div className={`min-w-0 self-end md:row-start-4 lg:absolute lg:col-auto lg:row-auto lg:bottom-8 lg:left-[54%] lg:right-4 lg:z-20 lg:h-[200px] ${defeated ? "md:col-span-2" : "md:col-start-2"}`}><DialogWindow title={title} detail={detail} preview={attackPreview} showAttackQuote={round?.status === 1 && (secondsLeft === null || secondsLeft > 0)} walletConnected={Boolean(account)} networkMismatch={arena.networkMismatch} writeBusy={busy} /></div>}
-        {defeated && round && !visibleEffect && <div className="mx-auto w-full md:col-span-2 md:row-start-4 lg:absolute lg:col-auto lg:row-auto lg:inset-0 lg:z-40 lg:grid lg:place-items-center lg:bg-[#041833]/80 lg:p-4">
+        <div className="h-[320px] min-w-0 self-end md:col-start-2 md:row-start-4 lg:absolute lg:col-auto lg:row-auto lg:bottom-8 lg:left-[54%] lg:right-4 lg:z-20 lg:h-[300px]">
+          <DialogWindow
+            title={title}
+            detail={detail}
+            preview={attackPreview}
+            showAttackQuote={round?.status === 1 && (secondsLeft === null || secondsLeft > 0)}
+            walletConnected={Boolean(account)}
+            networkMismatch={arena.networkMismatch}
+            writeBusy={busy}
+            showMessage={!round || !presentation || Boolean(visibleEffect) || busy || round.status !== 1 ||
+              (writeMatches && arena.writeState.status !== "idle" && arena.writeState.status !== "confirmed")}
+          >
+            {live && <BattleActivityLog key={`${arena.network}:${live.hookAddress}:${live.manifest.deploymentTxHash}:${live.rpcUrl}`} live={live} />}
+          </DialogWindow>
+        </div>
+        {defeated && round && !visibleEffect && <div className="mx-auto w-full self-end md:col-start-1 md:row-start-4 lg:absolute lg:col-auto lg:row-auto lg:bottom-8 lg:left-6 lg:z-20 lg:max-h-[60vh] lg:w-[40vw] lg:overflow-y-auto">
           <div className="mx-auto w-full max-w-[480px]"><VictoryCard round={round} player={live?.player} onClaim={openActions} onClose={onClose} /></div>
         </div>}
         {sequence && visibleEffect && anchors && (
@@ -433,6 +447,7 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
           {!account ? "Connect wallet" : "Switch wallet network"}
         </button>}
         {!approvalOnly && arena.wallet.error && <p role="status" className="mt-2 break-words px-4 text-sm text-[#a14845]">{arena.wallet.error}</p>}
+        {!approvalOnly && live && <p className="mt-3 break-all font-mono text-xs text-muted">Hook: {live.hookAddress}</p>}
         <div className={approvalOnly ? "px-4 py-3" : ""}>
           <BossActions
             key={identity}
