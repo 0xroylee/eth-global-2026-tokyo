@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* Design tokens carried over from the BP01 shell. */
+@theme {
+  --font-sans: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-dm-mono), ui-monospace, monospace;
+
+  --color-ink: #080b14;
+  --color-panel: #111627;
+  --color-fog: #f3f3f8;
+  --color-muted: #aab2c8;
+  --color-dim: #78839f;
+  --color-faint: #69738d;
+  --color-accent: #95a7f6;
+  --color-accent-soft: #b7c5ff;
+  --color-live: #4fdaa5;
+  --color-live-soft: #91e7c5;
+  --color-danger: #ffaaa4;
+
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-ink text-fog font-sans min-h-screen min-w-80 m-0;
+    background-image: radial-gradient(
+      ellipse at 72% 26%,
+      rgba(51, 79, 132, 0.2),
+      transparent 36%
+    );
+  }
+}
+
+@utility eyebrow {
+  @apply font-mono text-[10px] tracking-[0.12em] text-[#9aaccd];
+}
+
+@utility hairline {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Reduced motion: keep opacity/color feedback, drop movement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
