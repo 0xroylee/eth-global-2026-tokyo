@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { DecodedContractEvent, LocalDeploymentManifest } from "@boss-pool/chain";
-import { confirmedBattleAttack, roundSecondsLeft, writeStateMatchesEncounter } from "./battle";
+import { attackPlaybackChoice, attackWaitPhase, confirmedBattleAttack, rememberSeenAttackId, roundSecondsLeft, writeStateMatchesEncounter, SEEN_ATTACK_LIMIT } from "./battle";
 import { findBossPresentation } from "../game/bosses";
 import type { WriteState } from "./useBossPool";
 
@@ -79,6 +79,47 @@ test("boss presentation is address and chain scoped, with casing-insensitive kno
   expect(findBossPresentation(31337, other, other)?.name).toBe("Pool Unis");
   expect(findBossPresentation(31337, account, other)).toBeUndefined();
   expect(findBossPresentation(84532, other)).toBeUndefined();
+});
+
+test("stage-clear and defeat flags come from that receipt, and a defeat still keeps the original stage output", () => {
+  const defeated = confirmedBattleAttack({
+    ...confirmed,
+    result: { events: [...events, { address: other, eventName: "BossDefeated", transactionHash: "0x5678", logIndex: 4, args: { finalEligibleHP: 1n, originalPrize: 1n } }] },
+  }, "local", manifest, other, account);
+  expect(defeated?.bossHPOut).toBe(7123456789012345678n);
+  expect(defeated?.stage).toBe(0);
+  expect(defeated?.stageCleared).toBe(true);
+  expect(defeated?.defeated).toBe(true);
+});
+
+test("attack presentation follows the request kind, not the action label", () => {
+  const prompting: WriteState = { status: "prompting", action: "Attack", requestKind: "approval", network: "local", hookAddress: other, manifest };
+  expect(attackWaitPhase(prompting, "local", other)).toBeNull();
+  expect(attackWaitPhase({ ...prompting, requestKind: "attack" }, "local", other)).toBe("charging");
+  expect(attackWaitPhase({ status: "pending", action: "Approve attack input", record }, "local", other)).toBe("pending");
+  expect(attackWaitPhase({ status: "unresolved", action: "Attack", record: { ...record, request: { ...record.request, kind: "approval" } }, message: "Receipt pending" }, "local", other)).toBeNull();
+  expect(attackWaitPhase({ status: "unresolved", action: "Checking", record, message: "Receipt pending" }, "local", other)).toBe("checking");
+  expect(attackWaitPhase({ status: "rejected", action: "Attack", requestKind: "attack", message: "Wallet request rejected", network: "local", hookAddress: other }, "local", other)).toBeNull();
+});
+
+test("a confirmed attack id is remembered once, capped, and a cancelled start does not consume it", () => {
+  const memory = { ids: [] as string[] };
+  const storage = new Map<string, string>();
+  const store = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => { storage.set(key, value); },
+  };
+  expect(attackPlaybackChoice({ id: "hit-1", hidden: false, cancelled: true, memory, storage: store })).toBe("cancelled");
+  expect(memory.ids).toEqual([]);
+  expect(attackPlaybackChoice({ id: "hit-1", hidden: false, cancelled: false, memory, storage: store })).toBe("play");
+  expect(attackPlaybackChoice({ id: "hit-1", hidden: false, cancelled: false, memory, storage: store })).toBe("static");
+  expect(attackPlaybackChoice({ id: "hit-2", hidden: true, cancelled: false, memory, storage: store })).toBe("static");
+  expect(memory.ids).toEqual(["hit-1", "hit-2"]);
+  const capped = { ids: [] as string[] };
+  for (let index = 0; index < SEEN_ATTACK_LIMIT + 1; index += 1) rememberSeenAttackId(`id-${index}`, capped, null);
+  expect(capped.ids).toHaveLength(SEEN_ATTACK_LIMIT);
+  expect(capped.ids[0]).toBe("id-1");
+  expect(rememberSeenAttackId("id-1", capped, null)).toBe(false);
 });
 
 test("the displayed deadline advances from chain time without restarting on mount or going negative", () => {

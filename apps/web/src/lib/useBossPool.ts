@@ -64,11 +64,11 @@ type StoredPending = {
 
 export type WriteState =
   | { status: "idle" }
-  | { status: "prompting"; action: string; network: NetworkKey; hookAddress: Address; manifest: DeploymentManifest }
+  | { status: "prompting"; action: string; requestKind?: PendingActionKind; network: NetworkKey; hookAddress: Address; manifest: DeploymentManifest }
   | { status: "pending"; action: string; record: StoredPending }
   | { status: "unresolved"; action: string; record: StoredPending; message: string }
   | { status: "confirmed"; action: string; record: StoredPending; result: unknown }
-  | { status: "rejected" | "requote" | "reverted" | "replaced" | "failed"; action: string; hash?: string; message: string; network?: NetworkKey; hookAddress?: Address };
+  | { status: "rejected" | "requote" | "reverted" | "replaced" | "failed"; action: string; requestKind?: PendingActionKind; hash?: string; message: string; network?: NetworkKey; hookAddress?: Address };
 
 export type DeploymentState =
   | { kind: "loading"; network: NetworkKey; selectionId: string; hookAddress?: string }
@@ -304,6 +304,7 @@ export function useBossPool() {
   const runPending = useCallback(async <T,>(
     action: string,
     submit: () => Promise<PendingOperation<T> | SkippedApproval>,
+    requestKind?: PendingActionKind,
   ): Promise<WaitResult<T> | SkippedApproval | undefined> => {
     const origin = selectedHookMatches && deployment.kind === "live" ? deployment.context : null;
     if (writeLock.current || pendingRef.current) {
@@ -320,7 +321,7 @@ export function useBossPool() {
       return undefined;
     }
     writeLock.current = true;
-    setWriteState({ status: "prompting", action, network: origin.key, hookAddress: origin.hookAddress, manifest: origin.manifest });
+    setWriteState({ status: "prompting", action, requestKind, network: origin.key, hookAddress: origin.hookAddress, manifest: origin.manifest });
     try {
       const operation = await submit();
       if (isSkippedApproval(operation)) {
@@ -360,7 +361,7 @@ export function useBossPool() {
         pendingRef.current = null;
         setPendingRecord(null);
       }
-      setWriteState({ status, action, hash, network: origin.key, hookAddress: origin.hookAddress, message: errorMessage(error) });
+      setWriteState({ status, action, requestKind, hash, network: origin.key, hookAddress: origin.hookAddress, message: errorMessage(error) });
       throw error;
     } finally {
       writeLock.current = false;

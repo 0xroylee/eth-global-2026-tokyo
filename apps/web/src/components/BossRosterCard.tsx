@@ -20,13 +20,11 @@ function focusHubCanvas() {
 
 /**
  * Gate presentation for entries that have no contract behind them. It shows the
- * curated snapshot row and the ticker shield instead of battle actions, and it
- * never implies a live pool.
+ * hidden boss instead of battle actions, and it never implies a live pool.
  */
 export function BossRosterCard({ boss, onClose }: { boss: BossDefinition; onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const meta = boss.rosterMeta;
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -72,7 +70,7 @@ export function BossRosterCard({ boss, onClose }: { boss: BossDefinition; onClos
           <div className="flex min-w-0 items-start gap-4">
             <div
               className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-ink"
-              style={meta ? { borderColor: `${boss.accent}59` } : undefined}
+              style={{ borderColor: `${boss.accent}59` }}
             >
               {boss.portrait ? (
                 <img src={boss.portrait} alt="" className="size-full object-cover object-top [image-rendering:pixelated]" />
@@ -83,7 +81,7 @@ export function BossRosterCard({ boss, onClose }: { boss: BossDefinition; onClos
               )}
             </div>
             <div className="min-w-0">
-              <p className="eyebrow mb-1">{meta ? "LAUNCH BOOST · BASE" : "FIXTURE GATE"}</p>
+              <p className="eyebrow mb-1">HIDDEN GATE</p>
               <h2 id="boss-roster-title" className="flex flex-wrap items-baseline gap-2 text-2xl font-semibold tracking-[-0.03em]">
                 {boss.name}
                 <span className="font-mono text-[11px] tracking-[0.14em]" style={{ color: boss.accent }}>
@@ -110,22 +108,8 @@ export function BossRosterCard({ boss, onClose }: { boss: BossDefinition; onClos
           <span className="inline-flex rounded-md border border-white/12 bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-dim">
             {STATUS_LABEL[boss.status]}
           </span>
-          {meta ? (
-            <dl className="mt-4 grid grid-cols-[6.5rem_1fr] gap-x-3 gap-y-2">
-              <dt className="font-mono text-[9px] tracking-[0.12em] text-dim">RANK</dt>
-              <dd className="font-mono text-[11px] text-fog">#{meta.rank}</dd>
-              <dt className="font-mono text-[9px] tracking-[0.12em] text-dim">CHAIN</dt>
-              <dd className="font-mono text-[11px] text-fog">{meta.chain}</dd>
-              <dt className="font-mono text-[9px] tracking-[0.12em] text-dim">CATEGORY</dt>
-              <dd className="font-mono text-[11px] text-fog">{meta.category}</dd>
-              <dt className="font-mono text-[9px] tracking-[0.12em] text-dim">SNAPSHOT</dt>
-              <dd className="font-mono text-[11px] text-fog">{meta.snapshot}</dd>
-            </dl>
-          ) : null}
           <p className="mt-4 text-xs leading-relaxed text-dim">
-            {meta
-              ? "Launch Boost snapshot entry. No contract is deployed, so there is no pool to challenge here yet."
-              : "Fixture map entry. No contract is deployed, so there is no pool to challenge here yet."}
+            No contract is deployed, so there is no pool to challenge here yet.
           </p>
         </div>
       </div>

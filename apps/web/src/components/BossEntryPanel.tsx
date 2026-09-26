@@ -17,18 +17,15 @@ export function BossEntryPanel({
   arena,
   onClose,
   suspendInput = false,
-  onConnect,
-  onSwitch,
 }: {
   boss: BossDefinition;
   arena: Arena;
   onClose: () => void;
   suspendInput?: boolean;
-  onConnect?: () => void;
-  onSwitch?: () => void;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const actionRef = useRef<HTMLButtonElement>(null);
+  const entryRef = useRef<HTMLAnchorElement>(null);
   const candidate = arena.deployment.kind === "live" ? arena.deployment : null;
   const live = candidate && candidate.hookAddress.toLowerCase() === getDefaultBossHook(candidate.context.baseManifest).toLowerCase()
     ? candidate
@@ -36,115 +33,85 @@ export function BossEntryPanel({
   const stage = live?.round.currentStage ?? 0;
   const portrait = boss.id === "cat" ? CAT_FORMS[Math.min(stage, 2)] : boss.portrait;
   const supported = boss.id === "cat";
-  const needsWallet = supported && !arena.wallet.account;
-  const needsSwitch = supported && Boolean(arena.wallet.account) && arena.networkMismatch;
+  const canEnter = supported && Boolean(live);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
 
   useEffect(() => {
     if (suspendInput) return;
-    (needsWallet || needsSwitch ? actionRef : closeRef).current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [needsSwitch, needsWallet, onClose, suspendInput]);
+    (canEnter ? entryRef : closeRef).current?.focus();
+  }, [canEnter, suspendInput]);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      ref={dialogRef}
       aria-labelledby="boss-entry-title"
       inert={suspendInput}
-      className="absolute inset-0 z-20 grid place-items-center bg-ink/70 p-4 backdrop-blur-[2px]"
+      onCancel={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!suspendInput) onClose();
+      }}
+      className="window-chrome panel-enter m-auto max-h-[calc(100dvh-2rem)] w-[min(560px,calc(100vw-2rem))] overflow-y-auto p-1 backdrop:bg-ink/70 backdrop:backdrop-blur-[2px]"
     >
-      <div className="panel-enter max-h-[min(32rem,calc(100dvh-2rem))] w-full max-w-[560px] overflow-y-auto rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)] sm:p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-4">
-            <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-ink">
-              {portrait ? (
-                <img src={portrait} alt="" className="size-full object-cover object-top [image-rendering:pixelated]" />
-              ) : (
-                <span className="font-mono text-2xl text-dim">?</span>
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="eyebrow mb-1">{boss.locked ? "GATE LOCKED" : supported ? "BOSS GATE" : "FIXTURE ONLY"}</p>
-              <h2 id="boss-entry-title" className="text-2xl font-semibold tracking-[-0.03em]">
-                {boss.name}
-              </h2>
-              <p className="mt-1 text-sm leading-relaxed text-muted">{boss.tagline}</p>
-            </div>
+      <div className="window-title flex items-center justify-between gap-3 py-1 pl-4 pr-1">
+        <p className="text-xs">{boss.locked ? "GATE LOCKED" : supported ? "BOSS GATE" : "FIXTURE ONLY"}</p>
+        <button
+          ref={closeRef}
+          type="button"
+          onClick={onClose}
+          aria-label="Close boss actions"
+          className="min-h-11 shrink-0 border border-white/60 px-3 text-xs hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff]"
+        >
+          CLOSE
+        </button>
+      </div>
+      <div className="p-4 sm:p-5">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="grid size-24 shrink-0 place-items-center overflow-hidden border-2 border-[#2b4a8b] bg-[#092b61]">
+            {portrait ? (
+              <img src={portrait} alt="" className="size-full object-cover object-top [image-rendering:pixelated]" />
+            ) : (
+              <span className="font-pixel text-2xl text-[#fff9e9]">?</span>
+            )}
           </div>
-          <button
-            ref={closeRef}
-            type="button"
-            onClick={onClose}
-            aria-label="Close boss actions"
-            className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            CLOSE
-          </button>
+          <div className="min-w-0">
+            <h2 id="boss-entry-title" className="font-pixel text-xl leading-tight sm:text-2xl">
+              {boss.name}
+            </h2>
+            <p className="mt-2 font-mono text-xs leading-relaxed">{boss.tagline}</p>
+          </div>
         </div>
 
-        <div className="hairline mt-5 border-t pt-4">
+        <div className="mt-5 border-t-2 border-[#2b4a8b]/20 pt-4">
           <BossHealth boss={boss} deployment={arena.deployment} />
         </div>
 
-        {needsWallet && (
-          <button
-            ref={actionRef}
-            type="button"
-            onClick={onConnect}
-            disabled={arena.wallet.busy || arena.wallet.status === "checking" || arena.wallet.status === "missing"}
-            className="mt-5 w-full rounded-lg bg-accent/20 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-accent-soft transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-accent/25 active:scale-[0.98] disabled:opacity-40"
-          >
-            {arena.wallet.status === "choosing" ? "CHOOSE WALLET TO CHALLENGE" : arena.wallet.busy ? "CONNECTING WALLET…" : "CONNECT WALLET TO CHALLENGE"}
-          </button>
-        )}
-        {needsSwitch && (
-          <button
-            ref={actionRef}
-            type="button"
-            onClick={onSwitch}
-            disabled={arena.wallet.busy}
-            className="mt-5 w-full rounded-lg border border-[#f5b04a]/40 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-[#f5b04a] transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-[#f5b04a]/10 active:scale-[0.98] disabled:opacity-40"
-          >
-            {arena.wallet.busy ? "SWITCHING NETWORK…" : `SWITCH WALLET TO ${arena.selectedChainId}`}
-          </button>
-        )}
         {supported && live && (
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/30 px-3 py-3">
-            <div>
-              <p className="font-mono text-[9px] tracking-[0.12em] text-dim">LIVE BATTLE</p>
-              <p className="mt-1 text-xs text-muted">Enter the arena. Choose an attack cap of up to 1, 5, or 10 MockUSD.</p>
-            </div>
+          <div className="mt-6">
             <Link
+              ref={entryRef}
               href={`/battle/${live.hookAddress}?network=${arena.network}`}
-              className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog transition-colors hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              aria-describedby="boss-entry-cost"
+              className="flex min-h-16 w-full items-center justify-center gap-3 border-2 border-[#092b61] bg-[#092b61] px-4 py-4 font-pixel text-xl text-[#fff9e9] shadow-[0_4px_0_#041833] hover:bg-[#2b4a8b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#2b4a8b] active:bg-[#2b4a8b]"
             >
+              <span aria-hidden="true">▶</span>
               ENTER BATTLE
             </Link>
+            <p id="boss-entry-cost" className="mt-4 text-center font-mono text-xs leading-relaxed">Each attack uses a cap of up to 1, 5, or 10 MockUSD.</p>
           </div>
         )}
         {!supported && (
-          <p className="mt-4 rounded-lg border border-white/8 px-3 py-3 text-xs leading-relaxed text-muted">
+          <p className="mt-4 font-mono text-xs leading-relaxed">
             This gate is a visual fixture. No contract or attack route is deployed for it.
           </p>
         )}
-
-        <div className="mt-5 flex gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="ml-auto rounded-lg border border-white/12 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-fog transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.97]"
-          >
-            CLOSE · ESC
-          </button>
-        </div>
       </div>
-    </div>
+    </dialog>
   );
 }
 
@@ -173,7 +140,7 @@ function BossHealth({ boss, deployment }: { boss: BossDefinition; deployment: Ar
   return (
     <Row label={`STAGE ${stage + 1} / 3 · ${roundStatusLabel(round.status).toUpperCase()}`} badge="LIVE">
       <Bar fraction={fraction} />
-      <p className="mt-1.5 font-mono text-[10px] text-dim">
+      <p className="mt-2 font-mono text-xs leading-relaxed">
         {factory
           ? `${displayAmount(sold, 6)} / ${displayAmount(cap, 6)} mUSD volume`
           : `${displayAmount(remaining, round.hpToken.decimals)} / ${displayAmount(cap, round.hpToken.decimals)} ${round.hpToken.symbol} remaining`}
@@ -186,11 +153,11 @@ function Row({ label, badge, children }: { label: string; badge: string; childre
   const live = badge === "LIVE";
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="font-mono text-[9px] tracking-[0.12em] text-dim">{label}</span>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <span className="font-pixel text-[11px]">{label}</span>
         <span
-          className={`rounded-full border px-2 py-0.5 font-mono text-[8px] tracking-[0.12em] ${
-            live ? "border-live/30 text-live-soft" : "border-white/12 text-dim"
+          className={`border px-2 py-1 font-mono text-[10px] tracking-[0.08em] ${
+            live ? "border-[#276334] bg-[#57c858]/15 text-[#276334]" : "border-[#2b4a8b]/40"
           }`}
         >
           {badge}
@@ -203,12 +170,12 @@ function Row({ label, badge, children }: { label: string; badge: string; childre
 
 function Bar({ fraction }: { fraction: number | null }) {
   return (
-    <div className="h-2.5 overflow-hidden rounded-full bg-white/8" role="progressbar" aria-valuenow={fraction ?? undefined}>
+    <div className="bar-track h-4 overflow-hidden border-2 border-[#2b4a8b]" role="progressbar" aria-label="Boss health remaining" aria-valuemin={0} aria-valuemax={100} aria-valuenow={fraction === null ? undefined : Math.round(fraction * 100)}>
       {fraction === null ? (
-        <div className="h-full w-full bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.08)_0_6px,transparent_6px_12px)]" />
+        <div className="h-full w-full bg-[repeating-linear-gradient(135deg,rgba(169,214,255,0.2)_0_6px,transparent_6px_12px)]" />
       ) : (
         <div
-          className="h-full origin-left rounded-full bg-gradient-to-r from-danger to-[#ff6b6b] transition-transform duration-300 ease-[var(--ease-out-strong)]"
+          className="h-full origin-left bg-[#57c858] transition-transform duration-300 ease-[var(--ease-out-strong)] motion-reduce:transition-none"
           style={{ transform: `scaleX(${fraction})` }}
         />
       )}
