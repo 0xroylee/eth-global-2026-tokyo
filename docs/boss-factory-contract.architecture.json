@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Boss Factory Contract Architecture",
+    "output": "boss-factory-contract.html",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/0xroylee/eth-global-2026-tokyo",
+      "revision": "ba565402be16c4eae5bbe855d2ca8b51810a5e38"
+    }
+  },
+  "components": [
+    {
+      "id": "wallet",
+      "type": "external",
+      "label": "Creator / Player",
+      "sublabel": "signer wallet",
+      "pos": [40, 120],
+      "size": [190, 84]
+    },
+    {
+      "id": "factory",
+      "type": "backend",
+      "label": "BossFactory",
+      "sublabel": "quote + per-boss deploy",
+      "tag": "shared launchpad",
+      "pos": [300, 120],
+      "size": [220, 86],
+      "sources": [{ "path": "contracts/src/BossFactory.sol" }]
+    },
+    {
+      "id": "router",
+      "type": "backend",
+      "label": "BossRouter",
+      "sublabel": "per boss · attack + LP reserves",
+      "pos": [560, 120],
+      "size": [210, 86],
+      "sources": [{ "path": "contracts/src/BossRouter.sol" }]
+    },
+    {
+      "id": "manager",
+      "type": "cloud",
+      "label": "PoolManager",
+      "sublabel": "shared v4 settlement",
+      "pos": [820, 120],
+      "size": [200, 86],
+      "sources": [{ "path": "contracts/src/BossFactory.sol" }]
+    },
+    {
+      "id": "pool-states",
+      "type": "cloud",
+      "label": "Pool States",
+      "sublabel": "shared supply + per-boss battle pool",
+      "pos": [1080, 120],
+      "size": [230, 90],
+      "sources": [{ "path": "contracts/src/BossRouter.sol" }]
+    },
+    {
+      "id": "hook",
+      "type": "security",
+      "label": "BossHook",
+      "sublabel": "per boss · volume + prize escrow",
+      "pos": [820, 410],
+      "size": [230, 90],
+      "sources": [{ "path": "contracts/src/BossHook.sol" }]
+    },
+    {
+      "id": "collectibles",
+      "type": "backend",
+      "label": "BossCollectibles",
+      "sublabel": "optional victory NFT",
+      "pos": [1080, 410],
+      "size": [230, 84],
+      "sources": [{ "path": "contracts/src/BossCollectibles.sol" }]
+    }
+  ],
+  "connections": [
+    { "id": "creator-launch", "from": "wallet", "to": "factory", "label": "quote + launch", "labelDy": 66, "variant": "emphasis" },
+    { "id": "factory-router", "from": "factory", "to": "router", "label": "CREATE2", "variant": "emphasis" },
+    {
+      "id": "attack-request",
+      "from": "wallet",
+      "to": "router",
+      "label": "attackWithMockUSD",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [[135, 360], [665, 360]],
+      "labelSegment": 1
+    },
+    { "id": "router-unlock", "from": "router", "to": "manager", "label": "one unlock", "labelDy": 67, "variant": "emphasis" },
+    { "id": "pool-settlement", "from": "manager", "to": "pool-states", "label": "two swaps" },
+    { "id": "hook-callback", "from": "pool-states", "to": "hook", "label": "authenticated hook callback", "variant": "security" },
+    { "id": "optional-nft", "from": "hook", "to": "collectibles", "variant": "dashed" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Launch",
+      "items": [
+        "The creator selects a MEME allocation, prize percentage, MockUSD target, and deadline.",
+        "BossFactory quotes the shared MockUSD / Attack Token pool, then creates the Router, Hook, and optional collection.",
+        "The Hook holds the MEME prize; the Router holds battle inventory and future-stage reserves."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Attack and stage release",
+      "items": [
+        "One Router unlock swaps MockUSD to Attack Token, then Attack Token to MEME.",
+        "Eligible volume = floor(MockUSD spent × Attack Token spent / Attack Token bought).",
+        "The 1:2:3 volume gates release stages; refill and next-stage liquidity are atomic in the same unlock."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Victory and claim",
+      "items": [
+        "Each Hook tracks purchase credit for its own boss; unrelated token balances do not qualify.",
+        "After defeat, claimReward pays proportional MEME from the Hook escrow. Victory NFTs are optional."
+      ]
+    }
+  ]
+}
