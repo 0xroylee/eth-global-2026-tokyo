@@ -2,7 +2,6 @@ import { BlockNotFoundError, type Address, type PublicClient } from "viem";
 import {
   bossHpAbi,
   bossPoolHookAbi,
-  bossCollectiblesAbi,
   mockUsdAbi,
   royTokenAbi,
 } from "./generated/abi";
@@ -44,11 +43,8 @@ export type PlayerSnapshot = {
   mockUSDBalance: bigint;
   royBalance: bigint;
   bossHPBalance: bigint;
-  collectibleBalance: bigint;
-  enrollmentAllowance: bigint;
   attackAllowance: bigint;
   claimAllowance: bigint;
-  enrolled: boolean;
   hasAttacked: boolean;
   victoryClaimed: boolean;
 };
@@ -79,7 +75,7 @@ export async function readState(
   account?: Address,
 ): Promise<BossPoolSnapshot> {
   const { manifest } = deployment;
-  const { hook, router, bossHP, roy, mockUSD, collectibles, poolManager } = manifest.addresses;
+  const { hook, router, bossHP, roy, mockUSD, poolManager } = manifest.addresses;
   return withLatestSupportedBlock(client, async (blockNumber, blockTimestamp) => {
     const [
       status,
@@ -184,11 +180,8 @@ async function readPlayerAtBlock(
     mockUSDBalance,
     royBalance,
     bossHPBalance,
-    collectibleBalance,
-    enrollmentAllowance,
     attackAllowance,
     claimAllowance,
-    enrolled,
     hasAttacked,
     victoryClaimed,
   ] = await Promise.all([
@@ -196,11 +189,8 @@ async function readPlayerAtBlock(
     client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [account], blockNumber }),
     client.readContract({ address: addresses.roy, abi: royTokenAbi, functionName: "balanceOf", args: [account], blockNumber }),
     client.readContract({ address: addresses.bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [account], blockNumber }),
-    client.readContract({ address: addresses.collectibles, abi: bossCollectiblesAbi, functionName: "balanceOf", args: [account], blockNumber }),
-    client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "allowance", args: [account, addresses.hook], blockNumber }),
     client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "allowance", args: [account, addresses.router], blockNumber }),
     client.readContract({ address: addresses.bossHP, abi: bossHpAbi, functionName: "allowance", args: [account, addresses.hook], blockNumber }),
-    client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "enrolled", args: [account], blockNumber }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "hasAttacked", args: [account], blockNumber }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "victoryClaimed", args: [account], blockNumber }),
   ]);
@@ -211,11 +201,8 @@ async function readPlayerAtBlock(
     mockUSDBalance,
     royBalance,
     bossHPBalance,
-    collectibleBalance,
-    enrollmentAllowance,
     attackAllowance,
     claimAllowance,
-    enrolled,
     hasAttacked,
     victoryClaimed,
   };

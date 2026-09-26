@@ -4,22 +4,21 @@ Updated 26 September 2026. The current implementation uses the generated contrac
 
 The active target is Base Sepolia, chain `84532`. Its RPC is reachable, but no Boss Pool manifest or deployment has been verified there. The browser defaults to Base Sepolia and shows a not-deployed state while the manifest is absent. The testnet transactions below are historical Robinhood evidence on chain `46630`; they do not verify Base Sepolia.
 
-The quote contract changes came from `b98b685fadd5`. The SDK implementation is `1802ffd6d812`. The reader retry and UI integration use `4033d7b7818f`; the NFT completion run used that SDK source. The current Robinhood PoolManager is deployed from pinned v4-core source by the team. It is a non-production fixture, not an official Robinhood deployment.
+The previous quote contract changes came from `b98b685fadd5`; SDK and UI work followed in `1802ffd6d812` and `4033d7b7818f`. Commit `eb213a6` removed enrollment, entry fees, starter ROY, and entry-NFT minting. The local and Robinhood journeys below predate that change and are historical enrollment-era evidence. The Robinhood PoolManager is team-deployed from pinned v4-core source, not an official deployment.
 
 ## Local and browser checks
 
-The final post-merge verification at commit `ebb9b87` passed these checks:
+The direct-attack core contract checks pass. Five focused Foundry tests cover fresh-wallet attacks, both token orderings, quote non-persistence, deadline guards, and expiry. A fresh local SDK direct-attack journey is pending.
 
-- The frozen Bun install, Solidity build and size report passed. `bun run contracts:test` passed five focused Foundry cases, including quote non-persistence.
-- `bun run abi:check`, `bun run typecheck`, `bun run web:build`, `bun run local:smoke`, and `bun run --cwd apps/web map:check` passed.
-- The isolated local SDK journey recorded 18 successful transactions on chain `31337` and ended at block `36`. It compared a quote made before approval with execution, then exercised two wallets through all stages, refills, HP transfer and redemption, and both victory NFTs. Its ignored journal is `.scratch/boss-pool-exercise/local-20260926T090227138Z-79386.json`.
-- Browser checks showed an active local round and a public attack quote without a connected wallet. Base Sepolia showed Not Deployed with no quote because its manifest is absent. The header selector changed from Local to Base Sepolia with ArrowDown and Enter, and the amount field kept native caret movement after End and ArrowLeft. The historical Robinhood deployment rendered as Defeated with its verified state.
+- The previous SDK/web build checks passed before the no-entry change. The current direct-attack changes pass the focused contract suite and TypeScript typecheck.
+- The earlier local SDK journey recorded 18 successful transactions on chain `31337` and ended at block `36`. It included the entry fee, starter ROY, and entry NFTs. Its ignored journal is `.scratch/boss-pool-exercise/local-20260926T090227138Z-79386.json`; it is not direct-attack proof.
+- The parent confirmed the current public page returns a direct-attack quote on an active fresh local deployment without showing enrollment UI. Base Sepolia remains Not Deployed without a manifest. A fresh direct-attack local SDK journey and browser attack check are pending.
 
-The browser checks did not automate an injected wallet's popup. Use the [manual wallet checklist](#manual-browser-wallet-checklist) to verify connect, network switch, approval, rejection, signing, and receipt recovery.
+The browser checks did not automate an injected wallet's popup. Use the [manual wallet checklist](#manual-browser-wallet-checklist) to verify connection, network switch, direct attack, Router approval, rejection, signing, and receipt recovery.
 
 ## Historical Robinhood testnet run
 
-The original SDK gameplay process submitted 16 successful transactions on chain `46630`. It completed enrollment, all three stages and refills, BossHP transfer, and both prize claims. It stopped before the two victory-NFT writes when an RPC returned `Block at number "124485152" could not be found.` The saved gameplay journal therefore has `status: "failed"`, but all 16 recorded transactions succeeded.
+The original enrollment-era SDK gameplay process submitted 16 successful transactions on chain `46630`. It completed enrollment, all three stages and refills, BossHP transfer, and both prize claims. It stopped before the two victory-NFT writes when an RPC returned `Block at number "124485152" could not be found.` The saved gameplay journal therefore has `status: "failed"`, but all 16 recorded transactions succeeded. These transactions use the previous contract source.
 
 The completion run did not redeploy or replay the round. It verified the 16 saved receipts and current defeated state, then submitted the two missing NFT claims. An independent read at block `124495300` confirmed all 18 receipts, both claim flags, and token ownership. These results combine two runs. They are not one uninterrupted 18-transaction run.
 
@@ -41,8 +40,8 @@ Use a fresh local round for writes. The historical Robinhood fixture is Defeated
 1. Open the app with a fresh local deployment and no wallet connected. Confirm that round state and an attack quote load without a wallet prompt.
 2. Connect a dedicated test wallet. Confirm that the app shows the selected account and that the active chain matches the selected deployment.
 3. Select the other network in the header. Confirm the wallet's network switch request, then test rejection and confirm that the app reports the mismatch without reusing stale player state or quotes.
-4. Start enrollment. Confirm the approval prompt names MockUSD, BossHook, and an unlimited allowance. Reject it once and confirm that enrollment does not proceed. Approve it, then confirm enrollment only after its receipt succeeds.
-5. Request an attack quote before attack approval. Confirm the quote shows the MockUSD cap, expected stage, outputs, and minimums. Check that the attack approval names MockUSD, BossRouter, and an unlimited allowance. Reject one request and confirm that no confirmed damage appears.
-6. Approve and attack. Confirm the app shows pending state after submission and applies damage only after the checked receipt. Change accounts or advance the stage from a second wallet, then confirm that stale quotes require a new quote.
+4. Request an attack quote before approval. Confirm it shows the MockUSD cap, expected stage, outputs, and minimums. Check that approval names MockUSD and BossRouter with an unlimited allowance. Confirm that the UI offers no enrollment, Hook allowance, or entry NFT.
+5. Reject the Router approval once and confirm that no attack is submitted. Approve it and attack directly. The app should show pending state after submission and apply damage only after the checked receipt.
+6. Change accounts or advance the stage from a second wallet, then confirm that stale quotes require a new quote.
 7. Refresh with a pending transaction. Confirm that the saved hash is checked through `resumePending(request)` and the app does not submit the write again.
 8. After defeat, confirm that any reward approval names BossHP and BossHook with an unlimited allowance. Redeem BossHP and claim the victory NFT. Confirm that the UI updates from receipt-backed state and keeps reward redemption separate from the participation NFT.

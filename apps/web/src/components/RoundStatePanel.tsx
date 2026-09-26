@@ -77,7 +77,7 @@ function LiveRound({ deployment }: { deployment: Extract<DeploymentState, { kind
         <Metric
           label="ORIGINAL PRIZE"
           value={`${displayAmount(round.originalPrize, 6)} mUSD`}
-          detail={`Hook MockUSD balance: ${displayAmount(round.mockUSDInHook, 6)} mUSD, including entry proceeds`}
+          detail={`Hook MockUSD balance: ${displayAmount(round.mockUSDInHook, 6)} mUSD`}
         />
       </div>
 

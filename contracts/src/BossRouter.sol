@@ -67,7 +67,6 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
 
     uint24 public constant SWAP_FEE = 3_000;
     int24 public constant TICK_SPACING = 60;
-    uint256 public constant STARTER_ROY_BUDGET = 10_000e18;
 
     IPoolManager public immutable manager;
     IERC20 public immutable mockUSD;
@@ -80,7 +79,6 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
     address public activePlayer;
     uint8 public expectedStage;
     uint8 public pendingStage;
-    uint256 public starterRoyPaid;
     bool public supplyPoolSeeded;
     bool public activated;
 
@@ -202,7 +200,6 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
                 || block.timestamp >= bossHook.deadline()
                 || bossHP.balanceOf(address(this)) != bossHP.totalSupply()
                 || bossHP.balanceOf(address(this)) < minimumBossHPForVictoryPath()
-                || roy.balanceOf(address(this)) < STARTER_ROY_BUDGET
                 || !bossHook.prizeFunded() || mockUSD.balanceOf(address(bossHook)) < bossHook.originalPrize()
         ) revert InvalidSetup();
 
@@ -221,13 +218,6 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
             + bossHook.stageLiquidityDeposit(2);
     }
 
-    function payStarterRoy(address recipient, uint256 amount) external {
-        if (msg.sender != address(bossHook) || !activated || amount != bossHook.STARTER_ROY()) revert Unauthorized();
-        if (starterRoyPaid + amount > STARTER_ROY_BUDGET) revert InsufficientReserve();
-        starterRoyPaid += amount;
-        roy.safeTransfer(recipient, amount);
-    }
-
     function attackWithMockUSD(
         uint256 maxMockUSD,
         uint256 minRoyOut,
@@ -240,7 +230,6 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
                 || maxMockUSD > uint256(type(int256).max)
                 || minBossHPOut == 0 || callDeadline < block.timestamp || callDeadline > bossHook.deadline()
                 || attackStage != bossHook.currentStage() || bossHook.status() != BossHook.RoundStatus.Active
-                || !bossHook.enrolled(msg.sender)
         ) revert InvalidAttack();
 
         mockUSD.safeTransferFrom(msg.sender, address(this), maxMockUSD);

@@ -19,7 +19,7 @@ bun --env-file=.env.testnet.local run testnet:deploy
 bun --env-file=.env.testnet.local run testnet:exercise
 ```
 
-The testnet exercise sends transactions from both test wallets. It enrolls both players, attacks across all three stages, verifies refills and settlement, transfers eligible BossHP, claims rewards, and claims victory NFTs. Run it only against the verified manifest and funded test-only wallets.
+The testnet exercise sends transactions from both test wallets. Fresh wallets attack across all three stages without enrollment or an entry NFT. The exercise verifies refills and settlement, transfers eligible BossHP, claims rewards, and claims victory NFTs. Run it only against the verified manifest and funded test-only wallets.
 
 If Forge completes a deployment but the endpoint has not exposed the final setup block yet, the deploy runner preserves a sanitized pending summary and receipt list under ignored `.scratch/`. Recover it with a read-only command; it verifies the existing receipts and pinned final setup block, then publishes the manifest without broadcasting again:
 

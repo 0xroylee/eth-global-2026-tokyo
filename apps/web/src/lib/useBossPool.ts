@@ -446,7 +446,7 @@ export function useBossPool() {
     deployment,
     wallet,
     sdk,
-    canWrite: Boolean(wallet.account && walletClient && sdk),
+    canWrite: Boolean(network !== "robinhood-testnet" && wallet.account && walletClient && sdk),
     networkMismatch,
     connect,
     switchToSelectedNetwork,
@@ -520,7 +520,7 @@ function readStoredPending(): StoredPending | null {
     ) return null;
     const manifest = parseDeployment(item.manifest);
     const request = item.request as Partial<PendingRequest>;
-    const kinds: readonly PendingActionKind[] = ["approval", "enroll", "attack", "claimReward", "claimVictoryNFT", "faucetMockUSD"];
+    const kinds: readonly PendingActionKind[] = ["approval", "attack", "claimReward", "claimVictoryNFT", "faucetMockUSD"];
     if (
       typeof request.hash !== "string" || !/^0x[\da-fA-F]{64}$/.test(request.hash) ||
       !request.kind || !kinds.includes(request.kind) || typeof request.chainId !== "number" ||

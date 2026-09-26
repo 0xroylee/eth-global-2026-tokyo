@@ -19,7 +19,6 @@ Prefund BossHP before activation. Its cap must cover initial liquidity, transiti
 
 ```text
 ROY supply = supply-pool allocation
-           + starter reserve
            + initial/future Boss-pool paired-ROY reserve
            + unallocated locked treasury
 
@@ -49,7 +48,7 @@ Removing the burn does not change the modeled swap prices, gross inputs, reset f
 
 ## Funding and permissions
 
-Keep the 1,000 MockUSD example prize separate from both pools, stage reserve, and entry proceeds. LP fee revenue does not automatically refill the prize.
+Keep the 1,000 MockUSD example prize separate from both pools and stage reserve. Players pay only the attack swap input; there is no enrollment fee or starter-token allocation. LP fee revenue does not automatically refill the prize.
 
 The frozen controller-only refill exchanges reserve BossHP for the ROY left in the exhausted positions, then adds HP-only incremental liquidity at the restored boundary. Prefund the entire transition cost, including fees. Settle player trades before maintenance; recovered ROY belongs to reserve custody. New LP debt must never be charged to the clearing attacker beyond their signed trading bounds.
 

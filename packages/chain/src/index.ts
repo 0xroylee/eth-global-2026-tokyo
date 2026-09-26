@@ -57,7 +57,6 @@ export type {
   BossPoolSdkOptions,
   ConfirmedTransaction,
   DecodedContractEvent,
-  EnrollmentResult,
   FaucetResult,
   PendingOperation,
   PendingActionKind,

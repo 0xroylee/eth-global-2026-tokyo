@@ -56,7 +56,7 @@ The implementation covers the existing player slices. It keeps the original cont
 | Existing slice | Concrete frontend work |
 | --- | --- |
 | BP02/BP06 | The Next.js app reads verified local and historical Robinhood deployments. Base Sepolia is selectable but shows not deployed until a manifest exists. The SDK pins round and player reads to one block. |
-| BP03 | The wallet UI connects through direct viem, switches network, displays balances and allowances, and supports approval and enrollment. |
+| BP03 | The wallet UI connects through direct viem, switches network, displays balances and Router allowance, and supports direct attacks from fresh wallets. |
 | BP04 | The Router exposes a public preapproval quote. The SDK runs the authenticated simulation after approval, sends writes, checks receipts, and rejects stale-stage quotes. |
 | BP05/BP06 | The Phaser hub and boss scenes show stage state and apply attack effects only from confirmed SDK events. |
 | BP07 | The SDK supports BossHP transfer and reward redemption. The UI supports reward redemption and a separate victory-NFT claim; it does not yet expose a BossHP transfer form. |
@@ -66,11 +66,10 @@ The approval map follows the actual contract spender:
 
 | Action | Token | Approval spender |
 | --- | --- | --- |
-| Enrollment | MockUSD | BossHook |
-| Attack | MockUSD | BossRouter |
+| Attack input | MockUSD | BossRouter |
 | Reward redemption | BossHP | BossHook |
 
-The generated ABI owns these calls. `quoteAttackWithMockUSD(uint256 maxMockUSD,uint8 attackStage)` runs the real two-hop trade and a possible stage refill inside an always-reverting frame. Public `eth_call` returns the quote without requiring an account, enrollment, allowance, or balance. `sdk.quoteAttack` exposes it before approval. `sdk.attack` then simulates the authenticated `attackWithMockUSD` call with the player's accepted minimum outputs and expected stage.
+The generated ABI owns these calls. `quoteAttackWithMockUSD(uint256 maxMockUSD,uint8 attackStage)` runs the real two-hop trade and a possible stage refill inside an always-reverting frame. Public `eth_call` returns the quote without requiring a wallet, allowance, or balance. `sdk.quoteAttack` exposes it before approval. `sdk.attack` then simulates the authenticated `attackWithMockUSD` call with the player's accepted minimum outputs and expected stage.
 
 Keep `bigint` for amounts and derive confirmed damage from the successful transaction events. Refresh balances, allowances, stage state, and claims after receipts and account/network changes. Give each quote an account, chain, stage, input, and freshness context so an old result cannot authorize the next action.
 

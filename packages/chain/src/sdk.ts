@@ -17,13 +17,12 @@ import {
   type WalletClient,
 } from "viem";
 import {
-  bossCollectiblesAbi,
   bossHpAbi,
   bossPoolHookAbi,
   bossRouterAbi,
   mockUsdAbi,
 } from "./generated/abi";
-import { isVerifiedDeployment, type VerifiedDeployment } from "./deployment";
+import { isVerifiedDeployment, ROBINHOOD_TESTNET_CHAIN_ID, type VerifiedDeployment } from "./deployment";
 import { readPlayer, readRound, readState, type RoundSnapshot } from "./reads";
 
 const CLAIMABLE_STATUS = 3;
@@ -34,7 +33,6 @@ const DEFAULT_RECEIPT_TIMEOUT_MS = 120_000;
 const QUOTE_SIMULATOR = "0x000000000000000000000000000000000000dEaD" as Address;
 
 export type ApprovalAction =
-  | { kind: "enroll" }
   | { kind: "attack"; maxMockUSD: bigint }
   | { kind: "claimReward"; hpAmount: bigint };
 
@@ -93,7 +91,6 @@ type DecodedEventBase<Name extends string, Args extends object> = {
 export type DecodedContractEvent =
   | DecodedEventBase<"Approval", { owner: Address; spender: Address; value: bigint }>
   | DecodedEventBase<"Transfer", { from: Address; to: Address; value: bigint }>
-  | DecodedEventBase<"Enrolled", { player: Address; entryFee: bigint; starterRoy: bigint; tokenId: bigint }>
   | DecodedEventBase<"AttackExecuted", { player: Address; stage: number; mockUSDSpent: bigint; royBought: bigint; roySpent: bigint; bossHPReceived: bigint; mockUSDRefunded: bigint; royRefunded: bigint }>
   | DecodedEventBase<"AttackRecorded", { player: Address; stage: number; bossHPOut: bigint; cumulativeSold: bigint }>
   | DecodedEventBase<"StageCleared", { stage: number; sold: bigint; capacity: bigint; roundingDust: bigint }>
@@ -103,7 +100,7 @@ export type DecodedContractEvent =
   | DecodedEventBase<"RewardClaimed", { player: Address; bossHPIn: bigint; mockUSDOut: bigint }>
   | DecodedEventBase<"VictoryNFTClaimed", { player: Address; tokenId: bigint }>;
 
-export type PendingActionKind = "approval" | "enroll" | "attack" | "transferBossHP" | "claimReward" | "claimVictoryNFT" | "faucetMockUSD";
+export type PendingActionKind = "approval" | "attack" | "transferBossHP" | "claimReward" | "claimVictoryNFT" | "faucetMockUSD";
 export type PendingRequest = {
   hash: Hex;
   kind: PendingActionKind;
@@ -138,13 +135,6 @@ export type ApprovalResult = {
   events: readonly DecodedContractEvent[];
 };
 export type SkippedApproval = { status: "skipped"; approval: ApprovalStatus };
-export type EnrollmentResult = {
-  account: Address;
-  entryFee: bigint;
-  starterRoy: bigint;
-  entryTokenId: bigint;
-  events: readonly DecodedContractEvent[];
-};
 export type AttackResult = {
   account: Address;
   stage: number;
@@ -253,7 +243,7 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     throw new Error(`Public client is configured for chain ${publicClient.chain.id}; deployment is on ${deployment.chainId}.`);
   }
   const { manifest } = deployment;
-  const { hook, router, bossHP, roy, mockUSD, collectibles } = manifest.addresses;
+  const { hook, router, bossHP, roy, mockUSD } = manifest.addresses;
 
   async function assertClientChain(): Promise<void> {
     const chainId = await publicClient.getChainId();
@@ -265,6 +255,9 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     account: Address;
     writeAccount: Account | Address;
   }> {
+    if (deployment.chainId === ROBINHOOD_TESTNET_CHAIN_ID) {
+      throw new BossPoolSdkError("HISTORICAL_DEPLOYMENT_READ_ONLY", "This Robinhood deployment uses enrollment-era contracts and is available for reads only.");
+    }
     const wallet = options.walletClient;
     if (!wallet) throw new BossPoolSdkError("WALLET_REQUIRED", "Connect a wallet before this action.");
     const [walletChain, accounts] = await Promise.all([wallet.getChainId(), wallet.getAddresses()]);
@@ -364,44 +357,6 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
           token: approval.tokenAddress,
           spender: approval.spenderAddress,
           amount: maxUint256,
-          events,
-        };
-      },
-    });
-  }
-
-  async function enroll(): Promise<PendingOperation<EnrollmentResult>> {
-    const { account } = await requireWalletAccount();
-    const state = await readState(publicClient, deployment, account);
-    assertActiveBeforeDeadline(state.round);
-    if (state.player?.enrolled) throw new BossPoolSdkError("ALREADY_ENROLLED", "This account is already enrolled.");
-    await publicClient.simulateContract({
-      address: hook,
-      abi: bossPoolHookAbi,
-      functionName: "enroll",
-      account,
-    });
-    const checkedWallet = await requireWalletAccount(account);
-    const calldata = encodeFunctionData({ abi: bossPoolHookAbi, functionName: "enroll" });
-    const hash = await checkedWallet.wallet.writeContract({
-      address: hook, abi: bossPoolHookAbi, functionName: "enroll", account: checkedWallet.writeAccount, chain: deployment.chain,
-    });
-    return makePending({
-      hash,
-      kind: "enroll",
-      action: "enroll",
-      account,
-      target: hook,
-      calldata,
-      expectedEvents: [{ address: hook, abi: bossPoolHookAbi, eventName: "Enrolled" }],
-      buildResult: (events) => {
-        const event = onlyEvent(events, "Enrolled");
-        assertEventAddress(event.args.player, account, "Enrollment event player does not match the selected wallet.");
-        return {
-          account,
-          entryFee: asBigInt(event.args.entryFee),
-          starterRoy: asBigInt(event.args.starterRoy),
-          entryTokenId: asBigInt(event.args.tokenId),
           events,
         };
       },
@@ -768,21 +723,12 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
         const spender = spenderValue as Address;
         const allowedSpender = sameAddress(request.target, bossHP)
           ? sameAddress(spender, hook)
-          : sameAddress(spender, hook) || sameAddress(spender, router);
+          : sameAddress(spender, router);
         if (!allowedSpender || value !== maxUint256) {
           throw new BossPoolSdkError("RECOVERY_CALL_MISMATCH", "Pending approval does not match the fixed spender map and unlimited allowance.");
         }
         expectedApproval = { spender, value };
         eventSpecs = [{ address: request.target, abi, eventName: "Approval" }];
-        break;
-      }
-      case "enroll": {
-        if (!sameAddress(request.target, hook)) throw new BossPoolSdkError("RECOVERY_TARGET_MISMATCH", "Enrollment target is not the verified Hook.");
-        abi = bossPoolHookAbi;
-        if (decodeFunctionData({ abi, data: request.calldata }).functionName !== "enroll") {
-          throw new BossPoolSdkError("RECOVERY_CALL_MISMATCH", "Pending enrollment calldata is invalid.");
-        }
-        eventSpecs = [{ address: hook, abi, eventName: "Enrolled" }];
         break;
       }
       case "attack": {
@@ -863,7 +809,7 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
       expectedEvents: eventSpecs,
       buildResult: (events) => {
         for (const event of events) {
-          if (event.eventName === "Enrolled" || event.eventName === "AttackExecuted" || event.eventName === "AttackRecorded" ||
+          if (event.eventName === "AttackExecuted" || event.eventName === "AttackRecorded" ||
               event.eventName === "RewardClaimed" || event.eventName === "VictoryNFTClaimed") {
             assertEventAddress(event.args.player, request.account, `Recovered ${request.kind} event belongs to a different account.`);
           } else if (event.eventName === "Approval") {
@@ -907,7 +853,6 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     prepareAttack,
     getApproval,
     approve,
-    enroll,
     attack,
     previewReward,
     claimReward,
@@ -920,7 +865,6 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
 
   function approvalAmount(action: ApprovalAction): bigint {
     switch (action.kind) {
-      case "enroll": return 10n * 10n ** 6n;
       case "attack": return action.maxMockUSD;
       case "claimReward": return action.hpAmount;
     }
@@ -929,9 +873,7 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
   async function readApproval(action: ApprovalAction, account: Address): Promise<Omit<ApprovalStatus, "requiredAllowance" | "approvalNeeded" | "approvalAmount">> {
     const mapping = action.kind === "claimReward"
       ? { token: "BossHP" as const, tokenAddress: bossHP, spender: "BossHook" as const, spenderAddress: hook, abi: bossHpAbi }
-      : action.kind === "enroll"
-        ? { token: "MockUSD" as const, tokenAddress: mockUSD, spender: "BossHook" as const, spenderAddress: hook, abi: mockUsdAbi }
-        : { token: "MockUSD" as const, tokenAddress: mockUSD, spender: "BossRouter" as const, spenderAddress: router, abi: mockUsdAbi };
+      : { token: "MockUSD" as const, tokenAddress: mockUSD, spender: "BossRouter" as const, spenderAddress: router, abi: mockUsdAbi };
     const currentAllowance = await publicClient.readContract({
       address: mapping.tokenAddress,
       abi: mapping.abi,

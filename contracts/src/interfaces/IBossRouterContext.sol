@@ -7,5 +7,4 @@ interface IBossRouterContext {
     function expectedStage() external view returns (uint8);
     function pendingStage() external view returns (uint8);
     function bossPoolId() external view returns (bytes32);
-    function payStarterRoy(address recipient, uint256 amount) external;
 }

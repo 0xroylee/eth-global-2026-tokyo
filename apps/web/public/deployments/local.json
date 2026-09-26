@@ -2,33 +2,33 @@
   "chainId": 31337,
   "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   "addresses": {
-    "hook": "0xa9f55636240Ab8219DfE7Df28c6acF0B31EC2Ac0",
-    "router": "0x7969c5eD335650692Bc04293B07F5BF2e7A673C0",
-    "bossHP": "0x82e01223d51Eb87e16A03E24687EDF0F294da6f1",
-    "roy": "0xCD8a1C3ba11CF5ECfa6267617243239504a98d90",
-    "mockUSD": "0xb7278A61aa25c888815aFC32Ad3cC52fF24fE575",
-    "collectibles": "0x2bdCC0de6bE1f7D2ee689a0342D76F52E8EFABa3",
-    "poolManager": "0x5f3f1dBD7B74C6B46e8c44f98792A1dAf8d69154"
+    "hook": "0xCE4c4787947C7f3Bdd67121F18c6b39F3ec12AC0",
+    "router": "0x51A1ceB83B83F1985a81C295d1fF28Afef186E02",
+    "bossHP": "0xD8a5a9b31c3C0232E196d518E89Fd8bF83AcAd43",
+    "roy": "0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2",
+    "mockUSD": "0x21dF544947ba3E8b3c32561399E88B52Dc8b2823",
+    "collectibles": "0xDC11f7E700A4c898AE5CAddB1082cFfa76512aDD",
+    "poolManager": "0x4C4a2f8c81640e47606d3fd77B353E87Ba015584"
   },
   "pools": {
     "supply": {
-      "id": "0x71603a4db4aef4b80f8b8cd982f0cf5a44bf9fc56a1073b5d57df2ff96410f27",
+      "id": "0x6be62f539921674ce0db26075e1d39f2afaee0135f70cf36430c960a1db2ec2c",
       "key": {
-        "currency0": "0xb7278A61aa25c888815aFC32Ad3cC52fF24fE575",
-        "currency1": "0xCD8a1C3ba11CF5ECfa6267617243239504a98d90",
+        "currency0": "0x21dF544947ba3E8b3c32561399E88B52Dc8b2823",
+        "currency1": "0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2",
         "fee": 3000,
         "tickSpacing": 60,
         "hooks": "0x0000000000000000000000000000000000000000"
       }
     },
     "boss": {
-      "id": "0x263dc1b4ef6270b16e53add14791752bc5aef60771f64d5e2de9fc0ce990cff6",
+      "id": "0xe54f709b35362c3501439ef1a1c12c33fd069c29c5d70797c213b3d0c4755e51",
       "key": {
-        "currency0": "0x82e01223d51Eb87e16A03E24687EDF0F294da6f1",
-        "currency1": "0xCD8a1C3ba11CF5ECfa6267617243239504a98d90",
+        "currency0": "0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2",
+        "currency1": "0xD8a5a9b31c3C0232E196d518E89Fd8bF83AcAd43",
         "fee": 3000,
         "tickSpacing": 60,
-        "hooks": "0xa9f55636240Ab8219DfE7Df28c6acF0B31EC2Ac0"
+        "hooks": "0xCE4c4787947C7f3Bdd67121F18c6b39F3ec12AC0"
       }
     }
   },
@@ -37,14 +37,14 @@
     "fee": 3000,
     "tickSpacing": 60,
     "bossTicks": [
-      0,
-      1920
+      -1920,
+      0
     ],
-    "bossIsCurrency0": true,
+    "bossIsCurrency0": false,
     "bossInitialSqrtPriceX96": "79228162514264337593543950336",
-    "bossSqrtLowerX96": "79228162514264337593543950336",
-    "bossSqrtUpperX96": "87210699426708006962522930182",
-    "expectedStageTerminalSqrtPriceX96": "87210699426708006962522930182",
+    "bossSqrtLowerX96": "71976280165737757769120291055",
+    "bossSqrtUpperX96": "79228162514264337593543950336",
+    "expectedStageTerminalSqrtPriceX96": "71976280165737757769120291055",
     "supplyStartTick": 299520,
     "supplyTicks": [
       293520,
@@ -79,22 +79,19 @@
       "993659380786189100217"
     ],
     "originalPrize": "1000000000",
-    "deadline": "1790415291"
+    "deadline": "1790418705"
   },
   "prefunded": {
     "routerBossHP": "1700000000000000000000",
     "routerROY": "50000000000000000597619",
     "routerMockUSD": "84771745",
     "ownerROY": "0",
-    "starterRoyBudget": "10000000000000000000000",
-    "starterRoyPaid": "0",
-    "starterRoyUnspent": "10000000000000000000000",
-    "lockedRouterROY": "40000000000000000597619",
+    "lockedRouterROY": "50000000000000000597619",
     "poolManagerBossHP": "300000000000000000000",
     "mockUSDInHook": "1000000000"
   },
   "schemaVersion": 1,
   "rpcUrl": "http://127.0.0.1:8548",
-  "deployedAtBlock": 70,
-  "deploymentTxHash": "0xb1bad2d418da8238dd3ae2742b428d9df9d56b4e969a8c7acf680d300eba4722"
+  "deployedAtBlock": 88,
+  "deploymentTxHash": "0xa9efab71991edd6c83d9fdffca48f1e28f865e5dbc59a565de8ed9852f3196c9"
 }

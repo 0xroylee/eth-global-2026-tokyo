@@ -10,6 +10,7 @@ The user confirmed this replacement for the earlier physical/magic design:
 
 - Supply pool: **MockUSD / ROY**.
 - Boss pool: **ROY / BossHP**, with BossHP as a real ERC-20.
+- Players connect, approve MockUSD to BossRouter when needed, and press Attack. No enrollment fee or entry NFT is required.
 - Primary Attack executes both swaps in one unlock. ROY is payment into the Boss pool; it is not burned by the attack.
 - BossHook accumulates actual BossHP output in `stageSold`. The router delivers BossHP to the player through ordinary settlement; no token burn or output-return delta is needed for damage.
 - Stage HP stays **300 → 600 → 900**. Clear the current sellable allocation, perform the controller-only price reset, then add the next stage's incremental liquidity. One attack cannot damage two stages.
@@ -19,7 +20,7 @@ The user confirmed this replacement for the earlier physical/magic design:
 
 ## Status
 
-The private Bun workspace, generated contract client, and local deployment flow are in place. Five focused Foundry cases pass, including the no-burn HP0 round, an HP1 refill, quote non-persistence, deadline setup rejection, and expiry. The reusable local Anvil exercise completed both wallets through all three stages, reward claims, and victory NFTs. The current Next.js arena uses `@boss-pool/chain` for public round reads, attack quotes before wallet connection, wallet actions, and receipt recovery. Base Sepolia is configured as the active target, but no Boss Pool deployment is verified there. Historical Robinhood evidence records 16 successful gameplay transactions followed by two separately verified NFT claims. See the [contract usage guide](docs/contract-usage.md), [SDK verification record](docs/sdk-verification.md), and [historical foundation report](docs/testnet-verification.md). Expiry and prize refund have local Foundry coverage only.
+The private Bun workspace, generated contract client, and local deployment flow are in place. Five focused Foundry cases pass for direct no-entry attacks, both token orderings, quote non-persistence, deadline guards, and expiry. The Next.js arena uses `@boss-pool/chain` for public reads and quotes, direct attack actions, and receipt recovery. Base Sepolia is configured as the active target, but no Boss Pool deployment is verified there. The prior local 18-transaction journey and Robinhood 16+2 receipts used enrollment-era contracts and are historical evidence only. A fresh local direct-attack journey remains to be recorded. See the [contract usage guide](docs/contract-usage.md), [SDK verification record](docs/sdk-verification.md), and [historical foundation report](docs/testnet-verification.md). Expiry and prize refund have local Foundry coverage only.
 
 The app uses Next.js App Router, Tailwind CSS, direct viem, and Phaser. Manual browser-wallet popup checks remain separate from automated local and testnet verification. See [apps/web/AGENTS.md](apps/web/AGENTS.md) for frontend rules.
 

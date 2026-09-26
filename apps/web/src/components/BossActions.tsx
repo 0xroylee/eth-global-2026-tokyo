@@ -25,7 +25,6 @@ type QuoteState = {
   receivedAt: number;
 };
 type ActionResult =
-  | { kind: "enroll"; hash: string; entryFee: bigint; starterRoy: bigint; tokenId: bigint }
   | { kind: "approval"; hash: string; token: string; spender: string; amount: bigint }
   | { kind: "attack"; hash: string; result: AttackResult }
   | { kind: "reward"; hash: string; hpAmount: bigint; payout: bigint }
@@ -35,7 +34,6 @@ type ActionResult =
 const MOCK_USD_DECIMALS = 6;
 const BOSS_HP_DECIMALS = 18;
 const PUBLIC_FAUCET_AMOUNT = 100n * 10n ** BigInt(MOCK_USD_DECIMALS);
-const ENROLLMENT_ALLOWANCE = 10n * 10n ** BigInt(MOCK_USD_DECIMALS);
 const DEFAULT_SLIPPAGE_BPS = 100;
 
 export function BossActions({
@@ -50,7 +48,7 @@ export function BossActions({
   const [claimText, setClaimText] = useState("");
   const [rewardPreview, setRewardPreview] = useState<RewardPreview | null>(null);
   const [rewardError, setRewardError] = useState<string | null>(null);
-  const [approvals, setApprovals] = useState<{ enroll?: ApprovalStatus; attack?: ApprovalStatus; claim?: ApprovalStatus }>({});
+  const [approvals, setApprovals] = useState<{ attack?: ApprovalStatus; claim?: ApprovalStatus }>({});
   const [lastResult, setLastResult] = useState<ActionResult | null>(null);
   const [now, setNow] = useState(Date.now());
 
@@ -61,7 +59,6 @@ export function BossActions({
   const round = live?.round;
   const inputAmount = parseTokenAmount(amountText, MOCK_USD_DECIMALS);
   const hpAmount = parseTokenAmount(claimText, BOSS_HP_DECIMALS);
-  const enrollmentAllowance = player?.enrollmentAllowance;
   const attackAllowance = player?.attackAllowance;
   const claimAllowance = player?.claimAllowance;
   const heldBossHP = player?.bossHPBalance;
@@ -89,22 +86,20 @@ export function BossActions({
     setRewardError(null);
     if (!sdk || !account) return;
     let activeRequest = true;
-    const requests: [Promise<ApprovalStatus>, Promise<ApprovalStatus>, Promise<ApprovalStatus> | null] = [
-      sdk.getApproval({ kind: "enroll" }, account),
+    const requests: [Promise<ApprovalStatus> | null, Promise<ApprovalStatus> | null] = [
       inputAmount !== null && inputAmount > 0n
         ? sdk.getApproval({ kind: "attack", maxMockUSD: inputAmount }, account)
-        : Promise.reject(new Error("Enter an attack input cap.")),
+        : null,
       hpAmount !== null && hpAmount > 0n && defeated
         ? sdk.getApproval({ kind: "claimReward", hpAmount }, account)
         : null,
     ];
     void Promise.all([
-      requests[0].catch(() => undefined),
-      requests[1].catch(() => undefined),
-      requests[2]?.catch(() => undefined) ?? Promise.resolve(undefined),
-    ]).then(([enroll, attack, claim]) => {
+      requests[0]?.catch(() => undefined) ?? Promise.resolve(undefined),
+      requests[1]?.catch(() => undefined) ?? Promise.resolve(undefined),
+    ]).then(([attack, claim]) => {
       if (!activeRequest) return;
-      setApprovals({ enroll, attack, claim });
+      setApprovals({ attack, claim });
     });
 
     if (hpAmount !== null && hpAmount > 0n && defeated) {
@@ -115,7 +110,7 @@ export function BossActions({
       });
     }
     return () => { activeRequest = false; };
-  }, [sdk, account, inputAmount, hpAmount, defeated, enrollmentAllowance, attackAllowance, claimAllowance, heldBossHP, eligibleHP, redeemedHP, originalPrize]);
+  }, [sdk, account, inputAmount, hpAmount, defeated, attackAllowance, claimAllowance, heldBossHP, eligibleHP, redeemedHP, originalPrize]);
 
   const quoteFresh = useMemo(() => {
     if (!quoteState || !live || !round) return false;
@@ -135,18 +130,12 @@ export function BossActions({
   const quoteSecondsLeft = quoteState && live
     ? Math.max(0, Number(quoteState.quote.expiresAt - quoteTimestamp))
     : 0;
-  const enrollApproval = approvals.enroll;
   const attackApproval = approvals.attack;
   const claimApproval = approvals.claim;
-  const needsFaucet = Boolean(player && (
-    player.mockUSDBalance < ENROLLMENT_ALLOWANCE ||
-    (inputAmount !== null && player.mockUSDBalance < inputAmount)
-  ));
-  const enrolled = player?.enrolled ?? false;
-  const enrollmentFunded = Boolean(player && player.mockUSDBalance >= (enrollApproval?.requiredAllowance ?? ENROLLMENT_ALLOWANCE));
+  const needsFaucet = Boolean(player && inputAmount !== null && player.mockUSDBalance < inputAmount);
   const hasInputBalance = Boolean(player && inputAmount !== null && inputAmount > 0n && player.mockUSDBalance >= inputAmount);
   const attackReady = Boolean(
-    sdk && account && arena.canWrite && !arena.networkMismatch && active && enrolled && hasInputBalance &&
+    sdk && account && arena.canWrite && !arena.networkMismatch && active && hasInputBalance &&
     quoteFresh && attackApproval && !attackApproval.approvalNeeded && !writeBusy && !arena.pendingRecord,
   );
 
@@ -232,24 +221,6 @@ export function BossActions({
     }
   }
 
-  async function enroll() {
-    if (!sdk) return;
-    try {
-      const confirmed = await arena.runPending("Enroll", () => sdk.enroll());
-      if (confirmed?.status === "confirmed") {
-        setLastResult({
-          kind: "enroll",
-          hash: confirmed.hash,
-          entryFee: confirmed.result.entryFee,
-          starterRoy: confirmed.result.starterRoy,
-          tokenId: confirmed.result.entryTokenId,
-        });
-      }
-    } catch {
-      // The shared write status retains the decoded contract error.
-    }
-  }
-
   async function attack() {
     if (!sdk || !quoteFresh || !quoteState) return;
     setQuoteError(null);
@@ -264,23 +235,23 @@ export function BossActions({
   }
 
   const statusText = round ? roundStatusLabel(round.status) : arena.deployment.kind === "not-deployed" ? "Not deployed" : arena.deployment.kind === "error" ? "Unavailable" : "Checking";
-  const attackBlockReason = !account
-    ? "Connect a wallet before enrolling or attacking. The quote remains public."
+  const attackBlockReason = arena.network === "robinhood-testnet"
+    ? "This enrollment-era Robinhood deployment is read-only in the current player UI."
+    : !account
+    ? "Connect a wallet before attacking. The quote remains public."
     : arena.networkMismatch
       ? `Switch the wallet to ${arena.network === "local" ? "local chain 31337" : arena.network === "base-sepolia" ? "Base Sepolia 84532" : "historical Robinhood testnet 46630"}.`
       : !active
         ? round?.status === 3 ? "The boss has been defeated." : round?.status === 4 ? "This round has expired." : "Attack is unavailable outside an active round."
-        : !enrolled
-          ? "Enroll before attacking."
-          : !hasInputBalance
-            ? "The wallet needs enough MockUSD for the full input cap; unused input is refunded."
-            : !quoteState
-              ? "Request a fresh public quote first."
-              : !quoteFresh
-                ? "This quote is stale. Request a new quote before approval or attack."
-                : attackApproval?.approvalNeeded
-                  ? "Approve MockUSD for BossRouter before attacking."
-                  : "Ready to submit the quoted attack.";
+        : !hasInputBalance
+          ? "The wallet needs enough MockUSD for the full input cap; unused input is refunded."
+          : !quoteState
+            ? "Request a fresh public quote first."
+            : !quoteFresh
+              ? "This quote is stale. Request a new quote before approval or attack."
+              : attackApproval?.approvalNeeded
+                ? "Approve MockUSD for BossRouter before attacking."
+                : "Ready to submit the quoted attack.";
 
   return (
     <div className="mt-5">
@@ -394,14 +365,14 @@ export function BossActions({
         <p className="eyebrow">PLAYER READINESS</p>
         <h3 id="readiness-heading" className="mt-1 text-base font-medium">Complete these actions in order</h3>
         {!account ? (
-          <p className="mt-2 text-xs leading-relaxed text-muted">Connect a wallet in the header to enroll and attack. Public round reads and quotes work without a wallet.</p>
+          <p className="mt-2 text-xs leading-relaxed text-muted">Connect a wallet in the header to attack or claim. Public round reads and quotes work without a wallet.</p>
         ) : !player ? (
           <p className="mt-2 text-xs text-muted">Reading this account on the selected network…</p>
         ) : (
           <div className="mt-3 space-y-3">
             <p className="break-words text-[11px] leading-relaxed text-faint">
               {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD · {displayAmount(player.royBalance, BOSS_HP_DECIMALS)} ROY · {displayAmount(player.bossHPBalance, BOSS_HP_DECIMALS)} BossHP · {displayAmount(player.nativeBalance, BOSS_HP_DECIMALS)} ETH gas
-              <span className="ml-2">{player.enrolled ? "ENROLLED" : "NOT ENROLLED"} · {player.hasAttacked ? "ATTACKED" : "NO ATTACK YET"}</span>
+              <span className="ml-2">{player.hasAttacked ? "ATTACKED" : "NO ATTACK YET"}</span>
             </p>
             <ReadinessRow step="A" title="MockUSD faucet" state={needsFaucet ? "needed" : "ready"}>
               <p className="text-xs text-muted">Balance: {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD</p>
@@ -412,31 +383,7 @@ export function BossActions({
               )}
             </ReadinessRow>
 
-            <ReadinessRow step="B" title="Enroll" state={enrolled ? "ready" : active ? "needed" : "closed"}>
-              {enrolled ? <p className="text-xs text-live-soft">Enrolled · entry NFT is in this wallet</p> : (
-                <>
-                  <p className="text-xs text-muted">Enrollment requires {displayAmount(enrollApproval?.requiredAllowance ?? ENROLLMENT_ALLOWANCE, MOCK_USD_DECIMALS)} mUSD.</p>
-                  {enrollApproval && (
-                    <p className="mt-1 break-all font-mono text-[9px] text-faint">
-                      MockUSD {shortAddress(enrollApproval.tokenAddress)} → BossHook {shortAddress(enrollApproval.spenderAddress)} · unlimited approval
-                    </p>
-                  )}
-                  {active && enrollmentFunded && enrollApproval?.approvalNeeded && (
-                    <ActionButton disabled={!arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord)} onClick={() => void submitApproval({ kind: "enroll" }, "Approve enrollment")}>
-                      Approve MockUSD for BossHook
-                    </ActionButton>
-                  )}
-                  {active && enrollmentFunded && enrollApproval && !enrollApproval.approvalNeeded && !enrolled && (
-                    <ActionButton disabled={!arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord)} onClick={() => void enroll()}>
-                      Enroll · {displayAmount(enrollApproval.requiredAllowance, MOCK_USD_DECIMALS)} mUSD
-                    </ActionButton>
-                  )}
-                  {!active && <p className="mt-1 text-xs text-faint">Enrollment is closed while the round is not Active or after its deadline.</p>}
-                </>
-              )}
-            </ReadinessRow>
-
-            <ReadinessRow step="C" title="Attack allowance" state={!quoteState ? "waiting" : !quoteFresh ? "stale" : attackApproval?.approvalNeeded ? "needed" : "ready"}>
+            <ReadinessRow step="B" title="Router allowance" state={!quoteState ? "waiting" : !quoteFresh ? "stale" : attackApproval?.approvalNeeded ? "needed" : "ready"}>
               {!quoteState ? <p className="text-xs text-muted">Get the public quote above before approving the attack input.</p> : (
                 <>
                   {attackApproval && (
@@ -448,7 +395,7 @@ export function BossActions({
                     MockUSD {live ? shortAddress(live.manifest.addresses.mockUSD) : "—"} → BossRouter {live ? shortAddress(live.manifest.addresses.router) : "—"} · unlimited approval
                   </p>
                   {quoteFresh && attackApproval?.approvalNeeded && (
-                    <ActionButton disabled={!enrolled || !hasInputBalance || !arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord)} onClick={() => void submitApproval({ kind: "attack", maxMockUSD: quoteState.quote.maxMockUSD }, "Approve attack input")}>
+                    <ActionButton disabled={!hasInputBalance || !arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord)} onClick={() => void submitApproval({ kind: "attack", maxMockUSD: quoteState.quote.maxMockUSD }, "Approve attack input")}>
                       Approve MockUSD for BossRouter
                     </ActionButton>
                   )}
@@ -457,7 +404,7 @@ export function BossActions({
               )}
             </ReadinessRow>
 
-            <ReadinessRow step="D" title="Attack" state={attackReady ? "ready" : active ? "waiting" : "closed"}>
+            <ReadinessRow step="C" title="Attack" state={attackReady ? "ready" : active ? "waiting" : "closed"}>
               <p className="text-xs leading-relaxed text-muted" role="status">{attackBlockReason}</p>
               <ActionButton primary disabled={!attackReady} onClick={() => void attack()}>
                 ATTACK · STAGE {round ? round.currentStage + 1 : "—"}
@@ -537,10 +484,10 @@ export function BossActions({
       {arena.writeState.status !== "idle" && <WriteStatus state={arena.writeState} />}
       {arena.pendingRecord && <p className="mt-2 text-xs text-danger">A transaction from {arena.pendingRecord.network} is unresolved. Resolve its saved hash before another write.</p>}
       {round && !active && !defeated && round.status === 4 && (
-        <p className="hairline mt-4 border-t pt-3 text-xs text-muted">Round expired at its on-chain deadline. Enrollment and attacks are closed.</p>
+        <p className="hairline mt-4 border-t pt-3 text-xs text-muted">Round expired at its on-chain deadline. Attacks are closed.</p>
       )}
       {round && round.status !== 3 && round.status !== 4 && chainTimestamp >= round.deadline && (
-        <p className="hairline mt-4 border-t pt-3 text-xs text-danger">The on-chain deadline has passed. Enrollment and attacks are disabled.</p>
+        <p className="hairline mt-4 border-t pt-3 text-xs text-danger">The on-chain deadline has passed. Attacks are disabled.</p>
       )}
     </div>
   );
@@ -620,9 +567,6 @@ function ExactValue({ label, amount, decimals, unit }: { label: string; amount: 
 function ConfirmedResult({ result }: { result: ActionResult }) {
   let text: string;
   switch (result.kind) {
-    case "enroll":
-      text = `Enrolled for ${displayAmount(result.entryFee, MOCK_USD_DECIMALS)} mUSD · ${displayAmount(result.starterRoy, BOSS_HP_DECIMALS)} starter ROY · entry NFT #${result.tokenId}`;
-      break;
     case "approval":
       text = `Unlimited allowance set · ${shortAddress(result.token)} → ${shortAddress(result.spender)}`;
       break;

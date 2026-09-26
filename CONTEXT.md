@@ -62,11 +62,7 @@ _Avoid_: Stage reserve, active liquidity, price support.
 
 **Prize escrow**:
 The maker's funded MockUSD reward reserved for victory claims or the defined expiry refund.
-_Avoid_: LP capital, entry proceeds, stage reserve.
-
-**Entry proceeds**:
-Payments collected for enrollment, accounted separately from prizes and liquidity.
-_Avoid_: Automatic prize top-up.
+_Avoid_: LP capital, attack payments, stage reserve.
 
 **HP budget**:
 A stage's nominal BossHP sale allocation. Unsellable rounding residue does not earn contribution.

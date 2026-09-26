@@ -5,7 +5,7 @@ Status: attacks count purchases without burns, and reward shares follow eligible
 ## Confirmed gameplay
 
 1. Use MockUSD / ROY as the supply pool and ROY / BossHP as a real second pool.
-2. Pressing Attack buys ROY and then BossHP in one transaction after any required approval.
+2. Connect a wallet and press Attack. After any required MockUSD approval to the Router, one transaction buys ROY and then BossHP. No enrollment, entry fee, starter grant, or entry NFT is required.
 3. ROY is paid into the Boss pool. The hook adds actual BossHP output to the current stage's `stageSold`. One purchased BossHP equals one effective damage unit. The player receives the tokens, which represent reward rights; no burn occurs.
 4. Retain independent stage HP budgets of 300, 600, and 900. One attack affects only its starting stage.
 5. Once the current registered allocation has no sellable HP, reset its price with a controller-only reserve-funded refill and add the next stage's incremental liquidity. Preloading every future allocation into active positions would violate this choice.
@@ -20,14 +20,14 @@ There is one attack currency, ROY. MROY, two attack types, the 3x magic multipli
 | Topic | Default |
 | --- | --- |
 | Round | One deployment, one maker, one prize, one shared boss state. |
-| Enrollment | Pay 10 MockUSD for a Little Roy entry NFT and 100 ROY; one enrollment per wallet, cap 100. |
+| Entry | Connect a wallet, approve MockUSD to the Router if needed, then Attack. No entry fee, entry NFT, starter ROY, or enrollment cap. |
 | Primary action | MockUSD-funded attack through both pools. |
 | Optional inventory action | Spend held ROY directly through the Boss pool; actual BossHP output earns damage. |
 | Damage | Sum actual authorized BossHP output in the current stage; no spill into the next stage. |
 | Settlement | Deliver purchased BossHP to the player and return unspent input/intermediate ROY. Bound the swap to the current stage's allocation. |
 | Rewards | 1,000 MockUSD example prize. Proposed token claims surrender eligible BossHP into permanent custody without burning; partial or later claims with newly acquired eligible tokens are allowed. Victory-NFT claims remain separate and once per eligible wallet. |
 | Deadline | A fixed deadline, with a two-hour round as a deployment target. |
-| Expiry | If the boss survives, stop attacks and allow the maker to reclaim only the unawarded prize once. Attack purchases and entry fees are nonrefundable. |
+| Expiry | If the boss survives, stop attacks and allow the maker to reclaim only the unawarded prize once. Attack purchases are nonrefundable. |
 | Treasury | Unallocated tokens remain locked through the deadline. Future-stage reserve is separately game-gated so it can fund stage releases during play. |
 | LP principal | Ordinary withdrawals remain locked through the deadline. Controller-only refills are allowed during transition. After victory, unsold HP and HP fees stay in controlled custody while reward rights remain outstanding, even beyond the deadline. |
 | Price | AMM-dependent; neither a fixed damage rule, timelock, nor stage release promises a stable price. |
@@ -39,7 +39,7 @@ These default quantities are demo choices, not real-value commitments. The suppl
 
 The supply pool can support ordinary trading. A BossHP purchase in the canonical Boss pool must pass through the authenticated attack path. Player BossHP-to-ROY sell-backs are disabled in this pool, so an attacker cannot recycle purchased HP into another credited purchase. The controller-only reverse refill uses the frozen stage reserve during transition and earns zero contribution.
 
-Direct token transfers, wallet balances, token supply, liquidity changes, and donations do not deal new damage or increase eligible reward supply. A transfer of eligible BossHP moves reward rights in the worked transferable model. Historical attack records and NFT eligibility do not move with the tokens. Testnet entry cost does not establish human uniqueness.
+Direct token transfers, wallet balances, token supply, liquidity changes, and donations do not deal new damage or increase eligible reward supply. A transfer of eligible BossHP moves reward rights in the worked transferable model. Historical attack records and NFT eligibility do not move with the tokens. A wallet address does not establish human uniqueness.
 
 Held BossHP cannot be submitted again for damage. After victory, the worked proposal allows its holder to surrender tokens for a proportional reward. The same tokens cannot remain spendable after redemption. The prize denominator excludes protocol reserve and HP fees. See [reward math](refill-math.md#rewards-follow-eligible-bosshp) for the formula, custody requirements, and rounding.
 
@@ -57,7 +57,7 @@ HP budgets are nominal stage allocations, not PoolManager's raw ERC-20 balance. 
 | --- | --- |
 | US01 | Connect to Base Sepolia and verify the two-hop route and stage LP primitives. |
 | US02 | Fund and activate a round with the prize, initial LP, and gated future-stage reserve. |
-| US03 | Enroll once and receive the entry NFT and starter ROY. |
+| US03 | Connect a wallet and authorize the Router to spend MockUSD when needed. |
 | US04 | Press Attack and atomically buy ROY, receive BossHP, and record its actual output as damage. |
 | US05 | Clear a stage and activate the next stage's actual liquidity once. |
 | US06 | See the new full HP bar, form, fee/quote state, and confirmed stage events. |
@@ -69,7 +69,7 @@ HP budgets are nominal stage allocations, not PoolManager's raw ERC-20 balance. 
 
 ## Core acceptance
 
-Two wallets enroll, execute the full two-hop route, receive real BossHP, clear all three stages, trigger exactly two reserve-funded refills and next-stage LP activations, and claim the prize/NFT. BossHP supply stays unchanged. Future-stage liquidity is unavailable before its gate. Failed stage activation rolls back all swaps, token deliveries, contribution, and stage changes.
+Two fresh wallets execute the full two-hop route without enrollment or an entry NFT, receive real BossHP, clear all three stages, trigger exactly two reserve-funded refills and next-stage LP activations, and claim the prize. No NFT is minted during attacks or token claims; victory NFTs are optional separate claims. BossHP supply stays unchanged. Future-stage liquidity is unavailable before its gate. Failed stage activation rolls back all swaps, token deliveries, contribution, and stage changes.
 
 The UI shows MockUSD input, intermediate ROY, purchased BossHP, effective damage, remaining sellable HP, returned inputs, both swap fees, and receipt status. A changed expected stage requires a fresh quote. Approvals are separate when necessary.
 

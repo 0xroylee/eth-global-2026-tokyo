@@ -41,7 +41,7 @@ Cleared-to-next-stage activation runs inside the same attack transaction by defa
 
 ## Hook responsibilities
 
-`beforeSwap` verifies PoolManager, the canonical pool, the registered attack router, the enrolled player context, the expected stage, and the HP-buying direction. It restricts the swap's price limit to the current stage boundary. Player reverse swaps are disabled. Only the controller's bounded reserve-funded refill may reverse direction during guarded Transition.
+`beforeSwap` verifies PoolManager, the canonical pool, the registered attack router, the active player, the expected stage, and the HP-buying direction. It restricts the swap's price limit to the current stage boundary. Player reverse swaps are disabled. Only the controller's bounded reserve-funded refill may reverse direction during guarded Transition.
 
 `afterSwap` uses the actual positive BossHP output:
 

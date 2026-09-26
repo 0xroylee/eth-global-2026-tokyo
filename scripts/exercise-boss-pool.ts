@@ -330,18 +330,21 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
   assert(initial.status === 1 && initial.currentStage === 0, "round must be Active at zero-based stage 0");
   assert(initial.stageSold.every((sold) => sold === 0n), "all stage counters must start at zero");
   assert(initial.finalEligibleHP === 0n && initial.redeemedHP === 0n, "reward accounting must start empty");
-  assert(initial.originalPrize > 0n && initial.mockUSDInHook >= initial.originalPrize, "Hook must custody the full prize");
+  assert(initial.originalPrize > 0n && initial.mockUSDInHook === initial.originalPrize, "Hook must custody only the full prize before claims");
   assert(initial.bossHPTotalSupply === 2_000n * 10n ** 18n, "BossHP fixture supply must be 2,000 tokens");
   assert(initial.mockUSDDecimals === 6 && initial.royDecimals === 18 && initial.bossHPDecimals === 18, "token decimals changed");
   assert(initial.bossHPCustody === initial.bossHPTotalSupply, "BossHP supply must be in protocol or player custody");
-  assert(!initial.enrolledA && !initial.enrolledB, "both wallets must be fresh for this round");
+  assert(initial.royA === 0n && initial.royB === 0n, "fresh attackers need no starter ROY");
+  assert(initial.victoryNftBalanceA === 0n && initial.victoryNftBalanceB === 0n, "fresh attackers need no entry NFT");
+  assert(initial.mockUSDHookAllowanceA === 0n && initial.mockUSDHookAllowanceB === 0n, "fresh attackers need no Hook approval");
+  assert(initial.nextCollectibleTokenId === 1n, "optional victory collection starts at token id one");
   assert(initial.stageCapacity[0] >= 300n * 10n ** 18n && initial.stageCapacity[0] <= 300n * 10n ** 18n + 1n, "stage 0 capacity changed");
   assert(initial.stageCapacity[1] >= 600n * 10n ** 18n && initial.stageCapacity[1] <= 600n * 10n ** 18n + 1n, "stage 1 capacity changed");
   assert(initial.stageCapacity[2] >= 900n * 10n ** 18n && initial.stageCapacity[2] <= 900n * 10n ** 18n + 1n, "stage 2 capacity changed");
   checkpoint(state, "active-round", initial);
   await saveEvidence(evidencePath, state);
 
-  state.currentStep = "public quote before connection, enrollment, and approval";
+  state.currentStep = "public quote before connection and approval";
   const stageZeroQuoteA = await runtime.sdk.public.quoteAttack({
     maxMockUSD: partialAttackUSD,
     stage: 0,
@@ -355,9 +358,9 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
     slippageBps: 0,
     validitySeconds: 900n,
   });
-  assert(stageZeroQuoteA.stage === 0 && staleStageZeroQuoteB.stage === 0, "public pre-enrollment quotes must use the active zero-based stage");
+  assert(stageZeroQuoteA.stage === 0 && staleStageZeroQuoteB.stage === 0, "public quotes must use the active zero-based stage");
   assert(stageZeroQuoteA.mockUSDSpent > 0n && staleStageZeroQuoteB.bossHPOut > 0n, "public pre-approval quotes must contain real route outputs");
-  await assertQuoteDidNotPersist(runtime, initial, "pre-enrollment public quote");
+  await assertQuoteDidNotPersist(runtime, initial, "public quote");
   checkpoint(state, "public-preapproval-quotes", initial, {
     quoteAStage: stageZeroQuoteA.stage,
     quoteAOutput: stageZeroQuoteA.bossHPOut.toString(),
@@ -399,52 +402,7 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
   });
   await saveEvidence(evidencePath, state);
 
-  state.currentStep = "approve and enroll both wallets";
-  for (const player of players) {
-    const enrollmentApproval = await player.sdk.approve({ kind: "enroll" });
-    if (!("request" in enrollmentApproval)) {
-      assert(enrollmentApproval.approval.currentAllowance >= enrollmentApproval.approval.requiredAllowance, "skipped enrollment approval must have enough allowance");
-    } else {
-      await submitPendingOperation(runtime, state, evidencePath, player, `approve Hook enrollment fee for player ${player.name}`, enrollmentApproval);
-    }
-    const [usdBeforeEnroll, royBeforeEnroll] = await Promise.all([
-      client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [player.address] }),
-      client.readContract({ address: addresses.roy, abi: royTokenAbi, functionName: "balanceOf", args: [player.address] }),
-    ]);
-    const enrollment = await submitPendingOperation(
-      runtime,
-      state,
-      evidencePath,
-      player,
-      `enroll player ${player.name}`,
-      await player.sdk.enroll(),
-    );
-    const entryFee = enrollment.result.entryFee;
-    const starterRoy = enrollment.result.starterRoy;
-    assert(entryFee === initial.enrollmentFee && starterRoy === 100n * 10n ** 18n, `player ${player.name} enrollment event amounts changed`);
-    const [usdAfterEnroll, royAfterEnroll] = await Promise.all([
-      client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [player.address] }),
-      client.readContract({ address: addresses.roy, abi: royTokenAbi, functionName: "balanceOf", args: [player.address] }),
-    ]);
-    assert(usdBeforeEnroll - usdAfterEnroll === entryFee, `player ${player.name} paid the wrong enrollment fee`);
-    assert(royAfterEnroll - royBeforeEnroll === starterRoy, `player ${player.name} received the wrong starter ROY amount`);
-    const entryTokenId = enrollment.result.entryTokenId;
-    const entryOwner = await client.readContract({
-      address: addresses.collectibles,
-      abi: bossCollectiblesAbi,
-      functionName: "ownerOf",
-      args: [entryTokenId],
-    });
-    assert(sameAddress(entryOwner, player.address), `entry NFT for player ${player.name} was not minted`);
-    state.checkpoints.push({
-      name: `enrolled-${player.name}`,
-      entryTokenId: entryTokenId.toString(),
-      entryFee: entryFee.toString(),
-      starterRoy: starterRoy.toString(),
-    });
-    await saveEvidence(evidencePath, state);
-  }
-
+  state.currentStep = "approve the Router for both attack inputs";
   const attackAllowanceA = await wallets.A.sdk.approve({ kind: "attack", maxMockUSD: stageZeroQuoteA.maxMockUSD });
   if ("request" in attackAllowanceA) {
     await submitPendingOperation(runtime, state, evidencePath, wallets.A, "approve Router attack spend for player A", attackAllowanceA);
@@ -564,14 +522,16 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
   assert(afterClaims.paidPrize <= afterClaims.originalPrize, "reward payouts exceeded the original prize");
   assert(afterClaims.originalPrize - afterClaims.paidPrize <= 1n, "two floor-rounded claims should leave at most one MockUSD base unit");
   assert(
-    afterClaims.mockUSDInHook === afterClaims.originalPrize + 2n * initial.enrollmentFee - afterClaims.paidPrize,
-    "Hook prize and enrollment-fee custody does not reconcile after claims",
+    afterClaims.mockUSDInHook === afterClaims.originalPrize - afterClaims.paidPrize,
+    "Hook prize custody does not reconcile after claims",
   );
+  assert(afterClaims.nextCollectibleTokenId === 1n, "attacks and token claims mint no NFT");
+  assert(afterClaims.victoryNftBalanceA === 0n && afterClaims.victoryNftBalanceB === 0n, "no NFT exists before optional victory claims");
   checkpoint(state, "claims-complete", afterClaims, { remainingHP: remainingHP.toString() });
   await saveEvidence(evidencePath, state);
 
   state.currentStep = "claim both victory NFTs";
-  for (const player of players) {
+  for (const [index, player] of players.entries()) {
     assert((await player.sdk.readPlayer(player.address)).hasAttacked, `player ${player.name} has no attack record`);
     const victory = await submitPendingOperation(
       runtime,
@@ -582,6 +542,7 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
       await player.sdk.claimVictoryNFT(),
     );
     const tokenId = victory.result.tokenId;
+    assert(tokenId === BigInt(index + 1), `victory NFT for player ${player.name} has an unexpected token id`);
     assert(await client.readContract({ address: addresses.collectibles, abi: bossCollectiblesAbi, functionName: "isVictoryToken", args: [tokenId] }), `token ${tokenId} is not marked as a victory NFT`);
     const owner = await client.readContract({ address: addresses.collectibles, abi: bossCollectiblesAbi, functionName: "ownerOf", args: [tokenId] });
     assert(sameAddress(owner, player.address), `victory NFT for player ${player.name} was not delivered`);
@@ -599,6 +560,8 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
   assert(final.mockUSDTotalSupply === mockUSDTotalSupplyAfterFaucet, "MockUSD supply changed after the explicit faucet phase");
   assert(final.bossHPCustody === final.bossHPTotalSupply, "BossHP balances do not reconcile to fixed supply");
   assert(final.victoryClaimedA && final.victoryClaimedB, "both players must independently claim victory NFTs");
+  assert(final.victoryNftBalanceA === 1n && final.victoryNftBalanceB === 1n, "each player must receive only their optional victory NFT");
+  assert(final.nextCollectibleTokenId === 3n, "only the two optional victory NFTs are minted");
   checkpoint(state, "final", final, { refills: priorRefills });
   await saveEvidence(evidencePath, state);
 }
@@ -652,7 +615,7 @@ async function verifyEip1193SelectionGuard(runtime: Runtime): Promise<void> {
     const testSdk = runtime.sdk.public.withWallet(walletClient);
     let rejected = false;
     try {
-      await testSdk.approve({ kind: "enroll" });
+      await testSdk.approve({ kind: "attack", maxMockUSD: 1n });
     } catch (error) {
       rejected = error instanceof BossPoolSdkError && error.code === "WALLET_ACCOUNT_CHANGED";
     }
@@ -900,6 +863,9 @@ function assertSnapshotUnchanged(
   assert(before.mockUSDA === after.mockUSDA && before.mockUSDB === after.mockUSDB, `${label}: player MockUSD changed`);
   assert(before.royA === after.royA && before.royB === after.royB, `${label}: player ROY changed`);
   assert(before.bossHPA === after.bossHPA && before.bossHPB === after.bossHPB, `${label}: player BossHP changed`);
+  assert(before.nextCollectibleTokenId === after.nextCollectibleTokenId, `${label}: NFT supply changed`);
+  assert(before.victoryNftBalanceA === after.victoryNftBalanceA && before.victoryNftBalanceB === after.victoryNftBalanceB, `${label}: NFT balances changed`);
+  assert(before.mockUSDHookAllowanceA === after.mockUSDHookAllowanceA && before.mockUSDHookAllowanceB === after.mockUSDHookAllowanceB, `${label}: Hook allowances changed`);
 }
 
 function eventIdentity(event: { transactionHash: Hex; logIndex: number } | undefined): string {
@@ -942,7 +908,6 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     redeemedHP,
     paidPrize,
     originalPrize,
-    enrollmentFee,
     mockUSDInHook,
     mockUSDTotalSupply,
     royTotalSupply,
@@ -959,8 +924,11 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     bossHPInHook,
     bossHPInRouter,
     bossHPInPoolManager,
-    enrolledA,
-    enrolledB,
+    victoryNftBalanceA,
+    victoryNftBalanceB,
+    nextCollectibleTokenId,
+    mockUSDHookAllowanceA,
+    mockUSDHookAllowanceB,
     victoryClaimedA,
     victoryClaimedB,
   ] = await Promise.all([
@@ -980,7 +948,6 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "redeemedHP", ...read }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "paidPrize", ...read }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "originalPrize", ...read }),
-    client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "ENROLLMENT_FEE", ...read }),
     client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [addresses.hook], ...read }),
     client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "totalSupply", ...read }),
     client.readContract({ address: addresses.roy, abi: royTokenAbi, functionName: "totalSupply", ...read }),
@@ -997,8 +964,11 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     client.readContract({ address: addresses.bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [addresses.hook], ...read }),
     client.readContract({ address: addresses.bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [addresses.router], ...read }),
     client.readContract({ address: addresses.bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [addresses.poolManager], ...read }),
-    client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "enrolled", args: [wallets.A.address], ...read }),
-    client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "enrolled", args: [wallets.B.address], ...read }),
+    client.readContract({ address: addresses.collectibles, abi: bossCollectiblesAbi, functionName: "balanceOf", args: [wallets.A.address], ...read }),
+    client.readContract({ address: addresses.collectibles, abi: bossCollectiblesAbi, functionName: "balanceOf", args: [wallets.B.address], ...read }),
+    client.readContract({ address: addresses.collectibles, abi: bossCollectiblesAbi, functionName: "nextTokenId", ...read }),
+    client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "allowance", args: [wallets.A.address, addresses.hook], ...read }),
+    client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "allowance", args: [wallets.B.address, addresses.hook], ...read }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "victoryClaimed", args: [wallets.A.address], ...read }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "victoryClaimed", args: [wallets.B.address], ...read }),
   ]);
@@ -1017,7 +987,6 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     redeemedHP,
     paidPrize,
     originalPrize,
-    enrollmentFee,
     mockUSDInHook,
     mockUSDTotalSupply,
     royTotalSupply,
@@ -1035,8 +1004,11 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     bossHPInRouter,
     bossHPInPoolManager,
     bossHPCustody: bossHPInHook + bossHPInRouter + bossHPInPoolManager + bossHPA + bossHPB,
-    enrolledA,
-    enrolledB,
+    victoryNftBalanceA,
+    victoryNftBalanceB,
+    nextCollectibleTokenId,
+    mockUSDHookAllowanceA,
+    mockUSDHookAllowanceB,
     victoryClaimedA,
     victoryClaimedB,
   };
