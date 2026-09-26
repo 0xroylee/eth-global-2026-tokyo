@@ -59,13 +59,16 @@ export function HubHelp({ onClose, onReplay }: { onClose: () => void; onReplay: 
         role="dialog"
         aria-modal="true"
         aria-labelledby="hub-help-title"
-        className="w-full max-w-[380px] rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)]"
+        className="max-h-[min(32rem,calc(100dvh-2rem))] w-full max-w-[380px] overflow-y-auto rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)]"
       >
         <p className="eyebrow mb-1">HUB</p>
         <h2 id="hub-help-title" className="text-xl font-semibold tracking-[-0.03em]">
           Help
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-muted">Find a boss pool to challenge. Closed routes lead to future regions.</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
+          Explore freely. Connect your wallet when you're ready to challenge a boss pool.
+        </p>
         <dl className="mt-4 space-y-2">
           {CONTROLS.map(([control, description]) => (
             <div key={control} className="grid gap-1 text-[12px] leading-snug sm:grid-cols-[9.5rem_1fr] sm:gap-2">

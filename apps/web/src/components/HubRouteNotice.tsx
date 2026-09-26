@@ -51,7 +51,7 @@ export function HubRouteNotice({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="hub-route-title"
-        className="w-full max-w-[340px] rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)]"
+        className="max-h-[min(32rem,calc(100dvh-2rem))] w-full max-w-[340px] overflow-y-auto rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)]"
       >
         <p className="eyebrow mb-1">Coming soon</p>
         <h2 id="hub-route-title" className="text-xl font-semibold tracking-[-0.03em]">

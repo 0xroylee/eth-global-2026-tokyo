@@ -7,6 +7,13 @@ import { HubAtmosphere } from "./HubAtmosphere";
 
 /** World units are map pixels; the camera zooms them for the viewport. */
 const ZOOM = 3;
+
+/** Integer zoom that covers the viewport. Normal desktop sizes stay at 3×. */
+export function integerCameraZoom(viewWidth: number, viewHeight: number, worldWidth: number, worldHeight: number): number {
+  const coverX = worldWidth > 0 ? Math.ceil(viewWidth / worldWidth) : ZOOM;
+  const coverY = worldHeight > 0 ? Math.ceil(viewHeight / worldHeight) : ZOOM;
+  return Math.max(ZOOM, coverX, coverY);
+}
 const PLAYER_SPEED = 80;
 const GATE = { width: 48, height: 32 } as const;
 /** Overhead tiles (fences, canopies) draw above every y-sorted sprite. */
@@ -83,6 +90,8 @@ export class HubScene extends Phaser.Scene {
   private nearRegion = false;
   private unsubscribe: (() => void)[] = [];
   private atmosphere!: HubAtmosphere;
+  private crispLabels: Phaser.GameObjects.Text[] = [];
+  private readonly onCameraResize = () => this.fitCamera();
 
   constructor() {
     super("hub");
@@ -107,6 +116,7 @@ export class HubScene extends Phaser.Scene {
     this.nearGate = null;
     this.regionZone = null;
     this.nearRegion = false;
+    this.crispLabels = [];
     this.registerWalk();
     makeCroppedTexture(this, "portrait-cat", "portrait-master-cat", { x: 120, y: 60, w: 880, h: 1240 }, 28);
     makeCroppedTexture(this, "portrait-macro-whale", "portrait-master-macro-whale", { x: 160, y: 80, w: 940, h: 940 }, 28);
@@ -142,9 +152,10 @@ export class HubScene extends Phaser.Scene {
     this.physics.add.collider(this.player, collision);
     this.physics.add.collider(this.player, gateBodies);
 
-    this.cameras.main.setZoom(ZOOM);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.cameras.main.setRoundPixels(true);
+    this.fitCamera();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onCameraResize);
 
     this.setupInput();
     this.atmosphere = new HubAtmosphere(this, map);
@@ -195,6 +206,8 @@ export class HubScene extends Phaser.Scene {
       this.bridge.onCommand("attack:confirmed", (effect) => this.showConfirmedAttack(effect)),
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.onCameraResize);
+      this.crispLabels = [];
       this.hintArrow?.destroy();
       this.hintArrow = null;
       this.regionZone = null;
@@ -230,6 +243,7 @@ export class HubScene extends Phaser.Scene {
       guideDistance: this.guideDistance,
       hintVisible: this.hintArrow?.visible ?? false,
       nearRegion: this.nearRegion,
+      cameraZoom: this.cameras.main.zoom,
       gates: this.gates.map((g) => ({ id: g.boss.id, zone: { x: g.zone.x, y: g.zone.y, w: g.zone.width, h: g.zone.height } })),
     });
     (window as unknown as { __bpHub?: () => ReturnType<typeof probe> }).__bpHub = probe;
@@ -294,6 +308,7 @@ export class HubScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0)
         .setDepth(LABEL_DEPTH + 1);
+      this.crispLabels.push(label);
       const caption = boss.locked
         ? null
         : this.add
@@ -306,6 +321,7 @@ export class HubScene extends Phaser.Scene {
             })
             .setOrigin(0.5, 0)
             .setDepth(LABEL_DEPTH + 1);
+      if (caption) this.crispLabels.push(caption);
       const blockHeight = label.height + (caption?.height ?? 0);
       const plate = this.add
         .rectangle(
@@ -631,6 +647,14 @@ export class HubScene extends Phaser.Scene {
     return nearest;
   }
 
+  /** Resize the camera viewport. Player, collision, and guide distance stay where they are. */
+  private fitCamera() {
+    const world = this.physics.world.bounds;
+    const zoom = integerCameraZoom(this.scale.gameSize.width, this.scale.gameSize.height, world.width, world.height);
+    this.cameras.main.setZoom(zoom);
+    for (const label of this.crispLabels) label.setResolution(zoom);
+  }
+
   /** Wooden sign on the closed east route. The approach is the marker's own height, west of the barrier. */
   private buildRegionExit(map: Phaser.Tilemaps.Tilemap) {
     const markers = map.getObjectLayer(HUB_LAYERS.markers);
@@ -654,6 +678,7 @@ export class HubScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(LABEL_DEPTH + 1);
+    this.crispLabels.push(title);
     const subtitle = this.add
       .text(cx, cy + 4, "COMING SOON", {
         fontFamily: "var(--font-dm-mono), monospace",
@@ -664,6 +689,7 @@ export class HubScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(LABEL_DEPTH + 1);
+    this.crispLabels.push(subtitle);
     this.add
       .rectangle(cx, cy, Math.max(title.width, subtitle.width) + 8, title.height + subtitle.height + 6, 0x6a4324, 0.94)
       .setStrokeStyle(1, 0xc48a45)

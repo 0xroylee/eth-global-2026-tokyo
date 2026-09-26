@@ -27,7 +27,7 @@ export function HubGuide({
   if (!showHint || step === "hidden") return null;
   const copy = COPY[step];
   return (
-    <div className="pointer-events-auto absolute top-14 left-3 z-10 max-w-[240px] rounded-lg border border-[#f5b04a]/40 bg-ink/90 px-3 py-2 motion-reduce:transition-none">
+    <div className="pointer-events-auto relative z-10 max-w-[240px] rounded-lg border border-[#f5b04a]/40 bg-ink/90 px-3 py-2 motion-reduce:transition-none">
       <p className="font-mono text-[8px] tracking-[0.16em] text-[#f5b04a]">{copy.label}</p>
       <p aria-live="polite" className="mt-1 text-[12px] leading-snug text-fog">
         {copy.text}
@@ -81,23 +81,26 @@ function WelcomeDialog({ onStart, onSkip }: { onStart: () => void; onSkip: () =>
   }, [onSkip]);
 
   return (
-    <div className="absolute inset-0 z-20 grid place-items-center bg-ink/70 p-4 backdrop-blur-[2px]">
+    <div className="pointer-events-auto absolute inset-0 z-20 grid place-items-center bg-ink/70 p-4 backdrop-blur-[2px]">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="hub-guide-title"
-        className="w-full max-w-[340px] rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)] transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] motion-reduce:transition-opacity"
+        className="max-h-[min(32rem,calc(100dvh-2rem))] w-full max-w-[340px] overflow-y-auto rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)] transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] motion-reduce:transition-opacity"
       >
         <p className="eyebrow mb-1">HUB</p>
         <h2 id="hub-guide-title" className="text-xl font-semibold tracking-[-0.03em]">
           Welcome to Boss Pool
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-muted">Explore the garden and find a boss pool to challenge.</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
+          Explore freely. Connect your wallet when you're ready to challenge a boss pool.
+        </p>
         <p className="mt-2 text-[12px] leading-relaxed text-dim">Sound is optional—you can enable it above the map.</p>
         <div className="mt-4 flex gap-2">
           <button ref={startRef} type="button" onClick={onStart} className={`${buttonClass} flex-1 bg-accent/20 text-accent-soft`}>
-            START
+            START GAME
           </button>
           <button type="button" onClick={onSkip} className={buttonClass}>
             SKIP
