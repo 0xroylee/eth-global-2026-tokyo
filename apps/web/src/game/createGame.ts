@@ -2,22 +2,21 @@ import Phaser from "phaser";
 import type { GameBridge } from "./bridge";
 import { HubScene } from "./HubScene";
 
-export const VIEWPORT = { width: 960, height: 600 } as const;
-
 /** Boots the Phaser game into `parent`. Browser-only; import dynamically. */
 export function createGame(parent: HTMLElement, bridge: GameBridge): Phaser.Game {
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
-    width: VIEWPORT.width,
-    height: VIEWPORT.height,
+    width: Math.max(1, parent.clientWidth),
+    height: Math.max(1, parent.clientHeight),
     backgroundColor: "#080b14",
     pixelArt: true,
     antialias: false,
     roundPixels: true,
     scale: {
-      mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
+      mode: Phaser.Scale.RESIZE,
+      autoCenter: Phaser.Scale.NO_CENTER,
+      autoRound: true,
     },
     physics: {
       default: "arcade",

@@ -79,7 +79,17 @@ export {
   royTokenAbi,
 } from "./generated/abi";
 export { formatUnits, isAddress } from "viem";
-export type { Address } from "viem";
+export type { Address, EIP1193Provider } from "viem";
+export {
+  BASE_SEPOLIA_CHAIN,
+  BASE_SEPOLIA_CHAIN_HEX,
+  createBaseSepoliaWalletClient,
+  parseWalletAccounts,
+  parseWalletChainId,
+  providerErrorCode,
+  switchToBaseSepolia,
+  walletErrorMessage,
+} from "./wallet";
 
 export type LocalRoundSnapshot = RoundSnapshot & { walletBossHP?: bigint };
 

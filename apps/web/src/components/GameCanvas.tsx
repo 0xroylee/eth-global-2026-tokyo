@@ -11,7 +11,7 @@ const GameCanvasRuntime = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="grid aspect-[16/10] w-full place-items-center rounded-xl border border-white/10 bg-ink font-mono text-[10px] tracking-[0.2em] text-dim">
+      <div className="absolute inset-0 grid place-items-center bg-ink font-mono text-[10px] tracking-[0.2em] text-dim">
         LOADING HUB
       </div>
     ),
@@ -19,5 +19,9 @@ const GameCanvasRuntime = dynamic(
 );
 
 export function GameCanvas({ bridge, onPhase }: { bridge: GameBridge; onPhase?: (phase: CanvasPhase) => void }) {
-  return <GameCanvasRuntime bridge={bridge} onPhase={onPhase} />;
+  return (
+    <div className="absolute inset-0">
+      <GameCanvasRuntime bridge={bridge} onPhase={onPhase} />
+    </div>
+  );
 }
