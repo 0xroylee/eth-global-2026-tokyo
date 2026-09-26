@@ -4,6 +4,7 @@
 @theme {
   --font-sans: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-dm-mono), ui-monospace, monospace;
+  --font-pixel: var(--font-silkscreen), var(--font-dm-mono), monospace;
 
   --color-ink: #080b14;
   --color-panel: #111627;
@@ -69,13 +70,41 @@
 @utility window-title {
   background: #2b4a8b;
   color: #ffffff;
-  font-family: var(--font-dm-mono), ui-monospace, monospace;
+  font-family: var(--font-pixel), var(--font-dm-mono), monospace;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
+  letter-spacing: 1px;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @utility bar-track {
   background: #1b2a55;
+}
+
+/* Roy idle: a 2px float. Movement only. */
+@keyframes boss-float {
+  from { transform: translateY(0); }
+  to { transform: translateY(-2px); }
+}
+@keyframes boss-blink {
+  0%, 90%, 100% { transform: scaleY(0); }
+  93%, 97% { transform: scaleY(1); }
+}
+@keyframes boss-bubble {
+  from { transform: translateY(0); opacity: 0.8; }
+  to { transform: translateY(-36px); opacity: 0; }
+}
+@keyframes boss-splash {
+  from { transform: scaleX(0.8); opacity: 0.35; }
+  to { transform: scaleX(1.2); opacity: 0.75; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boss-float,
+  .boss-lid,
+  .boss-bubble,
+  .boss-splash {
+    animation: none;
+  }
 }
 
 /* Boss entry panel: enters from slightly below and scaled, never from nothing. */

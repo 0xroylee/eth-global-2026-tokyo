@@ -9,17 +9,14 @@ import { CommandWindow } from "./CommandWindow";
 import { CroppedSprite } from "./CroppedSprite";
 import { DialogWindow } from "./DialogWindow";
 import { NamePlate } from "./NamePlate";
-import { StatusPanel } from "./StatusPanel";
+import { BattleMeta, StatusPanel } from "./StatusPanel";
 import { VictoryCard } from "./VictoryCard";
 
 const STAGE = [1, 2, 3] as const;
 
 /**
- * Full-screen battle overlay (`z-30`, above the entry panel's `z-20`).
- * JRPG pixel layout (uiux-battle v2 §4): STATUS top-left, NAME PLATE
- * top-right, BOSS right-middle, HERO+COMMAND bottom-left, DIALOG bottom-right,
- * VICTORY and STAGE CLEARED as centered overlays.
- * Presentation only: data arrives via props, never from the chain.
+ * Full-screen battle. The boss, status rows, command menu, and dialogue
+ * occupy the battlefield; the lake stays behind them.
  */
 export function BattleView({
   state,
@@ -50,60 +47,60 @@ export function BattleView({
       role="dialog"
       aria-modal="true"
       aria-labelledby="battle-title"
-      className="fixed inset-0 z-30 overflow-hidden"
+      className="fixed inset-0 z-30 overflow-hidden font-pixel [-webkit-font-smoothing:none]"
     >
-      <div aria-hidden className="absolute inset-0">
+      <div aria-hidden className="absolute inset-0 z-0">
         <img
           src="/images/arena-lake-background.png"
           alt=""
           className="size-full object-cover [image-rendering:pixelated]"
         />
-        <div className="absolute inset-0 bg-ink/45" />
       </div>
 
       <h1 id="battle-title" className="sr-only">
-        ROY · BOSS BATTLE
+        Pool Unis · Boss Battle
       </h1>
 
-      {/* STATUS zone — top-left */}
-      <div className="absolute left-[2%] top-[2.5%] w-[min(320px,32vw)] max-md:w-[min(340px,44vw)]">
-        <StatusPanel state={state} stage={stage} deadlineAt={deadlineAt} />
+      <div className="absolute left-6 top-7 z-20 w-[44vw]">
+        <StatusPanel state={state} />
       </div>
 
-      {/* NAME PLATE zone — top-right */}
-      <div className="absolute right-[2%] top-[2.5%] flex flex-col items-end gap-2">
-        <NamePlate stage={stage} />
-        <button
-          type="button"
-          onClick={onClose}
-          className="window-chrome min-h-[44px] px-4 py-2 font-mono text-[10px] tracking-[0.14em] transition-transform duration-150 ease-[var(--ease-out-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff] hover:opacity-80 active:scale-[0.97]"
-        >
-          EXIT BATTLE · ESC
-        </button>
+      <div className="absolute right-4 top-12 z-20">
+        <NamePlate stage={stage} phase={phase} />
       </div>
 
-      {/* BOSS zone — right-middle, lower; on narrow screens the bottom band is
-          taller, so the zone rises to keep clear of the command window. */}
-      <div className="absolute bottom-[26%] right-[26%] aspect-square h-[min(34vh,340px)] max-md:right-[10%] max-md:bottom-[36%] max-md:h-[24vh]">
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute right-3 top-2 z-30 bg-[#092B61] px-2 py-1 font-pixel text-[16px] leading-none text-white shadow-[3px_3px_0_#041833] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff]"
+      >
+        ESC · EXIT
+      </button>
+
+      <div className="pointer-events-none absolute left-[50%] top-[20%] z-[18] h-[50%] w-[35%] bg-transparent">
         <BossStage stage={stage} state={state.bossState} />
       </div>
 
-      {/* HERO + COMMAND (bottom-left) and DIALOG (bottom-right) band */}
-      <div className="absolute inset-x-[2%] bottom-[3%] flex items-end justify-between gap-3 max-md:flex-col max-md:items-start">
-        <div className="flex items-end gap-3">
-          <CroppedSprite className="h-[min(26vh,190px)] max-md:h-[14vh]" />
-          <CommandWindow canAttack={canAttack} onAttack={onAttack} onClose={onClose} />
+      <div className="absolute bottom-[428px] left-6 z-20 flex flex-col gap-2">
+        <BattleMeta stage={stage} deadlineAt={deadlineAt} />
+        <div className="w-[108px] border-[3px] border-[#f3ead2] bg-[#16356e] px-1.5 pb-1.5 pt-1.5 shadow-[3px_3px_0_#041833] [border-radius:8px]">
+          <div className="mx-auto h-[84px] w-[70px] overflow-hidden">
+            <CroppedSprite className="h-[140px]" />
+          </div>
+          <p className="mt-1 text-center font-pixel text-[16px] leading-none text-[#f6e7b2]">YOU</p>
         </div>
-        <DialogWindow
-          phase={phase}
-          state={state}
-          stage={stage}
-          damage={MOCK_STAGE_DAMAGE[state.currentStage]}
-        />
+      </div>
+
+      <div className="absolute bottom-8 left-6 z-20 h-[360px] w-[36vw]">
+        <CommandWindow canAttack={canAttack} onAttack={onAttack} onClose={onClose} />
+      </div>
+
+      <div className="absolute bottom-8 left-[54%] right-4 z-20 h-[200px]">
+        <DialogWindow phase={phase} state={state} stage={stage} damage={MOCK_STAGE_DAMAGE[state.currentStage]} />
       </div>
 
       {state.victory && (
-        <div className="absolute inset-0 z-40 grid place-items-center p-4">
+        <div className="absolute inset-0 z-40 grid place-items-center bg-[#041833]/80 p-4">
           <div className="w-[min(420px,90vw)]">
             <VictoryCard
               eligibleHP={state.finalEligibleHP}
@@ -116,9 +113,11 @@ export function BattleView({
       )}
 
       {state.status === 2 && (
-        <div role="status" className="absolute inset-0 z-40 grid place-items-center bg-ink/85">
-          <div className="window-chrome px-6 py-3 font-mono">
-            <p className="text-lg tracking-[0.3em] text-[#2b4a8b]">STAGE {stage} CLEARED!</p>
+        <div role="status" className="absolute inset-0 z-40 grid place-items-center bg-[#041833]/80">
+          <div className="bg-[#092B61] p-1 shadow-[4px_4px_0_#041833]">
+            <p className="border-2 border-white bg-[#FFF9E9] px-8 py-4 font-pixel text-[28px] leading-none text-[#092B61]">
+              STAGE {stage} CLEARED!
+            </p>
           </div>
         </div>
       )}

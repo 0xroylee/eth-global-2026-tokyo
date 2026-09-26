@@ -1,9 +1,39 @@
-/** NAME PLATE zone: navy plate with white text — `ROY` plus the small `LV` tag. */
-export function NamePlate({ stage }: { stage: 1 | 2 | 3 }) {
+import type { AttackPhase } from "@/lib/mockBattle";
+import { BattleFrame } from "./BattleFrame";
+
+function actionCopy(phase: AttackPhase): string {
+  switch (phase) {
+    case "simulate":
+      return "けいさん / SIMULATE";
+    case "sign":
+      return "サイン / SIGN";
+    case "submit":
+      return "そうしん / SUBMIT";
+    case "confirmed":
+      return "ヒット / HIT";
+    default:
+      return "たおす / ATTACK";
+  }
+}
+
+/** Boss identity above the sprite: name, level, and the current action. */
+export function NamePlate({ stage, phase }: { stage: 1 | 2 | 3; phase: AttackPhase }) {
   return (
-    <div className="window-title flex items-baseline gap-3 rounded-[2px] border-3 border-[#2b4a8b] px-4 py-2 shadow-[0_4px_0_rgba(20,30,60,0.45)]">
-      <span className="font-mono text-sm tracking-[0.15em] text-white">ROY</span>
-      <span className="font-mono text-[10px] tracking-[0.15em] text-white/85">LV {stage}</span>
+    <div className="flex items-start gap-3 font-pixel">
+      <div className="flex flex-col items-center gap-3">
+        <BattleFrame tone="navy" className="min-w-[240px]">
+          <div className="px-4 py-3 text-center">
+            <p className="text-[18px] leading-none">プール・ユニス</p>
+            <p className="mt-2 text-[30px] leading-none">Pool Unis</p>
+          </div>
+        </BattleFrame>
+        <BattleFrame tone="navy">
+          <p className="px-4 py-2 text-center text-[22px] leading-none">{actionCopy(phase)}</p>
+        </BattleFrame>
+      </div>
+      <BattleFrame tone="navy">
+        <p className="px-4 py-3 text-[28px] leading-none">LV. {stage}</p>
+      </BattleFrame>
     </div>
   );
 }
