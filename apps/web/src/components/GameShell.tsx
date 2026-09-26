@@ -211,7 +211,7 @@ export function GameShell() {
   const showSagePrompt = nearSage && !overlayOpen && !showBossPrompt && !guideInspect;
   const showRoutePrompt = nearRoute && !showSagePrompt && !showBossPrompt && !overlayOpen && !guideInspect;
   const showMarketPrompt = nearMarket && !showRoutePrompt && !showSagePrompt && !showBossPrompt && !overlayOpen && !guideInspect;
-  const live = isHubEncounter(deployment);
+  const live = deployment.kind === "live";
   const chainLabel =
     deployment.kind === "loading" ? "CHECKING" : live ? "LIVE" : deployment.kind === "error" ? "RPC ERROR" : "NOT DEPLOYED";
 
