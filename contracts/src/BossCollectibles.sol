@@ -3,7 +3,7 @@ pragma solidity ^0.8.26;
 
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-/// @notice Entry and victory collectibles. Only the configured game hook can mint.
+/// @notice Optional victory collectibles. Only the configured game hook can mint.
 contract BossCollectibles is ERC721 {
     address public immutable owner;
     address public minter;
@@ -25,19 +25,11 @@ contract BossCollectibles is ERC721 {
         minter = gameHook;
     }
 
-    function mintEntry(address recipient) external returns (uint256 tokenId) {
-        return _mintFor(recipient, false);
-    }
-
     function mintVictory(address recipient) external returns (uint256 tokenId) {
-        return _mintFor(recipient, true);
-    }
-
-    function _mintFor(address recipient, bool victory) private returns (uint256 tokenId) {
         if (msg.sender != minter) revert Unauthorized();
         require(recipient != address(0), "zero recipient");
         tokenId = nextTokenId++;
-        isVictoryToken[tokenId] = victory;
+        isVictoryToken[tokenId] = true;
         _safeMint(recipient, tokenId);
     }
 }

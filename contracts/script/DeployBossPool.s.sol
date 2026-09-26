@@ -196,17 +196,12 @@ contract DeployBossPool is Script {
 
     function _prefundedJson(Deployment memory deployment) private view returns (string memory result) {
         uint256 routerRoy = deployment.roy.balanceOf(address(deployment.router));
-        uint256 starterBudget = deployment.router.STARTER_ROY_BUDGET();
-        uint256 starterPaid = deployment.router.starterRoyPaid();
         result = "{\"routerBossHP\":\"";
         result = string.concat(result, vm.toString(deployment.bossHP.balanceOf(address(deployment.router))), "\",\"routerROY\":\"");
         result = string.concat(result, vm.toString(routerRoy), "\",\"routerMockUSD\":\"");
         result = string.concat(result, vm.toString(deployment.mockUSD.balanceOf(address(deployment.router))), "\",\"ownerROY\":\"");
-        result = string.concat(result, vm.toString(deployment.roy.balanceOf(deployment.deployer)), "\",\"starterRoyBudget\":\"");
-        result = string.concat(result, vm.toString(starterBudget), "\",\"starterRoyPaid\":\"");
-        result = string.concat(result, vm.toString(starterPaid), "\",\"starterRoyUnspent\":\"");
-        result = string.concat(result, vm.toString(starterBudget - starterPaid), "\",\"lockedRouterROY\":\"");
-        result = string.concat(result, vm.toString(routerRoy - (starterBudget - starterPaid)), "\",\"poolManagerBossHP\":\"");
+        result = string.concat(result, vm.toString(deployment.roy.balanceOf(deployment.deployer)), "\",\"lockedRouterROY\":\"");
+        result = string.concat(result, vm.toString(routerRoy), "\",\"poolManagerBossHP\":\"");
         result = string.concat(result, vm.toString(deployment.bossHP.balanceOf(address(deployment.manager))), "\",\"mockUSDInHook\":\"");
         return string.concat(result, vm.toString(deployment.mockUSD.balanceOf(address(deployment.hook))), "\"}");
     }

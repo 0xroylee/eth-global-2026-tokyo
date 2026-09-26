@@ -43,9 +43,6 @@ contract BossHook is ReentrancyGuard {
     int24 public immutable LOWER_TICK;
     int24 public immutable UPPER_TICK;
     int24 private constant HP1_REFILL_SPLIT_TICK = -60;
-    uint256 public constant ENROLLMENT_FEE = 10e6;
-    uint256 public constant STARTER_ROY = 100e18;
-    uint256 public constant MAX_ENROLLED = 100;
     uint256 private constant FEE_DENOMINATOR = 1_000_000;
     uint256 private constant STAGE_ONE_HP = 300e18;
 
@@ -65,7 +62,6 @@ contract BossHook is ReentrancyGuard {
     uint256 public finalEligibleHP;
     uint256 public redeemedHP;
     uint256 public paidPrize;
-    uint256 public enrolledCount;
     bool public prizeFunded;
     bool public expiredPrizeRefunded;
     bool public poolInitialized;
@@ -82,7 +78,6 @@ contract BossHook is ReentrancyGuard {
     mapping(uint8 stage => uint256) public stageAttackCount;
     mapping(uint8 stage => uint256) public roundingDust;
     mapping(uint8 stage => uint160) public stageEndSqrtPriceX96;
-    mapping(address player => bool) public enrolled;
     mapping(address player => bool) public hasAttacked;
     mapping(address player => bool) public victoryClaimed;
 
@@ -95,13 +90,10 @@ contract BossHook is ReentrancyGuard {
     error InvalidSwap();
     error NoDamage();
     error PrizeNotFunded();
-    error AlreadyEnrolled();
-    error EnrollmentClosed();
     error ClaimUnavailable();
     error LiquidityRemovalDisabled();
 
     event PrizeFunded(address indexed maker, uint256 amount);
-    event Enrolled(address indexed player, uint256 entryFee, uint256 starterRoy, uint256 tokenId);
     event StageActivated(uint8 indexed stage, uint160 sqrtPriceX96, uint128 liquidity, uint256 capacity);
     event AttackRecorded(address indexed player, uint8 indexed stage, uint256 bossHPOut, uint256 cumulativeSold);
     event StageCleared(uint8 indexed stage, uint256 sold, uint256 capacity, uint256 roundingDust);
@@ -321,7 +313,6 @@ contract BossHook is ReentrancyGuard {
         if (router.mode() == MODE_ATTACK) {
             if (
                 status != RoundStatus.Active || block.timestamp >= deadline || router.activePlayer() == address(0)
-                    || !enrolled[router.activePlayer()]
                     || router.expectedStage() != currentStage || params.zeroForOne == bossIsCurrency0
                     || params.sqrtPriceLimitX96 != (bossIsCurrency0 ? sqrtUpperX96 : sqrtLowerX96)
             ) revert InvalidSwap();
@@ -383,19 +374,6 @@ contract BossHook is ReentrancyGuard {
         uint256 remaining = _remainingSellableHP(price, stageLiquidity[stage]);
         if (remaining == 0) _clearStage(stage);
         return (IHooks.afterSwap.selector, 0);
-    }
-
-    function enroll() external nonReentrant {
-        if (status != RoundStatus.Active || block.timestamp >= deadline || enrolledCount >= MAX_ENROLLED) {
-            revert EnrollmentClosed();
-        }
-        if (enrolled[msg.sender]) revert AlreadyEnrolled();
-        enrolled[msg.sender] = true;
-        enrolledCount++;
-        mockUSD.safeTransferFrom(msg.sender, address(this), ENROLLMENT_FEE);
-        _payStarterRoy(msg.sender);
-        uint256 tokenId = collectibles.mintEntry(msg.sender);
-        emit Enrolled(msg.sender, ENROLLMENT_FEE, STARTER_ROY, tokenId);
     }
 
     function claimReward(uint256 hpAmount) external nonReentrant returns (uint256 payout) {
@@ -574,7 +552,4 @@ contract BossHook is ReentrancyGuard {
         return uint128(value);
     }
 
-    function _payStarterRoy(address player) private {
-        router.payStarterRoy(player, STARTER_ROY);
-    }
 }

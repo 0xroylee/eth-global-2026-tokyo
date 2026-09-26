@@ -10,6 +10,7 @@ The user confirmed this replacement for the earlier physical/magic design:
 
 - Supply pool: **MockUSD / ROY**.
 - Boss pool: **ROY / BossHP**, with BossHP as a real ERC-20.
+- Players connect, approve MockUSD to BossRouter when needed, and press Attack. No enrollment fee or entry NFT is required.
 - Primary Attack executes both swaps in one unlock. ROY is payment into the Boss pool; it is not burned by the attack.
 - BossHook accumulates actual BossHP output in `stageSold`. The router delivers BossHP to the player through ordinary settlement; no token burn or output-return delta is needed for damage.
 - Stage HP stays **300 → 600 → 900**. Clear the current sellable allocation, perform the controller-only price reset, then add the next stage's incremental liquidity. One attack cannot damage two stages.

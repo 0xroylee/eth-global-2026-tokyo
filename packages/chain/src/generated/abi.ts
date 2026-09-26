@@ -54,19 +54,6 @@ export const bossPoolHookAbi = [
   },
   {
     "type": "function",
-    "name": "ENROLLMENT_FEE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "LOWER_TICK",
     "inputs": [],
     "outputs": [
@@ -74,32 +61,6 @@ export const bossPoolHookAbi = [
         "name": "",
         "type": "int24",
         "internalType": "int24"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_ENROLLED",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "STARTER_ROY",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -726,45 +687,6 @@ export const bossPoolHookAbi = [
   },
   {
     "type": "function",
-    "name": "enroll",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "enrolled",
-    "inputs": [
-      {
-        "name": "player",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "enrolledCount",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "expire",
     "inputs": [],
     "outputs": [],
@@ -1292,37 +1214,6 @@ export const bossPoolHookAbi = [
   },
   {
     "type": "event",
-    "name": "Enrolled",
-    "inputs": [
-      {
-        "name": "player",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "entryFee",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "starterRoy",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "tokenId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "ExpiredPrizeRefunded",
     "inputs": [
       {
@@ -1502,17 +1393,7 @@ export const bossPoolHookAbi = [
   },
   {
     "type": "error",
-    "name": "AlreadyEnrolled",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "ClaimUnavailable",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "EnrollmentClosed",
     "inputs": []
   },
   {
@@ -1624,19 +1505,6 @@ export const bossRouterAbi = [
       }
     ],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "STARTER_ROY_BUDGET",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1910,24 +1778,6 @@ export const bossRouterAbi = [
   },
   {
     "type": "function",
-    "name": "payStarterRoy",
-    "inputs": [
-      {
-        "name": "recipient",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "pendingStage",
     "inputs": [],
     "outputs": [
@@ -1999,19 +1849,6 @@ export const bossRouterAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "starterRoyPaid",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -2366,11 +2203,6 @@ export const bossRouterAbi = [
   {
     "type": "error",
     "name": "SlippageExceeded",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "Unauthorized",
     "inputs": []
   },
   {
@@ -3478,25 +3310,6 @@ export const bossCollectiblesAbi = [
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "mintEntry",
-    "inputs": [
-      {
-        "name": "recipient",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "tokenId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
