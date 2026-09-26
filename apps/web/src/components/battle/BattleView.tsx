@@ -82,15 +82,16 @@ export function BattleView({
         </button>
       </div>
 
-      {/* BOSS zone — right-middle, lower */}
-      <div className="absolute bottom-[26%] right-[26%] aspect-square h-[min(34vh,340px)] max-md:right-[20%] max-md:h-[24vh]">
+      {/* BOSS zone — right-middle, lower; on narrow screens the bottom band is
+          taller, so the zone rises to keep clear of the command window. */}
+      <div className="absolute bottom-[26%] right-[26%] aspect-square h-[min(34vh,340px)] max-md:right-[10%] max-md:bottom-[36%] max-md:h-[24vh]">
         <BossStage stage={stage} state={state.bossState} />
       </div>
 
       {/* HERO + COMMAND (bottom-left) and DIALOG (bottom-right) band */}
       <div className="absolute inset-x-[2%] bottom-[3%] flex items-end justify-between gap-3 max-md:flex-col max-md:items-start">
         <div className="flex items-end gap-3">
-          <CroppedSprite className="h-[26vh] max-md:h-[14vh]" />
+          <CroppedSprite className="h-[min(26vh,190px)] max-md:h-[14vh]" />
           <CommandWindow canAttack={canAttack} onAttack={onAttack} onClose={onClose} />
         </div>
         <DialogWindow
