@@ -54,7 +54,7 @@ The approval dialog is compact. It identifies MockUSD, the BossRouter spender, a
 
 Close the approval dialog when sufficient allowance is confirmed. Approval never submits an attack automatically. Each attack requires a new player click and retains its displayed input cap and accepted minimum outputs. Approved players do not pass through an extra attack-confirmation dialog.
 
-Balance and allowance checks use the selected cap. Insufficient balance for 10 MockUSD does not prevent selecting a smaller cap. A pending wallet action or unresolved transaction locks all attack commands. Changing the encounter or account resets the selection to 1 MockUSD.
+The selected button cap is `requestedMaxMockUSD`. A Factory quote may bind a smaller exact execution cap to the remaining stage volume. Balance and allowance checks use `quote.maxMockUSD`, the cap sent in the signed transaction. Insufficient funds for the 10 MockUSD button do not prevent selecting a smaller cap. A pending wallet action or unresolved transaction locks all attack commands. Changing the encounter or account resets the selection to 1 MockUSD.
 
 Battle details, receipt recovery, and reward claims remain available through explicit controls. They do not interrupt the normal attack path. When a quote changes during simulation, show the refreshed preview and require another click.
 

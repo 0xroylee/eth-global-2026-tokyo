@@ -1,8 +1,12 @@
 # Use the Boss Pool contracts
 
-This guide covers the no-entry contracts in `contracts/src` and the player operations in `@boss-pool/chain`. A fresh wallet attacks directly after approving MockUSD to BossRouter when needed. The local deployment script creates an active round on Anvil. The Foundry fixture exercises a separate two-wallet round through all three stages and claims. The browser app reads public state and quotes without a wallet, then sends player transactions only through the selected wallet.
+This guide documents the standalone BossHP deployment and its local operations. The current Base Sepolia product uses Factory bosses, whose behavior is summarized below and specified in the [Boss Factory reference](boss-factory.md). Do not apply standalone BossHP refill, expiry, reward-transfer, or claim-approval rules to a Factory boss.
 
 For creator-selected MEME launches, MockUSD volume tracking, MEME prizes, stage gates, price quotes, and permanent creator fund locks, see [Boss Factory](boss-factory.md). The creator form and launch SDK are available at `/boostpad` (`/launch` redirects); the page reads the Factory address from the Base Sepolia deployment manifest. The player battle page also supports verified Factory encounters by Hook address.
+
+The current Base Sepolia Factory activates all sale liquidity at launch. Its three stages use MockUSD volume goals and shared 60-second and 120-second cooldowns; bosses do not expire. Factory rewards use nontransferable per-player credit, and a claim pays the MEME prize without requiring token approval or surrendering purchased MEME. The separate owner liquidity position uses salt `4`; its owner can remove that position while the initial salt-`1` position remains locked. See [current Factory behavior](boss-factory.md#purchases-volume-and-rewards) and [current deployment addresses](boss-factory.md#base-sepolia-deployment).
+
+The commands and examples below cover the standalone BossHP round unless a section names Factory behavior explicitly.
 
 ## Run the local deployment
 
@@ -49,7 +53,7 @@ console.log({
 
 The package also exports the compiled ABIs as `bossPoolHookAbi`, `bossRouterAbi`, `bossHpAbi`, `royTokenAbi`, `mockUsdAbi`, and `bossCollectiblesAbi`. The generated file is `packages/chain/src/generated/abi.ts`. Export or check it with `bun run abi:export` or `bun run abi:check`.
 
-The local Anvil deployment starts at stage 0, with no player damage or NFTs. `bun run local:smoke` checks the active round, prize balance, fixed BossHP supply, stage capacities, currency order, normalized price band, and token custody. It does not attack.
+The standalone local Anvil deployment starts at stage 0, with no player damage or NFTs. `bun run local:smoke` checks the active round, prize balance, fixed BossHP supply, stage capacities, currency order, normalized price band, and token custody. It does not attack.
 
 Run the reusable two-wallet journey against that local round with:
 
@@ -57,7 +61,7 @@ Run the reusable two-wallet journey against that local round with:
 bun run local:exercise
 ```
 
-After it confirms chain `31337` and a loopback RPC, the exercise derives local Accounts 0 and 1 from Anvil's standard development keys. It does not ask the RPC to impersonate unlocked accounts. The exercise does not seed or reset Anvil and does not write the deployment manifest. Fresh wallets make one partial attack and three stage-clearing attacks, check the two refills and actual refunds, transfer eligible HP, make partial and final claims, then claim both optional victory NFTs. Receipt checkpoints go to `.scratch/boss-pool-exercise/`. A completed or partly used round cannot be restarted. Seed a fresh local deployment to run another full journey. For an isolated local node, set `LOCAL_RPC_URL` and `LOCAL_DEPLOYMENT_PATH`; an override manifest must stay under `.scratch/`:
+After it confirms chain `31337` and a loopback RPC, the standalone exercise derives local Accounts 0 and 1 from Anvil's standard development keys. It does not ask the RPC to impersonate unlocked accounts. The exercise does not seed or reset Anvil and does not write the deployment manifest. Fresh wallets make one partial attack and three stage-clearing attacks, check the two refills and actual refunds, transfer eligible HP, make partial and final claims, then claim both optional victory NFTs. Receipt checkpoints go to `.scratch/boss-pool-exercise/`. A completed or partly used round cannot be restarted. Seed a fresh local deployment to run another full journey. For an isolated local node, set `LOCAL_RPC_URL` and `LOCAL_DEPLOYMENT_PATH`; an override manifest must stay under `.scratch/`:
 
 ```sh
 LOCAL_RPC_URL=http://127.0.0.1:8548 \
@@ -73,7 +77,7 @@ bun run contracts:test
 
 That Foundry suite uses its own ephemeral contracts. One HP0 case covers the full two-wallet round, all three stages, claims, and NFTs. A separate HP1 case covers normalized pricing and the first stage refill. Other cases check deadline setup rejection and expiry. Passing the suite does not create transactions in the Anvil node.
 
-Run the browser app with `bun run web:dev`. It defaults to Base Sepolia. Select Local or historical Robinhood from the header to read those supported networks. Public round reads and quotes work without a connected wallet when a verified manifest exists. Base Sepolia now has a verified team deployment manifest, so the app can read and quote its active stage-0 round. Connect a wallet to attack, redeem BossHP, or claim an optional victory NFT. The SDK also exposes BossHP transfer, but the browser has no transfer form. See the [chain SDK guide](../packages/chain/README.md) for the public API.
+Run the browser app with `bun run web:dev`. It defaults to Base Sepolia. Select Local from the header to switch networks. The SDK retains historical Robinhood reads, but the browser does not offer Robinhood selection. Public round reads and quotes work without a connected wallet when a verified manifest exists. The Base Sepolia manifest selects the current Factory Roy encounter. Connect a wallet to attack or claim its MEME reward credit without a token approval. BossHP redemption and transfer describe the standalone mode only. See the [chain SDK guide](../packages/chain/README.md) for the public API.
 
 ## Know the tokens and amounts
 
@@ -108,7 +112,7 @@ The Hook freezes `finalEligibleHP` at defeat as the sum of actual player swap ou
 | Player | Attacks through the Router, transfers BossHP reward rights, surrenders HP to claim MockUSD, and may claim a victory NFT after attacking. |
 | BossHook | Owns status, stage counters, attack history, optional victory-NFT eligibility, the prize ledger, and permanently surrendered HP. |
 | BossRouter | Holds initial Attack Token and BossHP, owns the registered LP positions, and runs only the bounded attack, refill, and next-stage additions. |
-| PoolManager | Holds the assets for both pools. The Hook rejects every Boss pool liquidity removal. The Router has no fee collection or LP withdrawal path. |
+| PoolManager | Holds the assets for both pools. For standalone BossHP, the Hook locks the initial salt-`1` position and staged positions. A Factory Hook allows its owner to remove only the separate salt-`4` surplus position. |
 
 The Hook's MockUSD balance holds the original prize and any direct donations. `originalPrize` and `paidPrize` track prize accounting. BossHP delivered by an attack stays in the player's balance. Claims transfer selected HP to the Hook without burning it. Unsold reserve, LP fees, and surrendered HP have no recovery path in the current contracts.
 
@@ -129,7 +133,7 @@ Both pool keys use fee `3000` (0.30%) and tick spacing `60`. The supported route
 
 Do not call `activateFromRouter()` or `completeStageTransition()` directly. The Router calls them inside its guarded setup and transition paths. There is no public stage-release function.
 
-The current deployment script constructs the contracts with these arguments:
+The standalone deployment script constructs the contracts with these arguments:
 
 ```solidity
 new PoolManager(address initialOwner)
@@ -155,7 +159,7 @@ BossHP sorting changes the raw tick bounds but keeps the human Attack Token-per-
 
 ## Attack directly
 
-Any fresh wallet can attack during an Active round. Approve MockUSD to BossRouter when needed, then call the Router attack. The contracts charge no entry fee, grant no starter Attack Token, and mint no entry NFT.
+For a standalone round, any fresh wallet can attack while it is Active. Approve MockUSD to BossRouter when needed, then call `attackWithMockUSD`. The standalone Router also supports `attackWithRoy` for a wallet that already holds Attack Token. Factory bosses require `attackWithMockUSD` and reject `attackWithRoy` because only MockUSD purchases earn eligible volume. None of these routes charges an entry fee, grants starter Attack Token, or mints an entry NFT.
 
 The following ABI signatures use the actual caller and argument types. ERC20 `approve(address,uint256)` is the standard OpenZeppelin token call.
 
@@ -168,7 +172,8 @@ The following ABI signatures use the actual caller and argument types. ERC20 `ap
 | `BossRouter.activate()` | Router owner | Before the deadline, after pool seed and all custody checks pass |
 | `BossRouter.quoteAttackWithMockUSD(uint256 maxMockUSD, uint8 attackStage)` | Anyone through `eth_call` | Round must be Active before the deadline. Does not require allowance, a player account, or player balances. The route runs inside a reverting frame, so a transaction call cannot persist the simulated effects. |
 | `BossRouter.attackWithMockUSD(uint256 maxMockUSD, uint256 minRoyOut, uint256 minBossHPOut, uint8 attackStage, uint256 callDeadline) returns (uint256 mockUSDSpent, uint256 royBought, uint256 roySpent, uint256 bossHPOut)` | Any wallet | Approve MockUSD to Router when needed. Round must be Active. Use a fresh stage and set both deadlines. |
-| `BossHook.claimReward(uint256 hpAmount) returns (uint256 payout)` | Any eligible HP holder | Round must be Defeated. Approve BossHP to Hook and request a positive payout. |
+| `BossRouter.attackWithRoy(uint256 maxRoy, uint256 minBossHPOut, uint8 attackStage, uint256 callDeadline) returns (uint256 roySpent, uint256 bossHPOut)` | Any wallet, standalone mode only | Approve Attack Token to Router. Factory bosses reject this route. |
+| `BossHook.claimReward(uint256 hpAmount) returns (uint256 payout)` | Eligible standalone HP holder, or Factory credit holder | Standalone: round must be Defeated; approve BossHP to Hook. Factory: round must be Defeated; `hpAmount` is reward credit and no token approval is needed. |
 | `BossHook.claimVictoryNFT() returns (uint256 tokenId)` | Wallet with `hasAttacked == true` | Round must be Defeated. One claim per wallet. |
 | `BossHook.expire()` | Anyone | At or after the deadline while Active |
 | `BossHook.refundExpiredPrize()` | Immutable maker | Round must be Expired. One claim. |
@@ -262,26 +267,26 @@ The Hook enum values are 0 for Setup, 1 for Active, 2 for StageCleared, 3 for De
 | `SlippageExceeded` | The actual Attack Token or BossHP output is below the supplied minimum. Read a fresh quote. |
 | `InsufficientReserve` | The Router cannot settle a required transition refill. The attack reverts atomically. |
 | `ClaimUnavailable` | The round is not Defeated, the HP amount is invalid, the payout rounds to zero, or the wallet already claimed its victory NFT. |
-| `LiquidityRemovalDisabled` | A caller tried to remove Boss pool liquidity. The current contracts provide no removal path. |
-| `ERC20InsufficientAllowance` | The approval names the wrong spender or amount. Attacks use the Router and reward claims use the Hook. |
+| `LiquidityRemovalDisabled` | Standalone deployments reject liquidity removal. The current Factory Router exposes only owner changes to the canonical salt-`4` position; it exposes no call that can remove the locked salt-`1` initial position. |
+| `ERC20InsufficientAllowance` | The approval names the wrong spender or amount. Attacks use the Router; standalone reward claims use the Hook. Factory credit claims need no token approval. |
 
 ## Limits of the current implementation
 
-The contracts have no public BossHP sell-back route, held-Attack Token attack route, LP removal method, fee collection method, treasury withdrawal, or generic token recovery. `beforeRemoveLiquidity` always reverts. Router-held reserves and LP assets remain locked, including after all HP rewards are redeemed. The expired-round path refunds only the original MockUSD prize. `BossCollectibles` has no configured metadata URI.
+The standalone contracts have no public BossHP sell-back route, fee collection method, treasury withdrawal, or generic token recovery. The standalone `attackWithRoy` method is the held-Attack Token route. Its Boss pool liquidity cannot be removed. Its expired-round path refunds only the original MockUSD prize, while Router-held reserves and LP assets remain locked after claims. Factory bosses do not expire; their initial salt-`1` liquidity remains locked, but the Router owner can modify or remove the separate salt-`4` position without reducing that initial position. Factory claims consume nontransferable reward credit and leave purchased MEME with the player. `BossCollectibles` has no configured metadata URI.
 
 The local Foundry suite runs the full two-wallet fresh-wallet HP0 flow against a pinned real PoolManager, including three stages, reward claims, and optional victory NFTs. A focused HP1 test covers normalized price and the first stage refill. The current direct-attack SDK journey passed with 14 successful transactions at commit `3450be7`; see the [verification record](sdk-verification.md). Earlier 18-transaction local SDK evidence used enrollment-era contracts and is historical. `local:seed` and `local:exercise` send transactions only to loopback Anvil; `local:smoke` is read-only.
 
 ## Base Sepolia testnet target
 
-Base Sepolia is the active target, chain `84532`, with RPC `https://sepolia.base.org`. The verified team deployment is recorded in `apps/web/public/deployments/base-sepolia.json` at block `47325823`. It includes a team-owned PoolManager deployed from pinned v4-core source; it is not an official Base PoolManager. The corrected Boss Factory is recorded in the same manifest at block `47332647`; see [its deployment receipt](https://sepolia.basescan.org/tx/0xae80726d3fe5edde233320fbacff7b32bf6f311c03964a844298d66d4b3a8214). Its first demo boss was created through `launchBoss` at block `47332745`. The [Factory deployment reference](boss-factory.md#base-sepolia-deployment) records the new addresses and launch settings. Never use an Anvil development key on any public testnet.
+Base Sepolia is the active target, chain `84532`, with RPC `https://sepolia.base.org`. The current manifest records the team-owned PoolManager at block `47325823`, current Factory `0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7` at block `47341945`, and default Roy Hook `0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0` at launch block `47342620`. The Factory uses the continuous-liquidity build and zero fee controller, so both pools charge 0.3%. See [current deployment details](boss-factory.md#base-sepolia-deployment). Earlier Factory deployments and the Hook at `0xc11D07448948AC4757592E91D8f5155907Ef6AC0` are historical. Never use an Anvil development key on any public testnet.
 
-The repository provides three Base Sepolia commands. `testnet:preflight` checks chain ID, Cancun transient-storage support, signer balances, and a pinned Forge deployment dry run. It sends no transaction. `testnet:deploy` repeats those checks, broadcasts only after an exclusive pending intent is saved, verifies every receipt and the final active stage-0 state, then writes the Base Sepolia manifest. `testnet:exercise` requires that verified manifest before it can send player transactions.
+The repository retains three Base Sepolia commands for the standalone BossHP fixture. They do not deploy or exercise the current Factory product. `testnet:preflight` checks chain ID, Cancun transient-storage support, signer balances, and a pinned Forge deployment dry run. It sends no transaction. `testnet:deploy` repeats those checks, broadcasts only after an exclusive pending intent is saved, verifies every receipt and the final active stage-0 state, then writes the Base Sepolia manifest. Run it only when you intend to deploy the standalone fixture. `testnet:exercise` requires that verified manifest before it can send player transactions.
 
 | Command | Purpose |
 | --- | --- |
 | `testnet:preflight` | Checks chain ID, Cancun support, signer balances, and a Forge dry run. Sends no transaction. |
 | `testnet:deploy` | Deploys the team fixture, verifies the contract code and receipts, and writes the public deployment manifest. |
-| `testnet:exercise` | Uses Player A (deployer) and Player B (separate key) to attack all three stages directly, verify refunds/refills, transfer BossHP, redeem rewards, and optionally claim victory NFTs. It writes per-receipt evidence under ignored `.scratch/boss-pool-exercise/` and does not update the public manifest. |
+| `testnet:exercise` | Exercises the standalone BossHP fixture with Player A and Player B, including attacks, refills, transferable HP claims, and optional victory NFTs. It does not exercise the current Factory Roy encounter. |
 
 Set `BASE_SEPOLIA_RPC_URL`, `TESTNET_DEPLOYER_PRIVATE_KEY`, and `TESTNET_PLAYER_PRIVATE_KEY` in the ignored `.env.testnet.local` file. Player A uses the deployer key; Player B uses the separate player key. Invoke the scripts through Bun's `--env-file` option:
 
@@ -291,6 +296,6 @@ bun --env-file=.env.testnet.local run testnet:deploy
 bun --env-file=.env.testnet.local run testnet:exercise
 ```
 
-The exercise confirms Player A matches the manifest deployer, verifies deployment receipts and code, checks chain `84532`, and uses each signer only inside the Bun process. Do not put key values or the RPC URL in command arguments, manifests, logs, or the web bundle. The verified deployment and funded test wallets are ready for an exercise, but no Base Sepolia gameplay run has been recorded yet.
+The standalone exercise confirms Player A matches its deployment manifest, verifies receipts and code, checks chain `84532`, and uses each signer only inside the Bun process. Do not put key values or the RPC URL in command arguments, manifests, logs, or the web bundle. These commands do not deploy or exercise the current Factory build. The [SDK verification record](sdk-verification.md) distinguishes deployment evidence from player and wallet checks.
 
 The separate historical [Robinhood foundation report](testnet-verification.md) and [SDK verification report](sdk-verification.md) preserve prior deployment evidence. The SDK journey recorded 16 successful gameplay transactions, then stopped before NFT writes on a pinned-block RPC read error. A later run separately confirmed both NFTs. These phases total 18 successful transactions, not one uninterrupted run. The associated evidence files are [gameplay](evidence/robinhood-sdk-gameplay.json) and [NFT completion](evidence/robinhood-sdk-nft-completion.json). Expiry and prize-refund behavior have local Foundry coverage only; they have no Robinhood or Base Sepolia receipts.
