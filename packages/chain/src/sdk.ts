@@ -32,6 +32,7 @@ import {
 } from "./deployment";
 import { readPlayer, readRound, readState, type RoundSnapshot } from "./reads";
 import { readActivity, type ReadActivityOptions } from "./activity";
+import { matchesRequestedTransaction } from "./transaction-match";
 
 const CLAIMABLE_STATUS = 3;
 const ACTIVE_STATUS = 1;
@@ -988,19 +989,14 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
         }
         if (replacement) {
           if (
-            replacement.reason === "cancelled" || !sameAddress(replacement.transaction.from, pending.account) ||
-            !sameAddress(replacement.transaction.to ?? ZERO_ADDRESS, pending.target) ||
-            !sameHex(replacement.transaction.input, pending.calldata) ||
-            replacement.transaction.value !== 0n ||
-            (replacement.transaction.chainId !== null && replacement.transaction.chainId !== undefined && replacement.transaction.chainId !== deployment.chainId)
+            replacement.reason === "cancelled" ||
+            !matchesRequestedTransaction(replacement.transaction, { ...pending, chainId: deployment.chainId })
           ) throw new TransactionReplacedError(pending.hash, replacement.transaction.hash, replacement.reason);
         }
         const transaction = await publicClient.getTransaction({ hash: receipt.transactionHash });
         if (
-          !sameAddress(receipt.from, pending.account) || !sameAddress(receipt.to ?? ZERO_ADDRESS, pending.target) ||
-          !sameAddress(transaction.from, pending.account) || !sameAddress(transaction.to ?? ZERO_ADDRESS, pending.target) ||
-          !sameHex(transaction.input, pending.calldata) || transaction.value !== 0n ||
-          (transaction.chainId !== null && transaction.chainId !== undefined && transaction.chainId !== deployment.chainId)
+          !sameAddress(receipt.from, transaction.from) || !sameAddress(receipt.to ?? ZERO_ADDRESS, transaction.to ?? ZERO_ADDRESS) ||
+          !matchesRequestedTransaction(transaction, { ...pending, chainId: deployment.chainId })
         ) throw new BossPoolSdkError("RECEIPT_MISMATCH", "Mined transaction sender, target, or calldata does not match the requested action.");
         if (receipt.status !== "success") throw new TransactionRevertedError(receipt.transactionHash, receipt);
         const events = decodeExpectedEvents(receipt, pending.expectedEvents);
