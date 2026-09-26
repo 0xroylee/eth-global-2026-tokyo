@@ -7,7 +7,7 @@
   "roundStatus": 1,
   "retiredHookRejected": true,
   "retiredContractReads": [],
-  "rpcRequests": 81,
+  "rpcRequests": 78,
   "methods": [
     "eth_chainId",
     "eth_blockNumber",
@@ -19,15 +19,15 @@
   ],
   "quote": {
     "mockUSD": "1",
-    "output": "132.304025798271019315",
+    "output": "130.150062063059081699",
     "symbol": "BHP"
   },
-  "verifiedAt": "2026-09-26T16:12:05.772827+00:00",
+  "verifiedAt": "2026-09-26T16:19:47.463020+00:00",
   "implementationModel": "gpt-6-luna xhigh",
   "reviewModel": "gpt-6-sol high",
   "checks": {
-    "focusedTests": 11,
-    "assertions": 46,
+    "focusedTests": 19,
+    "assertions": 70,
     "typecheck": "passed",
     "webBuild": "passed",
     "independentReview": "no actionable findings"
@@ -36,7 +36,8 @@
     "retiredHookUnavailable": true,
     "retiredHookHasNoPresentation": true,
     "defaultResolvesToCurrentHook": true,
-    "currentPoolUnisAttackPreviewEnabled": true
+    "currentPoolUnisAutoQuoteFresh": true,
+    "automaticQuoteAndReceiptUpdatesPreserved": true
   },
   "sourceSha256": {
     "apps/web/public/deployments/base-sepolia.json": "062678998bed6c605d263647fde870d81e193df30a56c564d61157e444da5186",
@@ -44,5 +45,6 @@
     "packages/chain/src/deployment.test.ts": "95ef60e63b0b00f0fe95da8fc70f54c0e150a60c0455d9c4b8a4cfee98c5b34c",
     "apps/web/src/game/bosses.ts": "951475a6795fe9744ffd41963fd39ac0befe515640bb46f278741f4cdb5c0a23",
     "apps/web/src/lib/battle.test.ts": "c2cab491797f5fc4476e379d9d46f117f6458bddfe4e26bb597096b8f4227d58"
-  }
+  },
+  "integratedMain": "d620713"
 }
