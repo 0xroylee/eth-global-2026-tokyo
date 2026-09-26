@@ -6,8 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { STAGE_HUES, type BossVisualState } from "@/lib/mockBattle";
 
 const BOSS_IMAGES = {
-  1: "/images/boss-cat-form-a.png",
-  2: "/images/boss-cat-form-b.png",
+  1: "/images/boss-cat-form-b.png",
+  2: "/images/boss-cat-form-a.png",
   3: "/images/boss-cat-form-c.png",
 } as const;
 
