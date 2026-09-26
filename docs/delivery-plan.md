@@ -13,6 +13,7 @@ Updated 27 September 2026. The no-burn direct-attack contracts, shared SDK, Next
 | Boostpad | ✅ Done | Factory launch flow at `/boostpad` |
 | Testnet | 🟡 Live (at risk) | Base Sepolia factory boss is live; public RPC returns 429 — swap to a keyed RPC before the demo |
 | World Channel | 🟢 Implemented on `feat/world-channel` | Bottom-left global activity feed: real `readActivity` blended with a deterministic mock stream (pending review) |
+| Map landmarks | 🟢 Implemented on `feat/map-uniswap-landmarks` | BaseScan explorer links for chain rows + `BattleActivityLog` (one-line `defineChain` fix), boss-exploration guide arrow now targets the active gate (`status === "active"`), and a Uniswap v4 **Market** landmark whose Pool Ledger panel reads the boss pool live from the hook (price / volume / stage liquidity) with a clearly marked ambient sample board (pending review) |
 
 ## Outcome and scope
 
