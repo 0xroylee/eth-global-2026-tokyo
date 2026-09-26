@@ -76,6 +76,7 @@ export type DeploymentState =
       context: VerifiedContext;
       round: Awaited<ReturnType<BossPoolSdk["readRound"]>>;
       player?: Awaited<ReturnType<BossPoolSdk["readPlayer"]>>;
+      /** Local clock anchor for blockTimestamp, retained when that timestamp has not advanced. */
       readAt: number;
     };
 
@@ -217,7 +218,7 @@ export function useBossPool() {
         if (!context) throw new Error("Verified deployment context is unavailable.");
         const snapshot = await context.publicSdk.readState(wallet.account);
         if (active && contextRef.current === context) {
-          setDeployment({
+          setDeployment((current) => ({
             kind: "live",
             network,
             manifest: context.manifest,
@@ -225,8 +226,10 @@ export function useBossPool() {
             context,
             round: snapshot.round,
             player: snapshot.player,
-            readAt: Date.now(),
-          });
+            readAt: current.kind === "live" && current.network === network &&
+              current.manifest.deploymentTxHash === context.manifest.deploymentTxHash &&
+              current.round.blockTimestamp === snapshot.round.blockTimestamp ? current.readAt : Date.now(),
+          }));
         }
       } catch (error) {
         if (!active) return;

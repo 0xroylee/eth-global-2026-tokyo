@@ -2,6 +2,7 @@ import { BlockNotFoundError, type Address, type PublicClient } from "viem";
 import {
   bossHpAbi,
   bossPoolHookAbi,
+  bossRouterAbi,
   mockUsdAbi,
   royTokenAbi,
 } from "./generated/abi";
@@ -17,6 +18,8 @@ export type RoundSnapshot = {
   stageCapacity: readonly [bigint, bigint, bigint];
   stageEndSqrtPriceX96: readonly [bigint, bigint, bigint];
   remainingSellableHP: bigint;
+  supplyPoolFee: number;
+  bossPoolFee: number;
   bossHPCurrency0: boolean;
   bossTickLower: number;
   bossTickUpper: number;
@@ -106,6 +109,8 @@ export async function readState(
       bossHPInHook,
       bossHPInRouter,
       bossHPInPoolManager,
+      supplyPoolKey,
+      bossPoolKey,
     ] = await Promise.all([
       client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "status", blockNumber }),
       client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "currentStage", blockNumber }),
@@ -135,6 +140,8 @@ export async function readState(
       client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [hook], blockNumber }),
       client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [router], blockNumber }),
       client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [poolManager], blockNumber }),
+      client.readContract({ address: router, abi: bossRouterAbi, functionName: "supplyPoolKey", blockNumber }),
+      client.readContract({ address: router, abi: bossRouterAbi, functionName: "bossPoolKey", blockNumber }),
     ]);
     const round: RoundSnapshot = {
       blockNumber,
@@ -146,6 +153,8 @@ export async function readState(
       stageCapacity: [capacity0, capacity1, capacity2],
       stageEndSqrtPriceX96: [endPrice0, endPrice1, endPrice2],
       remainingSellableHP,
+      supplyPoolFee: supplyPoolKey.fee,
+      bossPoolFee: bossPoolKey.fee,
       bossHPCurrency0,
       bossTickLower,
       bossTickUpper,
