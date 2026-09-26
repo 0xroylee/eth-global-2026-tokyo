@@ -62,13 +62,19 @@ const EMPTY_STAT: PoolStat = {
 /** Current stage liquidity read from the hook, or `null` when it could not be read. */
 export type StageLiquidity = bigint | null;
 
+/** The round fields the pool view model actually reads. A full snapshot satisfies it. */
+export type PoolRound = Pick<
+  RoundSnapshot,
+  "bossHPCurrency0" | "hpToken" | "rewardToken" | "bossCurrentSqrtPriceX96" | "encounterMode" | "totalVolume" | "mockUSDInHook"
+>;
+
 /**
  * Assemble the pool view model from an already-polled round snapshot and the one
  * supplementary field the snapshot omits. Pure: no RPC, no React, fully testable.
  * Token labels and decimals come from the deployment's own metadata, so the pair
  * shown is always the real pool pair rather than a hard-coded guess.
  */
-export function buildPoolStat(round: RoundSnapshot | undefined, stageLiquidity: StageLiquidity): PoolStat {
+export function buildPoolStat(round: PoolRound | undefined, stageLiquidity: StageLiquidity): PoolStat {
   if (!round) return EMPTY_STAT;
   const base = round.bossHPCurrency0 ? round.hpToken : round.rewardToken;
   const quote = round.bossHPCurrency0 ? round.rewardToken : round.hpToken;
