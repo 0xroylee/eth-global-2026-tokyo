@@ -1,6 +1,6 @@
 # Boss Pool technical specification
 
-Status: BP01 implements local no-burn contracts, transferable HP redemption and the shared real-v4 fixture. Four focused cases pass: the full HP0 round/claims path, an HP1 normalized-price/refill regression, deadline setup rejection and expiry. The workspace/local read shell is separate from the still-unimplemented full game UI. Robinhood target-chain deployment remains unverified.
+Status: BP01 implements local no-burn contracts, transferable HP redemption and the shared real-v4 fixture. Four focused cases pass: the full HP0 round/claims path, an HP1 normalized-price/refill regression, deadline setup rejection and expiry. The workspace/local read shell is separate from the still-unimplemented full game UI. Base Sepolia is the active target chain; no Base deployment exists yet. Earlier Robinhood target-chain work is historical and remains unverified.
 
 ## Architecture
 
@@ -71,7 +71,7 @@ The root package now exposes contract build/test, ABI export/check, web dev/buil
 
 Start with direct viem reads/writes. A's backend work is contracts, deployment, scripts, and shared integration. Add a read-only service under `apps/` only when BP09 demonstrates an RPC or shared-activity need. No Turbo, Nx, database, queue, shared UI library, or extra package split is required for the core demo. [Bun workspaces](https://bun.com/docs/pm/workspaces)
 
-The selected stack is Solidity with Foundry and Next.js App Router with React, TypeScript, Tailwind CSS, and direct viem wallet/contract access. The user selected Next.js, viem, and Tailwind CSS on 26 September 2026. The current BP01 web shell still uses Vite; its migration remains implementation work. Pin compatible versions under the [implementation rules](agents/implementation.md).
+The selected stack is Solidity with Foundry and Next.js App Router with React, TypeScript, Tailwind CSS, and direct viem wallet/contract access. The user selected Next.js, viem, and Tailwind CSS on 26 September 2026, and later that day selected Base Sepolia (chain ID 84532) as the active testnet target for wallet and deployment work. Chain constants derive from viem's installed `baseSepolia` definition in `packages/chain`. The current BP01 web shell still uses Vite; its migration remains implementation work. Pin compatible versions under the [implementation rules](agents/implementation.md).
 
 ### Frontend architecture
 
@@ -87,7 +87,9 @@ Preserve the existing approval, simulation, receipt, and stale-stage rules. Enro
 
 ## Deployment and proof gate
 
-Target Robinhood testnet chain ID 46630. The documented RPC previously returned HTTP 403 from this environment. Verify RPC access, manager/periphery provenance, selected EVM/compiler compatibility, and actual bytecode. A local proof is not testnet evidence.
+Target Base Sepolia, chain ID 84532. The initial public RPC is `https://sepolia.base.org`; it is rate-limited and must be configurable before production use. Deployment requires fresh Base bytecode, deployment receipts, PoolManager/periphery provenance on Base Sepolia, selected EVM/compiler compatibility, and real transaction checks. A local proof is not testnet evidence.
+
+Historical: the earlier target was Robinhood testnet chain ID 46630, whose documented RPC returned HTTP 403 from this environment. That evidence is retained for the record and does not prove a Base deployment.
 
 BP01 adapts the existing compact real-v4 scenario: both swaps, ordinary BossHP delivery, cumulative purchase accounting, current-stage completion, and the reserve-funded refill/LP addition with all deltas settled. Reuse existing upstream fixtures and settlement helpers. Then verify the real target-chain route after deployment.
 
@@ -207,4 +209,4 @@ Use one reusable two-wallet core/E2E fixture with real v4 core. Adapt the existi
 
 Assert unchanged BossHP supply, output delivery equal to eligible issuance, transfers moving reward rights without new damage, one-time surrender of each redeemed token amount, locked protocol HP including after the deadline, rejection of player sell-backs, no premature future liquidity, no same-attack stage spill, reserve/player fund separation, single release per stage, and zero unsettled deltas. Extend the shared claim journey with a token transfer and redemption rather than adding a separate suite. Keep the failed-release rollback and focused access-control/expiry checks where the browser cannot reliably exercise them.
 
-Do not add a separate simulator, exhaustive test matrix, or broad fuzz suite. Reuse focused evidence until relevant code changes. The current `BossPoolCoreTest` fixture exercises the local no-burn path; it does not establish production audit coverage or Robinhood deployment.
+Do not add a separate simulator, exhaustive test matrix, or broad fuzz suite. Reuse focused evidence until relevant code changes. The current `BossPoolCoreTest` fixture exercises the local no-burn path; it does not establish production audit coverage or a Base Sepolia deployment.
