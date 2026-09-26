@@ -1082,7 +1082,7 @@ export class HubScene extends Phaser.Scene {
 
   /** Nearest unlocked gate, keeping the current target until another is clearly closer. */
   private chooseHintGate(): Gate | null {
-    const unlocked = this.gates.filter((gate) => gate.boss.status !== "locked");
+    const unlocked = this.gates.filter((gate) => gate.boss.status === "active");
     if (unlocked.length === 0) return null;
     const distance = (gate: Gate) => {
       const centerX = gate.zone.x + gate.zone.width / 2;
