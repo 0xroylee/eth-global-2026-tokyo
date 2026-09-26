@@ -21,7 +21,7 @@ The user confirmed this replacement for the earlier physical/magic design:
 
 The private Bun workspace, minimal read-only Vite arena, generated contract client, and local deployment flow are in place. Four focused Foundry cases pass, including the full no-burn HP0 round and a targeted HP1 first-stage/refill case. The reusable local Anvil exercise also completes both wallets through all three stages, claims, and victory NFTs. A team-deployed, non-production fixture completed the full two-wallet journey on Robinhood testnet, including two refills, transferable HP claims, and both victory NFTs. See the [contract usage guide](docs/contract-usage.md) and [testnet verification report](docs/testnet-verification.md). The browser remains read-only; expiry and prize refund have local Foundry coverage only.
 
-The selected Next.js/Tailwind frontend and direct viem wallet connection are planned; the current runnable shell still uses Vite.
+The arena shell now runs on Next.js App Router and Tailwind CSS; the read-only round state, deployment validation, and not-deployed/error states are preserved from BP01. Direct viem wallet connection and the Phaser hub/battle scenes are the next frontend slices. See [apps/web/AGENTS.md](apps/web/AGENTS.md) for frontend rules.
 
 The 1,000 MockUSD prize is a test fixture. [Refill math](docs/refill-math.md) gives candidate prices and reserve amounts, with the no-burn accounting change distinguished from historical test evidence. Earlier ROY/MROY allocation tables and price-impact estimates are superseded.
 
@@ -73,7 +73,7 @@ Run `bun run contracts:test` for the shared core fixture and `bun run abi:check`
 
 ```text
 contracts/       Solidity, Foundry, deployment artifacts
-apps/web/        Read-only arena shell
+apps/web/        Next.js + Tailwind arena (read-only round state today; hub and battle scenes next)
 packages/chain/  Generated ABIs, public manifests, viem helpers/types
 scripts/         Seed, focused liquidity/E2E scenario, smoke commands
 ```
