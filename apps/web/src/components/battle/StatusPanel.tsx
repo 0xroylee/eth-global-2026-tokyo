@@ -5,7 +5,7 @@ import type { DeploymentState } from "@/lib/useBossPool";
 import { BattleFrame } from "./BattleFrame";
 
 function Label({ icon, children }: { icon: string; children: ReactNode }) {
-  return <span className="flex shrink-0 items-center gap-2 bg-[#092B61] px-2 py-2 text-xs leading-none text-white sm:text-sm"><span aria-hidden>{icon}</span>{children}</span>;
+  return <span className="flex shrink-0 items-center gap-2 bg-[#092B61] px-2 py-2 text-xs leading-none text-white sm:text-sm lg:px-3 lg:text-[clamp(16px,2.2vh,20px)]"><span aria-hidden>{icon}</span>{children}</span>;
 }
 
 export function StatusPanel({ deployment }: { deployment: DeploymentState }) {
@@ -20,26 +20,26 @@ export function StatusPanel({ deployment }: { deployment: DeploymentState }) {
 
   return (
     <div className="space-y-2 font-pixel">
-      <BattleFrame><div className="flex flex-wrap items-center gap-2 p-2"><Label icon="◆">BOSS POOL</Label><span className="min-w-0 flex-1 text-[10px] leading-relaxed sm:text-xs">UNISWAP V4 HACKATHON DEMO</span></div></BattleFrame>
+      <BattleFrame><div className="flex flex-wrap items-center gap-2 p-2 lg:flex-nowrap lg:gap-3"><Label icon="◆">BOSS POOL</Label><span className="min-w-0 flex-1 text-[10px] leading-relaxed sm:text-xs lg:text-[clamp(16px,2.45vh,22px)] lg:leading-none">UNISWAP V4 HACKATHON DEMO</span></div></BattleFrame>
       <BattleFrame>
-        <div className="flex flex-wrap items-center gap-2 p-2">
+        <div className="flex flex-wrap items-center gap-2 p-2 lg:flex-nowrap lg:gap-3">
           <Label icon="⚔">BOSS HP</Label>
-          <div className="min-w-[120px] flex-1">
-            {round && <div className="h-4 overflow-hidden bg-[#092B61]" role="progressbar" aria-label="Boss HP" aria-valuemin={0} aria-valuemax={100} aria-valuenow={hpFraction * 100} aria-valuetext={`${displayAmount(remaining, 18)} of ${displayAmount(cap, 18)} HP remaining`}>
+          <div className="min-w-[120px] flex-1 lg:contents">
+            {round && <div className="h-4 overflow-hidden bg-[#092B61] lg:h-8 lg:min-w-0 lg:flex-1" role="progressbar" aria-label="Boss HP" aria-valuemin={0} aria-valuemax={100} aria-valuenow={hpFraction * 100} aria-valuetext={`${displayAmount(remaining, 18)} of ${displayAmount(cap, 18)} HP remaining`}>
               <div className="h-full w-full origin-left bg-[#59C84A] transition-transform duration-300" style={{ transform: `scaleX(${hpFraction})` }} />
             </div>}
-            <p className="mt-1 break-words text-xs tabular-nums sm:text-sm" title={round ? `${displayAmount(remaining, 18)} HP remaining` : undefined}>{round ? `≈ ${displayEstimate(remaining, 18)} / ${displayEstimate(cap, 18)} (${Math.round(hpFraction * 100)}%)` : "—"}</p>
+            <p className="mt-1 break-words text-xs tabular-nums sm:text-sm lg:m-0 lg:shrink-0 lg:text-[clamp(16px,2.65vh,24px)] lg:leading-none" title={round ? `${displayAmount(remaining, 18)} HP remaining` : undefined}>{round ? `≈ ${displayEstimate(remaining, 18)} / ${displayEstimate(cap, 18)} (${Math.round(hpFraction * 100)}%)` : "—"}</p>
           </div>
         </div>
       </BattleFrame>
       <BattleFrame>
-        <div className="flex flex-wrap items-center gap-2 p-2">
-          <Label icon="◆">{defeated ? "YOUR SHARE" : "YOUR HP"}</Label>
-          <div className="min-w-[120px] flex-1">
-            {share !== null && <div className="h-4 overflow-hidden bg-[#092B61]" role="progressbar" aria-label="Your prize share" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, share)}>
+        <div className="flex flex-wrap items-center gap-2 p-2 lg:flex-nowrap lg:gap-3">
+          <Label icon="💧">{defeated ? "YOUR SHARE" : "YOUR HP"}</Label>
+          <div className="min-w-[120px] flex-1 lg:contents">
+            {share !== null && <div className="h-4 overflow-hidden bg-[#092B61] lg:h-8 lg:min-w-0 lg:flex-1" role="progressbar" aria-label="Your prize share" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, share)}>
               <div className="h-full w-full origin-left bg-[#55B8F2] transition-transform duration-300" style={{ transform: `scaleX(${Math.min(1, share / 100)})` }} />
             </div>}
-            <p className="mt-1 break-words text-xs tabular-nums sm:text-sm" title={player ? `${displayAmount(player.bossHPBalance, 18)} BossHP` : undefined}>{player ? share !== null ? `${share}%` : `≈ ${displayEstimate(player.bossHPBalance, 18)} HP` : "CONNECT WALLET"}</p>
+            <p className="mt-1 break-words text-xs tabular-nums sm:text-sm lg:m-0 lg:shrink-0 lg:text-[clamp(16px,2.65vh,24px)] lg:leading-none" title={player ? `${displayAmount(player.bossHPBalance, 18)} BossHP` : undefined}>{player ? share !== null ? `${share}%` : `≈ ${displayEstimate(player.bossHPBalance, 18)} HP` : "CONNECT WALLET"}</p>
           </div>
         </div>
       </BattleFrame>
@@ -55,9 +55,9 @@ export function BattleMeta({ deployment, now }: { deployment: DeploymentState; n
   const network = deployment.network === "local" ? "LOCAL CHAIN" : deployment.network === "base-sepolia" ? "BASE SEPOLIA" : "HISTORICAL · READ ONLY";
   const status = round ? roundStatusLabel(round.status) : deployment.kind === "loading" ? "CHECKING" : deployment.kind === "not-deployed" ? "NOT DEPLOYED" : "DATA UNAVAILABLE";
   return (
-    <div className="bg-[#092B61] px-3 py-2 font-pixel text-[10px] leading-relaxed text-white shadow-[3px_3px_0_#041833] sm:text-xs">
+    <div className="bg-[#092B61] px-3 py-2 font-pixel text-[10px] leading-relaxed text-white shadow-[3px_3px_0_#041833] sm:text-xs lg:flex lg:gap-2 lg:py-1 lg:text-[16px] lg:leading-none">
       <p>STAGE {round ? round.currentStage + 1 : "—"}/3 · ROUND <span className={seconds !== null && seconds < 600 && round?.status !== 3 ? "text-[#ffb4a8]" : ""}>{round?.status === 3 ? "VICTORY" : time}</span></p>
-      <p>{network} · {status}{round ? ` · BLOCK ${round.blockNumber}` : ""}</p>
+      <p title={`${status}${round ? ` · BLOCK ${round.blockNumber}` : ""}`}>{network}</p>
     </div>
   );
 }
