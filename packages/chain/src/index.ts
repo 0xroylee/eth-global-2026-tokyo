@@ -22,6 +22,17 @@ export {
 } from "./generated/abi";
 export { formatUnits, isAddress } from "viem";
 export type { Address } from "viem";
+export {
+  BASE_SEPOLIA_CHAIN,
+  BASE_SEPOLIA_CHAIN_HEX,
+  createBaseSepoliaWalletClient,
+  parseWalletAccounts,
+  parseWalletChainId,
+  providerErrorCode,
+  switchToBaseSepolia,
+  walletErrorMessage,
+} from "./wallet";
+export type { EIP1193Provider } from "viem";
 
 export const LOCAL_CHAIN_ID = 31337;
 export const DEFAULT_LOCAL_RPC_URL = "http://127.0.0.1:8547";
