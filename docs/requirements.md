@@ -93,6 +93,8 @@ Keep the shared E2E and focused accounting checks. Optional held-Attack Token at
 
 `/battle` is the live battle page using `@boss-pool/chain`. Existing `/mock-battle` links permanently redirect to `/battle` with the selected supported network. The pixel arena presents the verified shared round. The boss is named **Pool Unis**, and the command label is **SWAP ATTACK**, consistent with the purchase-based attack rules above. Attack Token remains the currency paid into the Boss pool.
 
+The desktop visual baseline is John Ku's Pool Unis design in commit `c5b11b3`: lake background, upper-left HUD, upper-right nameplate, large boss on the right, lower-left command menu, and lower-right dialogue. SDK integration must preserve this composition, pixel typography, and cream/navy windows. Shorter desktop windows may reduce spacing and sprite size to prevent overlap.
+
 Players can inspect the shared boss without connecting a wallet. A wallet is required for approvals, attacks, and claims. Boss HP, stage, deadline, and rewards come from the selected verified deployment. An unavailable deployment shows an unavailable state. Entering or refreshing the page does not start a new round.
 
 The hub boss gate shows boss health and **ENTER BATTLE**. Quotes, token approvals, attacks, and claims are available inside the battle. The player UI has no faucet; players need an existing MockUSD balance to attack.
@@ -101,7 +103,7 @@ The hub boss gate shows boss health and **ENTER BATTLE**. Quotes, token approval
 
 Each attack uses a fixed input cap of **1 MockUSD**. The player does not enter an amount or choose a preset. The fixed cap appears in the quote review before confirmation. Damage varies with the live quote. A stage-clearing attack can spend less than 1 MockUSD and returns unused input.
 
-**RUN**, **EXIT BATTLE**, and Escape close the battle view. Escape closes the quote or claim dialog first when it is open. Leaving does not refund purchases or cancel a submitted transaction. The saved transaction remains recoverable on return through **CHECK TRANSACTION**. Unused **MAGIC** and **ITEM** placeholders are removed.
+**RUN**, **EXIT BATTLE**, and Escape close the battle view. Escape closes the quote or claim dialog first when it is open. Leaving does not refund purchases or cancel a submitted transaction. The saved transaction remains recoverable on return through **CHECK TRANSACTION**. **MAGIC** and **ITEM** retain their original disabled menu slots and do not trigger transactions.
 
 Reward rights follow the connected wallet's eligible BossHP. The HUD shows **YOUR HP** during the fight and **YOUR SHARE** after defeat, when the denominator is frozen. Historical damage remains separate from current token holdings; the victory card does not invent a contribution total from the wallet balance.
 
@@ -109,7 +111,7 @@ Buying this round's BossHP from another holder or an external market transfers i
 
 After victory, the page supports reward preview, any required BossHP approval, and reward claiming. Optional victory-NFT claiming remains separate. After expiry, attacks close and the page explains that attack purchases are nonrefundable. The existing [core acceptance](#core-acceptance) still applies.
 
-The [battle page integration context](technical-spec.md#live-battle-page-context) maps these behaviors to current code and SDK operations. **BATTLE DETAILS** opens the shared quote and claim controls. The network selector and wallet controls remain available from the battle itself.
+The [battle page integration context](technical-spec.md#live-battle-page-context) maps these behaviors to current code and SDK operations. **BATTLE DETAILS** opens the shared quote and claim controls, network selector, and wallet controls.
 
 ## Coordination
 

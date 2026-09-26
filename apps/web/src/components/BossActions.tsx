@@ -345,7 +345,7 @@ export function BossActions({
         <p className="eyebrow">PLAYER READINESS</p>
         <h3 id="readiness-heading" className="mt-1 text-base font-medium">Complete these actions in order</h3>
         {!account ? (
-          <p className="mt-2 text-xs leading-relaxed text-muted">Connect a wallet in the header to attack or claim. Public round reads and quotes work without a wallet.</p>
+          <p className="mt-2 text-xs leading-relaxed text-muted">Connect a wallet to attack or claim. Public round reads and quotes work without a wallet.</p>
         ) : !player ? (
           <p className="mt-2 text-xs text-muted">Reading this account on the selected network…</p>
         ) : (
