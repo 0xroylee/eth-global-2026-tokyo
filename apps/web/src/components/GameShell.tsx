@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Address, type DecodedContractEvent, type DeploymentManifest } from "@boss-pool/chain";
-import { findBoss, type BossId } from "@/game/bosses";
+import { BOSSES, findBoss, type BossId } from "@/game/bosses";
 import { GameBridge } from "@/game/bridge";
 import { SAGE_DEFEATED_STORAGE_KEY, SAGE_TALKED_STORAGE_KEY, sageLines, type SageState } from "@/lib/sageLines";
 import { useHubGuide } from "@/lib/useHubGuide";
@@ -165,9 +165,14 @@ export function GameShell() {
               <h1 className="text-sm font-semibold tracking-[0.14em] text-fog">GARDEN HUB</h1>
               <p className="font-mono text-[10px] tracking-[0.16em] text-dim">REGION 01</p>
             </div>
-            <span className="mt-1 inline-flex rounded-md border border-[#f5b04a]/40 bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-[#f5b04a]">
-              HUB · FIXTURE MAP
-            </span>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <span className="inline-flex rounded-md border border-[#f5b04a]/40 bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-[#f5b04a]">
+                HUB · FIXTURE MAP
+              </span>
+              <span className="inline-flex rounded-md border border-white/12 bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-dim">
+                {BOSSES.length} CHALLENGERS
+              </span>
+            </div>
           </div>
           <div className="pointer-events-auto flex w-full flex-wrap items-start gap-2 sm:w-auto sm:justify-end">
             <button
