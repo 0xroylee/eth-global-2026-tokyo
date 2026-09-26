@@ -267,7 +267,7 @@ The Hook enum values are 0 for Setup, 1 for Active, 2 for StageCleared, 3 for De
 
 The contracts have no public BossHP sell-back route, held-ROY attack route, LP removal method, fee collection method, treasury withdrawal, or generic token recovery. `beforeRemoveLiquidity` always reverts. Router-held reserves and LP assets remain locked, including after all HP rewards are redeemed. The expired-round path refunds only the original MockUSD prize. `BossCollectibles` has no configured metadata URI.
 
-The local Foundry suite runs the full two-wallet fresh-wallet HP0 flow against a pinned real PoolManager, including three stages, reward claims, and optional victory NFTs. A focused HP1 test covers normalized price and the first stage refill. Earlier 18-transaction local SDK evidence used enrollment-era contracts and does not verify the direct-attack journey. A fresh local direct-attack SDK run is pending. `local:seed` and `local:exercise` send transactions only to loopback Anvil; `local:smoke` is read-only.
+The local Foundry suite runs the full two-wallet fresh-wallet HP0 flow against a pinned real PoolManager, including three stages, reward claims, and optional victory NFTs. A focused HP1 test covers normalized price and the first stage refill. The current direct-attack SDK journey passed with 14 successful transactions at commit `3450be7`; see the [verification record](sdk-verification.md). Earlier 18-transaction local SDK evidence used enrollment-era contracts and is historical. `local:seed` and `local:exercise` send transactions only to loopback Anvil; `local:smoke` is read-only.
 
 ## Base Sepolia testnet target
 

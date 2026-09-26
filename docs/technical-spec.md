@@ -1,6 +1,6 @@
 # Boss Pool technical specification
 
-Status (26 September 2026): The no-burn, no-entry contracts, transferable HP redemption, and public real-v4 fixture are implemented. Five focused Foundry cases pass, including direct fresh-wallet attacks and quote non-persistence. The Next.js player UI and shared viem SDK support direct attacks. The earlier local 18-transaction journey and Robinhood 16+2 receipts used enrollment-era source and are historical evidence only. Base Sepolia `84532` is the current target. The RPC is reachable, but no Boss Pool deployment or direct-attack E2E is verified there. See the [SDK verification record](sdk-verification.md) and [historical foundation report](testnet-verification.md).
+Status (26 September 2026): The no-burn, no-entry contracts, transferable HP redemption, and public real-v4 fixture are implemented. Five focused Foundry cases pass, including direct fresh-wallet attacks and quote non-persistence. The Next.js player UI and shared viem SDK support direct attacks. The current local SDK journey passed with 14 successful transactions at commit `3450be7`. The earlier local 18-transaction journey and Robinhood 16+2 receipts used enrollment-era source and are historical evidence only. Base Sepolia `84532` is the current target. The RPC is reachable, but no Boss Pool deployment or direct-attack E2E is verified there. See the [SDK verification record](sdk-verification.md) and [historical foundation report](testnet-verification.md).
 
 ## Architecture
 

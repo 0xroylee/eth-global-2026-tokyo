@@ -4,15 +4,17 @@ Updated 26 September 2026. The current implementation uses the generated contrac
 
 The active target is Base Sepolia, chain `84532`. Its RPC is reachable, but no Boss Pool manifest or deployment has been verified there. The browser defaults to Base Sepolia and shows a not-deployed state while the manifest is absent. The testnet transactions below are historical Robinhood evidence on chain `46630`; they do not verify Base Sepolia.
 
-The previous quote contract changes came from `b98b685fadd5`; SDK and UI work followed in `1802ffd6d812` and `4033d7b7818f`. Commit `eb213a6` removed enrollment, entry fees, starter ROY, and entry-NFT minting. The local and Robinhood journeys below predate that change and are historical enrollment-era evidence. The Robinhood PoolManager is team-deployed from pinned v4-core source, not an official deployment.
+The previous quote contract changes came from `b98b685fadd5`; SDK and UI work followed in `1802ffd6d812` and `4033d7b7818f`. Commit `eb213a6` removed enrollment, entry fees, starter ROY, and entry-NFT minting. The direct-attack local journey below tests the current source; the earlier local and Robinhood journeys are historical enrollment-era evidence. The Robinhood PoolManager is team-deployed from pinned v4-core source, not an official deployment.
 
 ## Local and browser checks
 
-The direct-attack core contract checks pass. Five focused Foundry tests cover fresh-wallet attacks, both token orderings, quote non-persistence, deadline guards, and expiry. A fresh local SDK direct-attack journey is pending.
+The direct-attack implementation passed the final gate at commit `3450be71dcac758e39acddeae2664cd0035e7666`:
 
-- The previous SDK/web build checks passed before the no-entry change. The current direct-attack changes pass the focused contract suite and TypeScript typecheck.
-- The earlier local SDK journey recorded 18 successful transactions on chain `31337` and ended at block `36`. It included the entry fee, starter ROY, and entry NFTs. Its ignored journal is `.scratch/boss-pool-exercise/local-20260926T090227138Z-79386.json`; it is not direct-attack proof.
-- The parent confirmed the current public page returns a direct-attack quote on an active fresh local deployment without showing enrollment UI. Base Sepolia remains Not Deployed without a manifest. A fresh direct-attack local SDK journey and browser attack check are pending.
+- Frozen dependency install, contract build and runtime sizes, five focused Foundry cases, generated ABI consistency, TypeScript typecheck, production web build, local read smoke, and the existing map checker all passed.
+- The shared local SDK journey completed **14 successful transactions** on chain `31337`, ending at block `54`. It covers public preapproval quotes, direct fresh-wallet attacks, all three stages and both refills, stale quote rejection, refunds, transferable HP redemption, custody, and optional victory NFTs `1` and `2`. No entry fee, starter ROY, or NFT is required for an attack. See the [direct-attack local journal](evidence/local-sdk-direct-attack.json).
+- A prior attempt used an Anvil fixture that had been idle longer than the quote TTL. Its first attack was rejected as expired after four preparation transactions; no attack was sent. A freshly seeded round completed the 14-transaction run above. Run the exercise shortly after seeding a local round.
+- The public page returned a quote from a fresh direct-attack local deployment without showing enrollment UI. Base Sepolia correctly showed Not Deployed; historical Robinhood displayed the defeated round. Native amount-field and network-selector keyboard handling passed. A clean reload after the development hot update showed no console error.
+- The earlier local 18-transaction journey at `ebb9b87`, recorded in `.scratch/boss-pool-exercise/local-20260926T090227138Z-79386.json`, used the former enrollment contracts. It is historical evidence, separate from the current 14-transaction proof.
 
 The browser checks did not automate an injected wallet's popup. Use the [manual wallet checklist](#manual-browser-wallet-checklist) to verify connection, network switch, direct attack, Router approval, rejection, signing, and receipt recovery.
 

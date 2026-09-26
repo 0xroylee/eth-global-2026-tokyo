@@ -1,6 +1,6 @@
 # Boss Pool delivery plan
 
-Updated 26 September 2026. The no-burn direct-attack contracts, shared SDK, Next.js player app, and Phaser hub are implemented. Five focused Foundry cases pass. The previously recorded local 18-transaction SDK journey used enrollment-era contracts and is historical; a fresh direct-attack local journey remains pending. Base Sepolia RPC access is verified, but there is no Boss Pool deployment there. Manual wallet-popup acceptance also remains open.
+Updated 26 September 2026. The no-burn direct-attack contracts, shared SDK, Next.js player app, and Phaser hub are implemented. Five focused Foundry cases pass. The fresh direct-attack local SDK journey passed with 14 successful transactions at commit `3450be7`. The earlier 18-transaction journey used enrollment-era contracts and is historical. Base Sepolia RPC access is verified, but there is no Boss Pool deployment there. Manual wallet-popup acceptance also remains open.
 
 ## Outcome and scope
 

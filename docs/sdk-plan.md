@@ -101,7 +101,7 @@ The design must preserve these conditions:
 - Use a nonzero preview recipient that cannot accidentally add simulated player output to Router, Hook, or PoolManager reserves.
 - A preview excludes player funding and allowance requirements. It cannot promise that a wallet is ready or that later execution will succeed.
 
-The implementation keeps the periphery's revert-and-catch shape without adding the periphery dependency. Five focused Foundry tests and the earlier local quote-parity run cover non-persistence, transition behavior, and reserve failure. The earlier test used enrollment-era contracts; repeat the full shared journey on a fresh no-entry deployment.
+The implementation keeps the periphery's revert-and-catch shape without adding the periphery dependency. Five focused Foundry tests cover non-persistence, transition behavior, and reserve failure. The full shared direct-attack journey passed on a fresh local deployment with 14 successful transactions at commit `3450be7`; see the [verification record](sdk-verification.md).
 
 RPC state overrides were an earlier fallback option and are not the accepted design. A read-only code-override probe on Robinhood did not prove a full attack quote. The router-native quote is the shipped path. Viem documents that an [override simulation can succeed while the real transaction fails](https://viem.sh/docs/contract/simulateContract#stateoverride-optional).
 
