@@ -95,10 +95,63 @@ describe("buildPoolStat", () => {
     expect(stat.price.endsWith(" BHP")).toBe(true);
   });
 
-  test("shows Factory volume and the stage liquidity when both are present", () => {
+  test("derives the real ROY / BHP pair on the Factory path, ignoring the self-paired reward token", () => {
+    // The SDK sets rewardToken = hpToken (both BHP) for Factory rounds; the resolved ROY
+    // counter must win so the ledger never shows a self-pair. bossHPCurrency0=false → ROY is currency0.
     const stat = buildPoolStat(
-      round({ encounterMode: "factory", totalVolume: 1234n * 10n ** 18n }),
+      round({ encounterMode: "factory", bossHPCurrency0: false, rewardToken: token("BHP", 18) }),
+      null,
+      token("ROY", 18),
+    );
+    expect(stat.poolLabel).toBe("ROY / BHP");
+    expect(stat.price.endsWith(" BHP")).toBe(true);
+  });
+
+  test("orients the Factory pair by bossHPCurrency0 with BHP as currency0", () => {
+    const stat = buildPoolStat(
+      round({ encounterMode: "factory", bossHPCurrency0: true, rewardToken: token("BHP", 18) }),
+      null,
+      token("ROY", 18),
+    );
+    expect(stat.poolLabel).toBe("BHP / ROY");
+    expect(stat.price.endsWith(" ROY")).toBe(true);
+  });
+
+  test("applies the real pair decimals to the Factory price", () => {
+    // ROY as a 6-decimal currency0 and BHP as an 18-decimal currency1 must shift by 10^(6-18).
+    const stat = buildPoolStat(
+      round({ encounterMode: "factory", bossHPCurrency0: false, rewardToken: token("BHP", 18), bossCurrentSqrtPriceX96: Q96 }),
+      null,
+      token("ROY", 6),
+    );
+    expect(stat.price).toBe(`${formatPrice(sqrtPriceX96ToPrice(Q96, 6, 18))} BHP`);
+  });
+
+  test("shows a neutral pool label instead of a self-pair when the counter token is unresolved", () => {
+    const stat = buildPoolStat(
+      round({ encounterMode: "factory", rewardToken: token("BHP", 18) }),
+      null,
+      null,
+    );
+    expect(stat.poolLabel).toBe("BHP pool");
+    expect(stat.price).toBe("—");
+  });
+
+  test("falls back to a neutral pool label when both sides resolve to the same symbol", () => {
+    const stat = buildPoolStat(
+      round({ encounterMode: "factory", rewardToken: token("BHP", 18) }),
+      null,
+      token("BHP", 18),
+    );
+    expect(stat.poolLabel).toBe("BHP pool");
+    expect(stat.price).toBe("—");
+  });
+
+  test("reports Factory volume in MockUSD and the stage liquidity", () => {
+    const stat = buildPoolStat(
+      round({ encounterMode: "factory", rewardToken: token("BHP", 18), totalVolume: 1234n * 10n ** 18n }),
       5n * 10n ** 18n,
+      token("ROY", 18),
     );
     expect(stat.volume).toBe("1234 mUSD");
     expect(stat.liquidity).toBe("5 L");

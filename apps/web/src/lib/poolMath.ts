@@ -35,7 +35,7 @@ export function formatPrice(value: number): string {
 export type PoolStatSource = "chain" | "sample";
 
 export type PoolStat = {
-  /** "BHP / mUSD" — currency0 / currency1 from the deployment's own token metadata. */
+  /** "ROY / BHP" — currency0 / currency1 of the boss pool, oriented by bossHPCurrency0. */
   poolLabel: string;
   /** Price of currency0 in currency1, or "—" when the round has no live price. */
   price: string;
@@ -68,23 +68,47 @@ export type PoolRound = Pick<
   "bossHPCurrency0" | "hpToken" | "rewardToken" | "bossCurrentSqrtPriceX96" | "encounterMode" | "totalVolume" | "mockUSDInHook"
 >;
 
+/** The identity a pool token contributes to the ledger: its symbol and decimals. */
+export type PoolToken = Pick<RoundSnapshot["hpToken"], "symbol" | "decimals">;
+
 /**
- * Assemble the pool view model from an already-polled round snapshot and the one
- * supplementary field the snapshot omits. Pure: no RPC, no React, fully testable.
- * Token labels and decimals come from the deployment's own metadata, so the pair
- * shown is always the real pool pair rather than a hard-coded guess.
+ * Assemble the pool view model from an already-polled round snapshot, the supplementary
+ * stage liquidity, and — on the Factory path — the resolved counter token (ROY). Pure:
+ * no RPC, no React, fully testable.
+ *
+ * The boss pool always holds BossHP (`hpToken`) on one side. The other side depends on
+ * the encounter: Factory rounds set `rewardToken = hpToken` (both BossHP), so the real
+ * counter, ROY, must arrive via `attackToken`; standalone rounds already pair BossHP with
+ * their MockUSD reward, so `rewardToken` is the true counter. Orientation (currency0 /
+ * currency1) follows the snapshot's `bossHPCurrency0` flag, so decimals and price stay
+ * correct for any pair. If the counter cannot be resolved, or both sides share a symbol,
+ * the ledger shows a neutral "<SYMBOL> pool" label rather than a self-pair.
  */
-export function buildPoolStat(round: PoolRound | undefined, stageLiquidity: StageLiquidity): PoolStat {
+export function buildPoolStat(
+  round: PoolRound | undefined,
+  stageLiquidity: StageLiquidity,
+  attackToken?: PoolToken | null,
+): PoolStat {
   if (!round) return EMPTY_STAT;
-  const base = round.bossHPCurrency0 ? round.hpToken : round.rewardToken;
-  const quote = round.bossHPCurrency0 ? round.rewardToken : round.hpToken;
+  const bhp = round.hpToken;
+  const counter: PoolToken | null = round.encounterMode === "factory" ? attackToken ?? null : round.rewardToken;
+  // base = currency0, quote = currency1, so the price's `decimals0 - decimals1` stays
+  // correct for any pair. A missing or self-symbol counter collapses to a neutral label.
+  const { base, quote }: { base: PoolToken; quote: PoolToken | null } =
+    counter !== null && counter.symbol !== bhp.symbol
+      ? round.bossHPCurrency0
+        ? { base: bhp, quote: counter }
+        : { base: counter, quote: bhp }
+      : { base: bhp, quote: null };
   const priceLive = round.bossCurrentSqrtPriceX96 > 0n;
-  const price = priceLive
-    ? `${formatPrice(sqrtPriceX96ToPrice(round.bossCurrentSqrtPriceX96, base.decimals, quote.decimals))} ${quote.symbol}`
-    : "—";
+  const price =
+    priceLive && quote
+      ? `${formatPrice(sqrtPriceX96ToPrice(round.bossCurrentSqrtPriceX96, base.decimals, quote.decimals))} ${quote.symbol}`
+      : "—";
+  // totalVolume is denominated in MockUSD (BossHook.totalVolume), independent of the pair.
   const volume =
     round.encounterMode === "factory" && round.totalVolume > 0n
-      ? `${displayEstimate(round.totalVolume, quote.decimals, 2)} ${quote.symbol}`
+      ? `${displayEstimate(round.totalVolume, 18, 2)} mUSD`
       : "—";
   const liquidity =
     stageLiquidity !== null
@@ -93,7 +117,7 @@ export function buildPoolStat(round: PoolRound | undefined, stageLiquidity: Stag
         ? `${displayEstimate(round.mockUSDInHook, 18, 2)} mUSD`
         : "—";
   return {
-    poolLabel: `${base.symbol} / ${quote.symbol}`,
+    poolLabel: quote ? `${base.symbol} / ${quote.symbol}` : `${bhp.symbol} pool`,
     price,
     priceLive,
     volume,
