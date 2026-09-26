@@ -91,3 +91,68 @@ export function selectMode(input: { live: boolean; chainId?: number; realErrored
   if (input.chainId === ROBINHOOD_TESTNET_CHAIN_ID) return "mock-only";
   return input.realErrored ? "blended-degraded" : "blended";
 }
+
+/**
+ * Pseudo-handles: readable, never a 0x address, never a real known wallet. Integrity boundary —
+ * mock rows must not masquerade as verifiable on-chain identities.
+ */
+export const MOCK_HANDLES = [
+  "pixel_roy", "garden_ghost", "stage3_slayer", "royraider", "hodl_knight", "mockwhale",
+  "sprite_hunter", "chain_cat", "boss_bane", "leek_lord", "usdc_samurai", "block_wraith",
+] as const;
+
+type MockTemplate = { templateId: string; kind: WorldChannelKind; build: (handle: string, rng: () => number) => string };
+
+/** Ambient / achievement / milestone / join only. Never a lifecycle kind (see §3.4 integrity guard). */
+const MOCK_CATALOG: readonly MockTemplate[] = [
+  { templateId: "m-attack", kind: "attack", build: (h, r) => `${h} struck · ≈ ${mockHp(r)} HP` },
+  { templateId: "m-victory", kind: "victory-nft", build: (h) => `${h} claimed a Victory NFT` },
+  { templateId: "m-reward", kind: "reward", build: (h, r) => `${h} redeemed ≈ ${mockHp(r)} HP` },
+  { templateId: "m-join", kind: "join", build: (h) => `${h} joined the hunt` },
+  { templateId: "a-streak", kind: "achievement", build: (h, r) => `${h} is on a ${2 + Math.floor(r() * 6)}-attack streak!` },
+  { templateId: "a-firststrike", kind: "achievement", build: (h) => `${h} landed the first strike of the hour` },
+  { templateId: "a-bighit", kind: "achievement", build: (h, r) => `${h} dealt a massive ${mockHp(r)} HP blow` },
+  { templateId: "m-ladder", kind: "milestone", build: (h, r) => `${h} climbed to #${1 + Math.floor(r() * 20)} on the ladder` },
+];
+
+function mockHp(rng: () => number): string {
+  return (1 + rng() * 39).toFixed(2);
+}
+
+/** mulberry32: a tiny pure PRNG so the mock stream is reproducible under test. */
+export function createSeededRng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Same `(seed, count)` → deep-equal output. Every row is `source: "mock"`, carries no explorer link,
+ * and uses a pseudo-handle actor. `timestamp` is a placeholder the hook re-stamps at injection time.
+ */
+export function generateMockEvents(seed: number, count: number): WorldChannelEvent[] {
+  const rng = createSeededRng(seed);
+  const events: WorldChannelEvent[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const template = MOCK_CATALOG[Math.floor(rng() * MOCK_CATALOG.length)]!;
+    const handle = MOCK_HANDLES[Math.floor(rng() * MOCK_HANDLES.length)]!;
+    events.push({
+      id: `mock:${seed}:${index}`,
+      kind: template.kind,
+      actor: handle,
+      message: template.build(handle, rng),
+      timestamp: 0,
+      source: "mock",
+    });
+  }
+  return events;
+}
+
+/** Injection cadence in [3000, 8000) ms so the ambient stream never looks metronomic. */
+export function mockIntervalMs(rng: () => number): number {
+  return 3_000 + Math.floor(rng() * 5_000);
+}
