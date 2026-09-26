@@ -182,11 +182,12 @@ for (let c = -1; c < WIDTH; c += 3) placeTree(c, -1); // top: crown row -1 is of
 for (let c = -1; c < WIDTH; c += 3) placeTree(c, HEIGHT - 3);
 for (let r = 2; r < HEIGHT - 3; r += 3) { placeTree(-1, r); placeTree(WIDTH - 2, r); }
 
-// Garden rooms: clustered trees framing the routes.
+// Garden rooms: clustered trees framing the routes. Positions are picked to clear
+// every reserved cell, so an entry over a new route simply fails to place.
 const clusters: [number, number][] = [
-  [2, 7], [4, 9], [11, 4], [13, 7], [3, 15], [10, 16], [12, 19],
-  [24, 5], [27, 8], [35, 9], [36, 15], [28, 17], [34, 20], [26, 23], [30, 25],
-  [13, 23], [15, 26], [24, 26], [9, 27], [3, 27], [33, 27],
+  [10, 16], [13, 17], [10, 19], [10, 22], [15, 22],
+  [24, 19], [24, 23], [27, 24],
+  [28, 16], [30, 19], [31, 22], [34, 24],
 ];
 for (const [c, r] of clusters) placeTree(c, r);
 
