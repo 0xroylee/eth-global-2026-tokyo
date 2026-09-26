@@ -437,9 +437,7 @@ contract BossHook is ReentrancyGuard {
                 revert InvalidSwap();
             }
             creditedVolume = FullMath.mulDiv(usdSpent, _inputAmount(delta, params.zeroForOne), royBought);
-            if (creditedVolume == 0 || creditedVolume > stageVolumeTarget[stage] - stageVolume[stage]) {
-                revert InvalidSwap();
-            }
+            if (creditedVolume == 0) revert InvalidSwap();
             nextVolume = totalVolume + creditedVolume;
             if (newEligibleHP > FullMath.mulDiv(saleHPBudget, nextVolume, volumeTargetMockUSD)) {
                 revert InvalidSwap();
@@ -458,7 +456,7 @@ contract BossHook is ReentrancyGuard {
             stageVolume[stage] += creditedVolume;
             totalVolume = nextVolume;
             emit VolumeCredited(router.activePlayer(), stage, creditedVolume, totalVolume);
-            if (stageVolume[stage] == stageVolumeTarget[stage]) _clearVolumeStage(stage);
+            if (stageVolume[stage] >= stageVolumeTarget[stage]) _clearVolumeStage(stage);
         } else if (remaining == 0) {
             _clearStage(stage);
         }
@@ -578,7 +576,7 @@ contract BossHook is ReentrancyGuard {
     }
 
     function _clearVolumeStage(uint8 stage) private {
-        if (stageVolume[stage] != stageVolumeTarget[stage]) revert InvalidStage();
+        if (stageVolume[stage] < stageVolumeTarget[stage]) revert InvalidStage();
         emit StageCleared(stage, stageSold[stage], stageCapacity[stage], 0);
         if (stage == 2) {
             status = RoundStatus.Defeated;

@@ -33,6 +33,7 @@ contract BossFactory is ReentrancyGuard {
         uint16 prizeBps;
         uint256 volumeTargetMockUSD;
         uint256 deadline;
+        uint256 maxAttackTokenPerMockUSDX128;
     }
 
     struct LaunchQuote {
@@ -120,7 +121,17 @@ contract BossFactory is ReentrancyGuard {
             revert SupplyMarketUnavailable();
         }
 
-        quote.maxRoyPerMockUSDX128 = BossPricing.maxRoyPerMockUSDX128(sqrtPriceX96, mockUSDIsCurrency0);
+        uint256 currentMaxRoyPerMockUSDX128 = BossPricing.maxRoyPerMockUSDX128(sqrtPriceX96, mockUSDIsCurrency0);
+        if (config.maxAttackTokenPerMockUSDX128 == 0) {
+            // A public quote with no frozen rate discovers the current accepted rate.
+            quote.maxRoyPerMockUSDX128 = currentMaxRoyPerMockUSDX128;
+        } else {
+            // The configured rate is frozen into hook init code. The inverse recovers
+            // the integer spot from BossPricing's rounded-up 10% headroom rate.
+            uint256 currentSpotX128 = FullMath.mulDiv(currentMaxRoyPerMockUSDX128, 10_000, 11_000);
+            if (currentSpotX128 > config.maxAttackTokenPerMockUSDX128) revert SupplyMarketUnavailable();
+            quote.maxRoyPerMockUSDX128 = config.maxAttackTokenPerMockUSDX128;
+        }
         quote.estimatedAttackToken =
             FullMath.mulDivRoundingUp(config.volumeTargetMockUSD, quote.maxRoyPerMockUSDX128, 1 << 128);
         quote.hpPriceTick =
@@ -142,7 +153,9 @@ contract BossFactory is ReentrancyGuard {
         bytes calldata hookCode
     ) external nonReentrant returns (BossHook hook, BossRouter router) {
         bytes32 bossId = keccak256(abi.encode(msg.sender, userSalt));
-        if (address(bosses[bossId]) != address(0)) revert InvalidLaunch();
+        if (address(bosses[bossId]) != address(0) || config.maxAttackTokenPerMockUSDX128 == 0) {
+            revert InvalidLaunch();
+        }
         _validateCode(routerCode, hookCode);
         LaunchQuote memory quote = quoteLaunch(config);
         router = BossRouter(Create2.deploy(0, bossId, _routerInitCode(config.token, routerCode)));
@@ -198,6 +211,7 @@ contract BossFactory is ReentrancyGuard {
         bytes calldata routerCode,
         bytes calldata hookCode
     ) external view returns (bytes memory) {
+        if (config.maxAttackTokenPerMockUSDX128 == 0) revert InvalidLaunch();
         _validateCode(routerCode, hookCode);
         LaunchQuote memory quote = quoteLaunch(config);
         (address router, address collectibles) = predictAddresses(maker, userSalt, config.token, routerCode);

@@ -1,26 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   BossFactorySdkError,
+  FactoryOperationTerminalError,
   createBaseSepoliaPublicClient,
   createBaseSepoliaWalletClient,
   createBossFactorySdk,
   fetchBaseSepoliaDeployment,
   formatUnits,
   isAddress,
-  parseUnits,
   readErc20TokenInfo,
   verifyDeployment,
   type Address,
   type Erc20TokenInfo,
+  type FactoryBuildStatus,
   type FactoryLaunchConfig,
   type FactoryLaunchProgress,
   type FactoryLaunchQuote,
   type FactoryLaunchResult,
 } from "@boss-pool/chain";
 import { WalletControl } from "./WalletControl";
+import { useFactoryOperation } from "./FactoryOperationProvider";
+import { isCurrentQuoteResponse, isCurrentTokenResponse, parseStrictUnits, sameAddressText } from "@/lib/factory-form";
 import { WalletProvider, useWallet } from "@/wallet/WalletProvider";
 
 const BASE_SEPOLIA_RPC_URL =
@@ -31,6 +34,7 @@ const configuredFactoryAddress = rawFactoryAddress && isAddress(rawFactoryAddres
   : undefined;
 
 type LaunchQuoteState = { config: FactoryLaunchConfig; quote: FactoryLaunchQuote };
+type FactoryBuildState = FactoryBuildStatus | { status: "checking" | "unconfigured" } | { status: "error"; message: string };
 
 export function BossFactoryLaunchPage() {
   return (
@@ -45,6 +49,9 @@ function LaunchForm() {
   const account = walletState.status === "connected" ? walletState.account : undefined;
   const provider = walletState.status === "connected" ? walletState.selected.provider : undefined;
   const [factoryAddress, setFactoryAddress] = useState(configuredFactoryAddress);
+  const [factoryBuild, setFactoryBuild] = useState<FactoryBuildState>(
+    configuredFactoryAddress ? { status: "checking" } : { status: "unconfigured" },
+  );
   const publicClient = useMemo(() => createBaseSepoliaPublicClient(BASE_SEPOLIA_RPC_URL), []);
   useEffect(() => {
     if (configuredFactoryAddress) return;
@@ -61,10 +68,31 @@ function LaunchForm() {
     () => factoryAddress ? createBossFactorySdk({ publicClient, factory: factoryAddress }) : undefined,
     [factoryAddress, publicClient],
   );
+  useEffect(() => {
+    if (!reader) {
+      setFactoryBuild({ status: factoryAddress ? "checking" : "unconfigured" });
+      return;
+    }
+    let active = true;
+    setFactoryBuild({ status: "checking" });
+    void reader.checkFactoryBuild().then((status) => {
+      if (active) setFactoryBuild(status);
+    }).catch((cause) => {
+      if (active) setFactoryBuild({ status: "error", message: errorMessage(cause) });
+    });
+    return () => { active = false; };
+  }, [factoryAddress, reader]);
   const sdk = useMemo(() => {
     if (!reader || !provider || !account) return undefined;
     return reader.withWallet(createBaseSepoliaWalletClient(provider, account));
   }, [account, provider, reader]);
+  const factoryOperation = useFactoryOperation();
+  const accountRef = useRef(account);
+  accountRef.current = account;
+  const tokenAddressRef = useRef("");
+  const tokenLoadRequestRef = useRef(0);
+  const quoteRequestRef = useRef(0);
+  const busyLockRef = useRef(false);
 
   const [tokenAddress, setTokenAddress] = useState("");
   const [tokenInfo, setTokenInfo] = useState<Erc20TokenInfo>();
@@ -76,10 +104,15 @@ function LaunchForm() {
   const [allowance, setAllowance] = useState<bigint>();
   const [progress, setProgress] = useState<FactoryLaunchProgress>();
   const [result, setResult] = useState<FactoryLaunchResult>();
-  const [busy, setBusy] = useState<"token" | "quote" | "approve" | "launch">();
+  const [busy, setBusy] = useState<"token" | "quote" | "approve" | "launch" | "resume">();
   const [error, setError] = useState<string>();
 
+  useEffect(() => {
+    if (factoryOperation.completedResult) setResult(factoryOperation.completedResult);
+  }, [factoryOperation.completedResult]);
+
   const clearQuote = useCallback(() => {
+    quoteRequestRef.current++;
     setQuoteState(undefined);
     setAllowance(undefined);
     setResult(undefined);
@@ -88,17 +121,29 @@ function LaunchForm() {
   }, []);
 
   useEffect(() => {
+    quoteRequestRef.current++;
+    setQuoteState(undefined);
+    setAllowance(undefined);
+    setBusy((current) => current === "quote" ? undefined : current);
+  }, [account]);
+
+  useEffect(() => {
     const token = tokenInfo?.address;
-    if (!token) return;
+    if (!token || !sameAddressText(token, tokenAddressRef.current)) return;
     if (!account) {
       setTokenInfo((current) => current ? { ...current, balance: undefined } : current);
       return;
     }
     let active = true;
+    setTokenInfo((current) => current && sameAddressText(current.address, token)
+      ? { ...current, balance: undefined }
+      : current);
     void readErc20TokenInfo(publicClient, token, account).then((value) => {
-      if (active) setTokenInfo(value);
+      if (active && isCurrentTokenResponse(token, tokenAddressRef.current, account, accountRef.current)) setTokenInfo(value);
     }).catch(() => {
-      if (active) setTokenInfo((current) => current ? { ...current, balance: undefined } : current);
+      if (active && isCurrentTokenResponse(token, tokenAddressRef.current, account, accountRef.current)) {
+        setTokenInfo((current) => current ? { ...current, balance: undefined } : current);
+      }
     });
     return () => { active = false; };
   }, [account, publicClient, tokenInfo?.address]);
@@ -118,28 +163,38 @@ function LaunchForm() {
   }, [account, quoteState?.config.token, quoteState?.config.tokenAllocation, reader]);
 
   async function loadToken() {
+    const request = ++tokenLoadRequestRef.current;
+    const requestedToken = tokenAddress.trim();
+    const requestedAccount = account;
     setBusy("token");
     setError(undefined);
     setQuoteState(undefined);
     setAllowance(undefined);
     setResult(undefined);
     try {
-      if (!isAddress(tokenAddress, { strict: false })) throw new Error("Enter a valid ERC-20 contract address.");
-      const info = await readErc20TokenInfo(publicClient, tokenAddress as Address, account);
+      if (!isAddress(requestedToken, { strict: false })) throw new Error("Enter a valid ERC-20 contract address.");
+      const info = await readErc20TokenInfo(publicClient, requestedToken as Address, requestedAccount);
+      if (!isCurrentTokenResponse(requestedToken, tokenAddressRef.current, requestedAccount, accountRef.current) ||
+          request !== tokenLoadRequestRef.current) return;
       setTokenInfo(info);
     } catch (cause) {
-      setTokenInfo(undefined);
-      setError(errorMessage(cause));
+      if (request === tokenLoadRequestRef.current &&
+          isCurrentTokenResponse(requestedToken, tokenAddressRef.current, requestedAccount, accountRef.current)) {
+        setTokenInfo(undefined);
+        setError(errorMessage(cause));
+      }
     } finally {
-      setBusy(undefined);
+      if (request === tokenLoadRequestRef.current) setBusy(undefined);
     }
   }
 
   function buildConfig(): FactoryLaunchConfig {
-    if (!tokenInfo) throw new Error("Read the MEME token contract before requesting a quote.");
-    const tokenAllocation = parseUnits(allocation.trim(), tokenInfo.decimals);
-    const prizeBps = parseUnits(prizePercent.trim(), 2);
-    const volumeTargetMockUSD = parseUnits(volumeTarget.trim(), 6);
+    if (!tokenInfo || !sameAddressText(tokenInfo.address, tokenAddress.trim()) || !sameAddressText(tokenAddressRef.current, tokenAddress.trim())) {
+      throw new Error("Read the current MEME token address before requesting a quote.");
+    }
+    const tokenAllocation = parseStrictUnits(allocation.trim(), tokenInfo.decimals);
+    const prizeBps = parseStrictUnits(prizePercent.trim(), 2);
+    const volumeTargetMockUSD = parseStrictUnits(volumeTarget.trim(), 6);
     const days = Number(deadlineDays);
     if (tokenAllocation < 6n) throw new Error("Allocation must be at least six token base units.");
     if (prizeBps < 1n || prizeBps >= 10_000n) throw new Error("Prize percentage must be greater than 0 and below 100%.");
@@ -151,63 +206,134 @@ function LaunchForm() {
       prizeBps: Number(prizeBps),
       volumeTargetMockUSD,
       deadline: BigInt(Math.floor(Date.now() / 1000)) + BigInt(days) * 86_400n,
+      maxAttackTokenPerMockUSDX128: 0n,
     };
   }
 
   async function requestQuote() {
-    if (!reader) return;
+    if (!reader || factoryBuild.status !== "compatible") return;
+    const request = ++quoteRequestRef.current;
+    const requestedAccount = account;
     setBusy("quote");
     setError(undefined);
     setResult(undefined);
     try {
       const config = buildConfig();
       const quote = await reader.quoteLaunch(config);
-      setQuoteState({ config, quote });
-      if (account) setAllowance(await reader.tokenAllowance(config.token, account));
+      if (!isCurrentQuoteResponse(request, quoteRequestRef.current, requestedAccount, accountRef.current,
+          config.token, tokenAddressRef.current)) return;
+      if (quote.maxRoyPerMockUSDX128 <= 0n) throw new Error("The Factory quote did not return a usable attack-token rate.");
+      const acceptedConfig = { ...config, maxAttackTokenPerMockUSDX128: quote.maxRoyPerMockUSDX128 };
+      const nextAllowance = requestedAccount ? await reader.tokenAllowance(config.token, requestedAccount) : undefined;
+      if (!isCurrentQuoteResponse(request, quoteRequestRef.current, requestedAccount, accountRef.current,
+          config.token, tokenAddressRef.current)) return;
+      setQuoteState({ config: acceptedConfig, quote });
+      setAllowance(nextAllowance);
     } catch (cause) {
-      setQuoteState(undefined);
-      setError(errorMessage(cause));
+      if (request === quoteRequestRef.current && accountRef.current === requestedAccount) {
+        setQuoteState(undefined);
+        setError(errorMessage(cause));
+      }
     } finally {
-      setBusy(undefined);
+      if (request === quoteRequestRef.current && accountRef.current === requestedAccount) setBusy(undefined);
     }
   }
 
   async function approveAllocation() {
-    if (!sdk || !quoteState) return;
+    if (!sdk || !quoteState || factoryBuild.status !== "compatible") return;
+    if (busyLockRef.current) return;
+    const attempt = factoryOperation.begin("approval", account);
+    if (!attempt) return;
+    busyLockRef.current = true;
     setBusy("approve");
     setError(undefined);
+    let submitted = false;
     try {
-      await sdk.approveToken(quoteState.config.token, quoteState.config.tokenAllocation);
+      await sdk.approveToken(quoteState.config.token, quoteState.config.tokenAllocation, (operation) => {
+        submitted = true;
+        factoryOperation.record(attempt, operation);
+      });
+      factoryOperation.finish(attempt);
       setAllowance(await sdk.tokenAllowance(quoteState.config.token, account!));
     } catch (cause) {
+      if (cause instanceof FactoryOperationTerminalError || !submitted) factoryOperation.finish(attempt);
       setError(errorMessage(cause));
     } finally {
+      busyLockRef.current = false;
       setBusy(undefined);
+      factoryOperation.releaseAttempt(attempt);
     }
   }
 
   async function createBoss() {
-    if (!sdk || !quoteState) return;
+    if (!sdk || !quoteState || factoryBuild.status !== "compatible") return;
+    if (busyLockRef.current) return;
+    const attempt = factoryOperation.begin("launch", account);
+    if (!attempt) return;
+    busyLockRef.current = true;
     setBusy("launch");
     setError(undefined);
     setResult(undefined);
     setProgress({ phase: "preparing" });
+    let submitted = false;
     try {
-      const launched = await sdk.launchBoss(quoteState.config, setProgress);
+      const launched = await sdk.launchBoss(quoteState.config, setProgress, (operation) => {
+        submitted = true;
+        factoryOperation.record(attempt, operation);
+      });
       setResult(launched);
+      factoryOperation.completeLaunch(attempt, launched);
     } catch (cause) {
+      if (cause instanceof FactoryOperationTerminalError || !submitted) factoryOperation.finish(attempt);
       setError(errorMessage(cause));
     } finally {
+      busyLockRef.current = false;
       setBusy(undefined);
+      factoryOperation.releaseAttempt(attempt);
     }
   }
 
-  const allocationAmount = tokenInfo && parseAmount(allocation, tokenInfo.decimals);
-  const hasEnoughBalance = tokenInfo?.balance !== undefined && allocationAmount !== undefined && tokenInfo.balance >= allocationAmount;
+  async function resumeFactoryOperation() {
+    const active = factoryOperation.active;
+    if (!reader || active?.status !== "submitted" || busyLockRef.current) return;
+    if (!factoryOperation.beginRecovery(active.id)) return;
+    busyLockRef.current = true;
+    setBusy("resume");
+    setError(undefined);
+    try {
+      const resumed = await reader.resumeOperation(active.operation);
+      if (resumed.kind === "launch") {
+        setResult(resumed.result);
+        factoryOperation.completeLaunch(active.id, resumed.result);
+      }
+      else if (account && sameAddressText(account, active.operation.account) &&
+          sameAddressText(tokenAddressRef.current, resumed.token)) {
+        factoryOperation.finish(active.id);
+        setAllowance(resumed.allowance ?? await reader.tokenAllowance(resumed.token, account));
+      } else {
+        factoryOperation.finish(active.id);
+      }
+    } catch (cause) {
+      if (cause instanceof FactoryOperationTerminalError) factoryOperation.finish(active.id);
+      setError(errorMessage(cause));
+    } finally {
+      busyLockRef.current = false;
+      setBusy(undefined);
+      factoryOperation.releaseAttempt(active.id);
+    }
+  }
+
+  const matchingTokenInfo = tokenInfo && sameAddressText(tokenInfo.address, tokenAddress.trim()) ? tokenInfo : undefined;
+  const allocationAmount = matchingTokenInfo && parseAmount(allocation, matchingTokenInfo.decimals);
+  const hasEnoughBalance = matchingTokenInfo?.balance !== undefined && allocationAmount !== undefined && matchingTokenInfo.balance >= allocationAmount;
   const approvalNeeded = quoteState !== undefined && allowance !== undefined && allowance < quoteState.config.tokenAllocation;
-  const canContinue = Boolean(account && sdk && quoteState && hasEnoughBalance && allowance !== undefined);
+  const factoryLocked = !factoryOperation.ready || factoryOperation.active !== undefined;
+  const factoryBuildReady = factoryBuild.status === "compatible";
+  const canContinue = Boolean(account && sdk && quoteState && hasEnoughBalance && allowance !== undefined && !factoryLocked && factoryBuildReady);
   const actionLabel = !account
     ? "CONNECT WALLET TO CONTINUE"
+    : !factoryBuildReady
+      ? factoryBuild.status === "checking" ? "VERIFYING FACTORY BUILD" : "FACTORY BUILD MISMATCH"
     : !quoteState
       ? "GET FUNDING QUOTE FIRST"
       : !hasEnoughBalance
@@ -227,10 +353,11 @@ function LaunchForm() {
     : busy === "quote" ? "CALCULATING FUNDING…"
       : busy === "approve" ? "WAITING FOR APPROVAL…"
         : busy === "launch" ? progressLabel(progress)
+          : busy === "resume" ? "CHECKING SAVED RECEIPT…"
           : undefined;
 
   return (
-    <main className="min-h-dvh overflow-y-auto bg-ink text-fog">
+    <main className="h-dvh overflow-y-auto bg-ink text-fog">
       <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 py-5 sm:px-7 sm:py-7">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
           <Link href="/" className="font-mono text-[10px] tracking-[0.16em] text-muted transition-colors hover:text-fog">
@@ -258,6 +385,24 @@ function LaunchForm() {
                 FACTORY CONTRACT · {factoryAddress}
               </p>
             )}
+            {factoryBuild.status === "checking" && (
+              <p className="mt-3 text-xs text-muted" role="status">Checking the deployed Factory bytecode against this app…</p>
+            )}
+            {factoryBuild.status === "not-deployed" && (
+              <p className="mt-3 rounded-lg border border-danger/25 bg-danger/[0.05] px-3 py-2.5 text-xs leading-relaxed text-danger" role="alert">
+                No Boss Factory contract exists at the configured address. Update the Factory address or deployment manifest before quoting or approving.
+              </p>
+            )}
+            {factoryBuild.status === "incompatible" && (
+              <p className="mt-3 rounded-lg border border-danger/25 bg-danger/[0.05] px-3 py-2.5 text-xs leading-relaxed text-danger" role="alert">
+                This Factory was deployed with different Router/Hook bytecode and an older launch config. Deploy a Factory build that matches this app, then update the configured address or manifest.
+              </p>
+            )}
+            {factoryBuild.status === "error" && (
+              <p className="mt-3 rounded-lg border border-danger/25 bg-danger/[0.05] px-3 py-2.5 text-xs leading-relaxed text-danger" role="alert">
+                Could not verify the configured Factory build: {factoryBuild.message}
+              </p>
+            )}
 
             <form className="mt-7 space-y-5" onSubmit={(event) => { event.preventDefault(); void requestQuote(); }}>
               <div>
@@ -266,38 +411,47 @@ function LaunchForm() {
                   <input
                     id="meme-address"
                     value={tokenAddress}
-                    onChange={(event) => { setTokenAddress(event.target.value.trim()); setTokenInfo(undefined); clearQuote(); }}
+                    onChange={(event) => {
+                      const value = event.target.value.trim();
+                      tokenAddressRef.current = value;
+                      tokenLoadRequestRef.current++;
+                      if (busy === "token") setBusy(undefined);
+                      setTokenAddress(value);
+                      setTokenInfo(undefined);
+                      clearQuote();
+                    }}
                     placeholder="0x…"
                     autoComplete="off"
                     spellCheck={false}
+                    disabled={busy !== undefined || factoryLocked}
                     className="min-w-0 flex-1 rounded-lg border border-white/12 bg-panel px-3 py-3 font-mono text-xs text-fog placeholder:text-faint"
                   />
                   <button
                     type="button"
                     onClick={() => void loadToken()}
-                    disabled={busy !== undefined || !tokenAddress}
+                    disabled={busy !== undefined || factoryLocked || !tokenAddress}
                     className="shrink-0 rounded-lg border border-white/12 px-4 py-3 font-mono text-[10px] tracking-[0.12em] text-fog transition-colors hover:bg-white/5 disabled:opacity-40"
                   >
                     {busy === "token" ? "READING…" : "READ TOKEN"}
                   </button>
                 </div>
-                {tokenInfo && (
+                {matchingTokenInfo && (
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px] text-muted">
-                    <span>{tokenInfo.symbol} · {tokenInfo.decimals} decimals</span>
-                    <span>Wallet balance · {tokenInfo.balance === undefined ? "connect wallet" : formatUnits(tokenInfo.balance, tokenInfo.decimals)}</span>
+                    <span>{matchingTokenInfo.symbol} · {matchingTokenInfo.decimals} decimals</span>
+                    <span>Wallet balance · {matchingTokenInfo.balance === undefined ? "checking wallet" : formatUnits(matchingTokenInfo.balance, matchingTokenInfo.decimals)}</span>
                   </div>
                 )}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="TOTAL MEME ALLOCATION" hint={tokenInfo ? `In ${tokenInfo.symbol} units` : "Read a token first"}>
+                <Field label="TOTAL MEME ALLOCATION" hint={matchingTokenInfo ? `In ${matchingTokenInfo.symbol} units` : "Read a token first"}>
                   <input
                     aria-label="Total MEME allocation"
                     inputMode="decimal"
                     value={allocation}
                     onChange={(event) => { setAllocation(event.target.value); clearQuote(); }}
                     placeholder="1000000"
-                    disabled={!tokenInfo || busy !== undefined}
+                    disabled={!matchingTokenInfo || busy !== undefined || factoryLocked}
                     className={inputClass}
                   />
                 </Field>
@@ -308,7 +462,7 @@ function LaunchForm() {
                       inputMode="decimal"
                       value={prizePercent}
                       onChange={(event) => { setPrizePercent(event.target.value); clearQuote(); }}
-                      disabled={busy !== undefined}
+                      disabled={busy !== undefined || factoryLocked}
                       className={`${inputClass} pr-10`}
                     />
                     <span className="pointer-events-none absolute inset-y-0 right-3 grid place-items-center font-mono text-xs text-muted">%</span>
@@ -321,7 +475,7 @@ function LaunchForm() {
                       inputMode="decimal"
                       value={volumeTarget}
                       onChange={(event) => { setVolumeTarget(event.target.value); clearQuote(); }}
-                      disabled={busy !== undefined}
+                      disabled={busy !== undefined || factoryLocked}
                       className={`${inputClass} pr-16`}
                     />
                     <span className="pointer-events-none absolute inset-y-0 right-3 grid place-items-center font-mono text-xs text-muted">MockUSD</span>
@@ -337,7 +491,7 @@ function LaunchForm() {
                       step="1"
                       value={deadlineDays}
                       onChange={(event) => { setDeadlineDays(event.target.value); clearQuote(); }}
-                      disabled={busy !== undefined}
+                      disabled={busy !== undefined || factoryLocked}
                       className={`${inputClass} pr-14`}
                     />
                     <span className="pointer-events-none absolute inset-y-0 right-3 grid place-items-center font-mono text-xs text-muted">days</span>
@@ -351,11 +505,39 @@ function LaunchForm() {
                 </p>
               )}
               {error && <p className="rounded-lg border border-danger/25 bg-danger/[0.05] px-3 py-2.5 text-xs leading-relaxed text-danger" role="alert">{error}</p>}
+              {factoryOperation.storageError && <p className="rounded-lg border border-danger/25 bg-danger/[0.05] px-3 py-2.5 text-xs leading-relaxed text-danger" role="alert">{factoryOperation.storageError}</p>}
+              {factoryOperation.active?.status === "preparing" && (
+                <p className="rounded-lg border border-[#f5b04a]/25 bg-[#f5b04a]/[0.05] px-3 py-2.5 text-xs leading-relaxed text-[#f3d19a]" role="status">
+                  Factory {factoryOperation.active.kind} is in progress for {factoryOperation.active.account ?? "the selected wallet"}. Finish the wallet prompt or wait for confirmation before starting another operation.
+                </p>
+              )}
+              {factoryOperation.active?.status === "submitted" && (
+                <div className="rounded-lg border border-[#f5b04a]/25 bg-[#f5b04a]/[0.05] px-3 py-3 text-xs leading-relaxed text-[#f3d19a]" role="status">
+                  <p className="font-mono text-[10px] tracking-[0.1em]">{factoryOperation.active.operation.kind === "launch" ? "LAUNCH TRANSACTION PENDING" : "TOKEN APPROVAL PENDING"}</p>
+                  <p className="mt-2 break-all">Account · {factoryOperation.active.operation.account}</p>
+                  <p className="mt-1 break-all">Transaction · {factoryOperation.active.operation.hash}</p>
+                  <a className="mt-2 inline-flex underline underline-offset-4" href={`https://sepolia.basescan.org/tx/${factoryOperation.active.operation.hash}`} target="_blank" rel="noreferrer">View transaction ↗</a>
+                  {factoryOperation.active.live && <p className="mt-3">Receipt handling is still active in this tab. Resume becomes available after that request ends.</p>}
+                  <button
+                    type="button"
+                    onClick={() => void resumeFactoryOperation()}
+                    disabled={busy !== undefined || factoryOperation.active.live || factoryOperation.active.operation.chainId !== 84532 || !reader}
+                    className="mt-3 block min-h-10 w-full rounded-lg border border-[#f5b04a]/45 px-3 py-2 font-mono text-[10px] tracking-[0.12em] text-[#ffd28a] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {busy === "resume" ? "CHECKING RECEIPT…" : "RESUME RECEIPT CHECK · READ ONLY"}
+                  </button>
+                </div>
+              )}
+              {factoryOperation.active?.status === "unreadable" && (
+                <p className="rounded-lg border border-danger/25 bg-danger/[0.05] px-3 py-2.5 text-xs leading-relaxed text-danger" role="alert">
+                  A saved Factory operation could not be read. The form stays locked to avoid a duplicate. Preserve this browser's local storage and check the transaction manually.
+                </p>
+              )}
 
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   type="submit"
-                  disabled={!reader || !tokenInfo || busy !== undefined}
+                  disabled={!reader || !factoryBuildReady || !matchingTokenInfo || busy !== undefined || factoryLocked}
                   className="min-h-12 flex-1 rounded-lg bg-accent-soft px-4 py-3 font-mono text-[10px] font-medium tracking-[0.13em] text-ink transition-[opacity,transform] hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-opacity motion-reduce:active:scale-100"
                 >
                   {busy === "quote" ? "CALCULATING FUNDING…" : "QUOTE LAUNCH"}
@@ -363,7 +545,7 @@ function LaunchForm() {
                 <button
                   type="button"
                   onClick={() => void continueLaunch()}
-                  disabled={!canContinue || busy !== undefined || !hasEnoughBalance}
+                  disabled={!canContinue || busy !== undefined || !hasEnoughBalance || factoryLocked || !factoryBuildReady}
                   className="min-h-12 flex-1 rounded-lg border border-[#f5b04a]/45 px-4 py-3 font-mono text-[10px] font-medium tracking-[0.13em] text-[#ffd28a] transition-[opacity,transform] hover:bg-[#f5b04a]/[0.06] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-opacity motion-reduce:active:scale-100"
                 >
                   {busyLabel ?? actionLabel}
@@ -383,14 +565,15 @@ function LaunchForm() {
             </div>
             {quoteState ? (
               <dl className="mt-6 space-y-3">
-                <QuoteRow label="PRIZE ESCROW" value={`${formatUnits(quoteState.quote.prizeAmount, tokenInfo?.decimals ?? 18)} ${tokenInfo?.symbol ?? "MEME"}`} />
-                <QuoteRow label="SALE BUDGET" value={`${formatUnits(quoteState.quote.saleHPBudget, tokenInfo?.decimals ?? 18)} ${tokenInfo?.symbol ?? "MEME"}`} />
-                <QuoteRow label="STAGE ONE HP" value={`${formatUnits(quoteState.quote.stageOneHP, tokenInfo?.decimals ?? 18)} ${tokenInfo?.symbol ?? "MEME"}`} />
+                <QuoteRow label="PRIZE ESCROW" value={`${formatUnits(quoteState.quote.prizeAmount, matchingTokenInfo?.decimals ?? 18)} ${matchingTokenInfo?.symbol ?? "MEME"}`} />
+                <QuoteRow label="SALE BUDGET" value={`${formatUnits(quoteState.quote.saleHPBudget, matchingTokenInfo?.decimals ?? 18)} ${matchingTokenInfo?.symbol ?? "MEME"}`} />
+                <QuoteRow label="STAGE ONE HP" value={`${formatUnits(quoteState.quote.stageOneHP, matchingTokenInfo?.decimals ?? 18)} ${matchingTokenInfo?.symbol ?? "MEME"}`} />
                 <QuoteRow label="ATTACK TOKEN ESTIMATE" value={formatUnits(quoteState.quote.estimatedAttackToken, 18)} />
-                <QuoteRow label="BATTLE FUNDING" value={`${formatUnits(quoteState.quote.requiredBattleTokenFunding, tokenInfo?.decimals ?? 18)} ${tokenInfo?.symbol ?? "MEME"}`} />
+                <QuoteRow label="BATTLE FUNDING" value={`${formatUnits(quoteState.quote.requiredBattleTokenFunding, matchingTokenInfo?.decimals ?? 18)} ${matchingTokenInfo?.symbol ?? "MEME"}`} />
                 <QuoteRow label="START PRICE TICK" value={String(quoteState.quote.hpPriceTick)} />
+                <QuoteRow label="ACCEPTED MAX RATE" value={`${formatAttackRate(quoteState.quote.maxRoyPerMockUSDX128)} ATK / MockUSD`} />
                 <p className="border-t border-white/8 pt-3 text-xs leading-relaxed text-muted">
-                  The volume gates release stages at 1/6, 1/3, and the remaining target. The quote uses the current MockUSD/attack-token pool and the selected MEME decimals.
+                  The quoted maximum attack-token rate is frozen into this launch. The volume gates release stages at 1/6, 1/3, and the remaining target.
                 </p>
               </dl>
             ) : (
@@ -404,7 +587,7 @@ function LaunchForm() {
               </div>
             )}
 
-            {tokenInfo && allocationAmount !== undefined && tokenInfo.balance !== undefined && tokenInfo.balance < allocationAmount && (
+            {matchingTokenInfo && allocationAmount !== undefined && matchingTokenInfo.balance !== undefined && matchingTokenInfo.balance < allocationAmount && (
               <p className="mt-4 text-xs text-danger" role="status">Wallet balance is below the requested allocation.</p>
             )}
             {result && (
@@ -460,10 +643,15 @@ function QuoteRow({ label, value }: { label: string; value: string }) {
 function parseAmount(value: string, decimals: number): bigint | undefined {
   if (!value.trim()) return undefined;
   try {
-    return parseUnits(value.trim(), decimals);
+    return parseStrictUnits(value, decimals);
   } catch {
     return undefined;
   }
+}
+
+function formatAttackRate(rate: bigint): string {
+  const displayed = rate / (1n << 128n);
+  return formatUnits(displayed, 12);
 }
 
 function progressLabel(progress?: FactoryLaunchProgress): string {

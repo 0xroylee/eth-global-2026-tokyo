@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {FullMath} from "v4-core/src/libraries/FullMath.sol";
 import {SqrtPriceMath} from "v4-core/src/libraries/SqrtPriceMath.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
+import {TickBitmap} from "v4-core/src/libraries/TickBitmap.sol";
 
 /// @notice Price quotes shared by BossHook and the permissionless factory.
 library BossPricing {
@@ -117,10 +118,13 @@ library BossPricing {
     {
         int24 lowerTick = TickMath.getTickAtSqrtPrice(lower);
         int24 upperTick = TickMath.getTickAtSqrtPrice(upper);
+        int24 lowerCompressed = TickBitmap.compress(lowerTick, TICK_SPACING);
+        int24 upperCompressed = TickBitmap.compress(upperTick, TICK_SPACING);
+        int24 wordPos = token0In ? upperCompressed >> 8 : (lowerCompressed + 1) >> 8;
         int24 splitTick = token0In
-            ? ((upperTick / TICK_SPACING - 1) >> 8) * 256 * TICK_SPACING
-            : (((lowerTick / TICK_SPACING + 1) >> 8) * 256 + 255) * TICK_SPACING;
-        if (splitTick > lowerTick && splitTick < upperTick) {
+            ? wordPos * 256 * TICK_SPACING
+            : (wordPos * 256 + 255) * TICK_SPACING;
+        if (splitTick > lowerTick && splitTick <= upperTick) {
             uint160 splitPrice = TickMath.getSqrtPriceAtTick(splitTick);
             if (splitPrice > lower && splitPrice < upper) {
                 return _stepInput(lower, splitPrice, liquidity, token0In)

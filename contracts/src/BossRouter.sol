@@ -422,11 +422,6 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
                 || bossHook.status() != BossHook.RoundStatus.Active
         ) revert InvalidCallback();
 
-        if (bossHook.volumeTargetMockUSD() != 0) {
-            uint256 remaining = bossHook.remainingStageVolume();
-            if (request.maxMockUSD > remaining) request.maxMockUSD = remaining;
-            if (request.maxMockUSD == 0) revert InvalidCallback();
-        }
         AttackResult memory result = request.maxMockUSD == 0 ? _executeDirect(request) : _executeTwoHop(request);
         bool stageCleared = bossHook.status() == BossHook.RoundStatus.StageCleared
             || bossHook.status() == BossHook.RoundStatus.Defeated;

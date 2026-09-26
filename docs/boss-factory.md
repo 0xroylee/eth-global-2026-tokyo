@@ -21,6 +21,7 @@ The factory has no administrator, token allowlist, upgrade function, or launch f
 | `prizeBps` | Prize percentage in basis points. For example, 1,000 means 10%. |
 | `volumeTargetMockUSD` | Required eligible purchase volume, in MockUSD base units. |
 | `deadline` | Immutable future Unix timestamp. |
+| `maxAttackTokenPerMockUSDX128` | Zero for a discovery quote. Before mining or launching, freeze the returned `maxRoyPerMockUSDX128` here as the accepted upper attack-token rate. |
 
 For total allocation `N` and prize rate `r` basis points, the quote reserves `P = floor(N × r / 10,000)` MEME for rewards. The remaining battle capital is `B = N - P`.
 
@@ -36,19 +37,21 @@ The calculation uses raw token units, so ERC-20 decimals are included in the pri
 
 The router checks each first-hop output against the allowed rate. The hook also caps cumulative MEME output at `floor(S × eligibleMockUSD / volumeTargetMockUSD)`. These limits keep accepted purchases within the launch budget as the supply pool price moves. The quote requires an initialized supply pool with active liquidity. It rejects unsupported ticks, unrepresentable funding, and supply output at zero or outside the configured rate. The 10% rate headroom is a per-attack guard. Changes beyond that bound pause attacks until the pool price returns inside the bound.
 
+The discovery quote derives the rate from the live pool. A positive `maxAttackTokenPerMockUSDX128` freezes that accepted rate for the launch configuration. Subsequent quotes derive the tick, funding, and Hook constructor arguments from the frozen rate and separately check that the current supply spot remains within it. `hookInitCode` and `launchBoss` reject a zero rate. A supply trade within the accepted bound does not invalidate the mined Hook address.
+
 `BossFactory` rejects prize rates below one basis point or at or above 100%. The prize must round to a positive MEME amount. Volume targets must be at least six MockUSD base units so every stage has a positive threshold.
 
 ## Deterministic deployment
 
 `predictAddresses(maker, userSalt, token, routerCode)` returns the router and collectibles addresses. `hookInitCode(maker, userSalt, config, routerCode, hookCode)` returns the hook creation code with its constructor arguments. These reads do not reserve an ID or move funds.
 
-The existing `HookMiner.find` can mine a salt locally using that init code, `address(factory)`, and permission flags `0x2ac0`. The factory is the CREATE2 deployer. The code parameters are the creation bytecode from the exact build pinned by `routerCodeHash` and `hookCodeHash`, excluding constructor arguments. Changing the creator, user salt, selected token, allocation, prize rate, volume target, or deadline invalidates the previous calculation. Mining is an off-chain operation. See the [official Uniswap hook deployment guide](https://developers.uniswap.org/docs/protocols/v4/guides/hooks/hook-deployment).
+The existing `HookMiner.find` can mine a salt locally using that init code, `address(factory)`, and permission flags `0x2ac0`. The factory is the CREATE2 deployer. The code parameters are the creation bytecode from the exact build pinned by `routerCodeHash` and `hookCodeHash`, excluding constructor arguments. Changing the creator, user salt, selected token, allocation, prize rate, volume target, accepted attack-token rate, or deadline invalidates the previous calculation. Mining is an off-chain operation. See the [official Uniswap hook deployment guide](https://developers.uniswap.org/docs/protocols/v4/guides/hooks/hook-deployment).
 
 The caller determines the creator identity. Copying another creator's call uses a different boss ID, router, and hook constructor arguments. A successful boss ID cannot be reused.
 
 ## Purchases, volume, and rewards
 
-Factory bosses require `attackWithMockUSD`. A player approves MockUSD to the per-boss router. The router caps the first-hop input at the remaining MockUSD target for the active stage, buys attack tokens in the supply pool, and spends them in the boss pool. It refunds unused MockUSD and unused attack tokens. Factory bosses reject direct attacks with held attack tokens because those attacks have no MockUSD purchase amount to record.
+Factory bosses require `attackWithMockUSD`. A player approves MockUSD to the per-boss router. The caller's MockUSD cap bounds the first hop, and the current stage's terminal pool price bounds the second hop. The router buys attack tokens in the supply pool, spends them in the boss pool, and refunds unused MockUSD and unused attack tokens. It does not cap the first hop to an exact remaining-volume tail, which could be too small to produce any tokens after fees and rounding. Factory bosses reject direct attacks with held attack tokens because those attacks have no MockUSD purchase amount to record.
 
 The hook credits one MockUSD amount per completed two-hop purchase:
 
@@ -58,7 +61,7 @@ eligibleMockUSD = floor(MockUSD spent × attack token spent / attack token bough
 
 Returned attack tokens earn no volume. The first-hop purchase and second-hop purchase count once as one attack. Transfers, outside-market swaps, refills, and LP actions earn no volume.
 
-The volume target splits into three additional stage thresholds in the ratio 1:2:3. For target `V`, they are `floor(V / 6)`, `floor(V / 3)`, and `V - floor(V / 6) - floor(V / 3)`. The sample target `6,000 MockUSD` therefore gates at cumulative totals `1,000`, `3,000`, and `6,000`. The last threshold defeats the boss.
+The volume target splits into three additional stage minimums in the ratio 1:2:3. For target `V`, they are `floor(V / 6)`, `floor(V / 3)`, and `V - floor(V / 6) - floor(V / 3)`. A `6,000 MockUSD` target requires at least `1,000`, `2,000`, and `3,000` additional eligible MockUSD in the respective stages. A purchase that reaches or exceeds its stage minimum clears that stage. Actual recorded volume can exceed a minimum within the caller's accepted cap; it is never fabricated or truncated to the target. Extra volume remains attributed to the starting stage and does not advance the next stage. The third stage's minimum defeats the boss.
 
 At each threshold, the router settles the attack, resets the boss-pool price with a controller refill, and adds the next stage's incremental liquidity within the same v4 unlock. Unsold MEME may remain in the positions. It does not block the stage. If the refill or LP addition fails, the purchase, volume credit, and stage change all revert.
 
@@ -84,13 +87,21 @@ Damage is the purchased meme-token amount. Actual traded input and output appear
 
 The factory deployment script is `contracts/script/DeployBossFactory.s.sol:DeployBossFactory`. It reads `BOSS_POOL_MANAGER`, `BOSS_MOCK_USD_TOKEN`, and `BOSS_ATTACK_TOKEN`, and pins hashes from the current compiled artifacts. It supports local chain 31337 and Base Sepolia 84532. Base Sepolia uses `TESTNET_DEPLOYER_PRIVATE_KEY`, as the standalone deployment does. It creates no tokens, market liquidity, or boss encounters.
 
-The creator form is available at `/launch` and reads the Base Sepolia Factory address from `apps/web/public/deployments/base-sepolia.json`. The chain SDK reads the submitted token's metadata and wallet balance, quotes the launch, checks the compiled Router and Hook bytecode against the factory, mines a valid hook salt, requests the required MEME approval, and submits the launch. Token choices are entered by contract address; ERC-20 does not provide wallet-wide token discovery. The Factory was deployed at block `47330324`; see the [deployment evidence](evidence/base-sepolia-boss-factory-deployment.json) and [transaction receipt](https://sepolia.basescan.org/tx/0xf9f15e3858636914ace7b23da41eefe1c9cf2476b1a717cc26e2f9530b4535d5). The player attack/claim UI for Factory rounds is not implemented.
+The creator form is available at `/launch`. The form loads the Factory from the verified Base Sepolia manifest unless `NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_ADDRESS` overrides it. The chain SDK reads the submitted token's metadata and wallet balance, quotes the launch, freezes the accepted rate, checks the compiled Router and Hook bytecode against the factory, mines a valid hook salt, requests the required MEME approval, and submits the launch. Submitted operations are persisted before receipt waiting. Read-only recovery validates the original call and events, and a root provider keeps the write lock across navigation and both approval steps. Token choices are entered by contract address; ERC-20 does not provide wallet-wide token discovery. The player attack/claim UI for Factory rounds is not implemented.
+
+The original Base Sepolia Factory was deployed at block `47330324`; its address and pinned code hashes are preserved in the [deployment record](evidence/base-sepolia-boss-factory-deployment.json). That immutable instance predates the review fixes in this revision. A new Factory deployment using the corrected Router and Hook bytecode is required. The SDK checks build compatibility before quotes, approvals, and launches and rejects the older build. Read-only receipt recovery remains independent of the current bundled code hashes.
 
 ## Local verification
 
 Verified on 26 September 2026 against the merge-updated working tree for PR #38. The latest measured runtime sizes are:
 
-- `cd contracts && forge build --sizes` passes runtime and initcode limits. Factory 17,965 bytes, hook 21,453 bytes, and router 24,534 bytes. The router is 42 bytes under EIP-170.
-- `cd contracts && forge test --match-contract BossPoolCoreTest -vv` passes all nine shared scenarios. Coverage includes the standalone round, factory rounds with either token ordering, three volume-gated stages, public quote simulation, MEME prizes, creators reusing a token and launch salt, six-decimal MEME, failed-transition rollback, funding errors, expiry, and LP recovery with outstanding claims.
+- `cd contracts && forge build --sizes` passes runtime and initcode limits. Factory 20,355 bytes, hook 21,404 bytes, and router 24,307 bytes. The router is 269 bytes under EIP-170.
+- `cd contracts && forge test --match-contract BossPoolCoreTest -vv` passes all twelve shared scenarios. Coverage includes the standalone round, factory rounds with either token ordering, three volume-gated stages, public quote simulation, MEME prizes, creators reusing a token and launch salt, six-decimal MEME, failed-transition rollback, funding errors, expiry, and LP recovery with outstanding claims. Review regressions cover a one-base-unit volume tail, stable mined addresses through a supply-price move, and partial-price bitmap fee rounding.
 
-These local runs use the real pinned v4 PoolManager. The Base Sepolia Factory deployment is recorded above; a Factory launch and player E2E have not yet been run there.
+These runs use the real pinned v4 PoolManager. They verify the corrected build locally; the original Base Sepolia Factory deployment does not include these fixes.
+
+The contract and local transaction results were verified through code commit `93ae695a24e57fca5b3c083bf80c82d9eae878d9`. After integrating main and adding the deployed-build guard, seventeen SDK/UI regression checks, typecheck, and production web build pass. Generated ABI/bytecode consistency also passes. A local Factory SDK smoke covered exact approval including a zero reset, frozen-rate launch, captured transaction identities, and read-only recovery without another transaction.
+
+The full standalone SDK journey caught renamed `RewardClaimed` arguments that broke the older public decoder fields. The SDK and activity reader now normalize those names. The already-mined claim was recovered without another transaction or changes to redemption totals; a fresh standalone journey then completed all fourteen transactions. [Review verification evidence](evidence/factory-review-verification.json) records the local results and contract sizes.
+
+Desktop browser checks covered the missing-Factory state, invalid token input, and reachable launch actions at 1280×720. A final desktop check loaded the published Base Sepolia address and showed the incompatible-build message with launch controls disabled; a direct SDK read confirmed the pinned hash mismatch. No mobile layout checks or public-chain transactions were performed by this review. Injected-wallet popup confirmation remains a manual check.

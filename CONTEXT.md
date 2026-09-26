@@ -1,6 +1,6 @@
 # Boss Pool domain language
 
-Boss Pool is a sponsor-funded fight where players spend Attack Token to buy BossHP. Damage counts cumulative authorized purchases, while eligible BossHP represents a share of the prize. Attacks do not burn tokens.
+Boss Pool is a sponsor-funded fight where players spend Attack Token to buy a boss token. The standalone BossHP demo has transferable reward rights; Factory encounters record prize credit separately for each attacker. Attacks do not burn tokens.
 
 Attack Token is the name used in product copy and documentation. Existing compatibility identifiers such as `RoyToken`, `roy`, and `royBought` refer to this same token. ABI names, manifest keys, and historical deployment records retain those identifiers. New deployments use `Attack Token` for both the ERC-20 name and symbol; existing deployments retain their original metadata.
 
@@ -12,6 +12,8 @@ The actual ERC-20 sold by a Factory boss and delivered to players. Attacks creat
 
 **Reward credit**:
 An attacker's unclaimed MEME purchase amount for one Factory boss. After victory, it can be consumed for a proportional share of that boss's MEME prize while the player keeps purchased tokens.
+
+The language below describes the standalone BossHP demo unless it specifies a Factory boss. See [Boss Factory](docs/boss-factory.md) for that mode's interface and accounting.
 
 ## Language
 
