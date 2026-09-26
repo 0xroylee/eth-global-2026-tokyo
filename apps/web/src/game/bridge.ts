@@ -21,6 +21,10 @@ export type GameEvents = {
   "region:near": { exitId: "east-route" | null };
   /** Player inspected the closed east route. */
   "region:inspect": { exitId: "east-route" };
+  /** Player walked into / out of the sage's talk zone. */
+  "npc:near": { npcId: "sage" | null };
+  /** Player pressed interact while inside the sage's talk zone. */
+  "npc:talk": { npcId: "sage" };
 };
 
 export type GuideSceneStep = "off" | "move" | "find" | "inspect";

@@ -1,0 +1,185 @@
+{
+  "evidenceType": "HubInteractionFixVerification",
+  "schemaVersion": 1,
+  "date": "2026-09-27",
+  "branch": "feat/boss-roster-hub",
+  "sourceCommit": "e0ceb30a20bd784526f98a0826f5beaa1f47e343",
+  "sourceParentCommit": "a477bdf184ae7c13e4e457ee4c17c5cebe52f8c7",
+  "sourceDirty": false,
+  "target": "http://localhost:3000",
+  "capturedBy": "trinity (REPAIR R2, paired author)",
+  "status": "passed",
+  "answersFindings": ["VERIFY V1 F3 (Low)", "VERIFY V1 F4 (Medium)"],
+  "environment": {
+    "browser": "VS Code integrated browser (Chromium), viewport 1280x800",
+    "pageVisibilityOverride": true,
+    "probe": "window.__bpHub() - dev only, stripped from the production bundle by the NODE_ENV guard",
+    "pageErrors": 0
+  },
+  "fix": {
+    "file": "apps/web/src/components/SageDialog.tsx",
+    "keydownGuardEarlyReturn": {
+      "keys": ["Enter", " "],
+      "targets": ["button", "a"]
+    },
+    "keydownGuardTextEntry": {
+      "keys": ["e", "E", "Enter", " "],
+      "targets": ["input", "textarea", "select", "[contenteditable]"]
+    },
+    "note": "e/E is not a button activation key, so it now reaches advance() even when the footer button holds focus"
+  },
+  "checks": [
+    {
+      "id": "E2-a",
+      "claim": "clicking a HUD button no longer freezes walking",
+      "measuredIn": "EXECUTE E2 (commits 91669bc..d8458bc)",
+      "observed": {
+        "clicked": "SOUND",
+        "playerBefore": [328, 408],
+        "playerAfter": [308, 348],
+        "canvasFocusWorkaroundNeeded": false
+      },
+      "status": "passed"
+    },
+    {
+      "id": "E2-b",
+      "claim": "after a mouse click on a HUD button, the interact key opens the panel and does not re-fire the button",
+      "measuredIn": "EXECUTE E2 (commits 91669bc..d8458bc)",
+      "observed": {
+        "panelOpened": "#boss-entry-title",
+        "soundPressed": false,
+        "positiveControl": "SOUND focused by keyboard + Enter -> aria-pressed=true and no panel opens"
+      },
+      "status": "passed"
+    },
+    {
+      "id": "E2-c",
+      "claim": "the three hub prompts are real buttons and are clickable",
+      "measuredIn": "EXECUTE E2 (commits 91669bc..d8458bc)",
+      "observed": {
+        "promptElements": "button",
+        "clickedPrompt": "E · ENTER SOLANA (BRIDGED)",
+        "result": "SOL roster card opened",
+        "hiddenPromptsDisabled": true
+      },
+      "status": "passed"
+    },
+    {
+      "id": "E2-d",
+      "claim": "the roaming boss has its own interaction radius",
+      "measuredIn": "EXECUTE E2 (commits 91669bc..d8458bc)",
+      "observed": {
+        "player": [201.3, 217.3],
+        "roamerDistance": 14.7,
+        "interactRadius": 22,
+        "nearGate": "sol",
+        "insideStaticSolZone": false,
+        "solStaticZone": { "x": 168, "y": 64, "w": 64, "h": 40 },
+        "card": "SOL RANK #3"
+      },
+      "status": "passed"
+    },
+    {
+      "id": "E2-e",
+      "claim": "the close affordance is a real button and Escape still works",
+      "measuredIn": "EXECUTE E2 (commits 91669bc..d8458bc)",
+      "observed": {
+        "click": "closes",
+        "escape": "closes",
+        "focusAfterClose": "CANVAS"
+      },
+      "status": "passed"
+    },
+    {
+      "id": "E2-f",
+      "claim": "no regression in the existing checks or the sage script",
+      "measuredIn": "EXECUTE E2 (commits 91669bc..d8458bc)",
+      "observed": {
+        "typecheck": 0,
+        "mapCheck": "hub map check passed",
+        "webBuild": 0,
+        "bunTest": "34 pass / 0 fail",
+        "sageScript": "first visit 2 lines, repeat visit 1 line"
+      },
+      "status": "passed"
+    },
+    {
+      "id": "E2-g",
+      "claim": "root cause: the welcome guide returned focus to the SOUND button, freezing the map after START GAME / SKIP",
+      "measuredIn": "EXECUTE E2 (commits 91669bc..d8458bc)",
+      "observed": {
+        "before": "welcome dialog unmount cleanup focused the SOUND button",
+        "after": "unmount cleanup focuses the hub canvas"
+      },
+      "status": "passed"
+    },
+    {
+      "id": "F3-before",
+      "claim": "before the fix: with the footer button focused, pressing E did nothing",
+      "measuredIn": "VERIFY V1 (smith, 96/100, independent)",
+      "observed": {
+        "reported": "mouse-click the footer NEXT / FINISH LINE button, then press E -> no reaction"
+      },
+      "status": "defect"
+    },
+    {
+      "id": "F3-a",
+      "claim": "after the fix: E advances the line while the footer button holds focus",
+      "measuredIn": "REPAIR R2 (commit e0ceb30)",
+      "observed": {
+        "activeElement": "BUTTON(E · NEXT)",
+        "key": "e",
+        "before": { "pastLines": 0, "label": "E · NEXT", "typedChars": 134 },
+        "after": { "pastLines": 1, "label": "E · FINISH LINE", "typedChars": 6 }
+      },
+      "status": "passed"
+    },
+    {
+      "id": "F3-b",
+      "claim": "after the fix: Enter while the footer button holds focus advances exactly once",
+      "measuredIn": "REPAIR R2 (commit e0ceb30)",
+      "observed": {
+        "activeElement": "BUTTON(E · FINISH LINE)",
+        "key": "Enter",
+        "before": { "index": 1, "label": "E · FINISH LINE", "typedChars": 6 },
+        "after": { "label": "E · CLOSE", "typedChars": 90, "liveChars": 90, "pastLines": 1 },
+        "dialogStillOpen": true,
+        "discriminator": "a second activation would have closed the dialog, because line 2 is the last line and was complete"
+      },
+      "status": "passed"
+    },
+    {
+      "id": "F3-c",
+      "claim": "default state (no button focused) is unchanged for E, Enter and Escape",
+      "measuredIn": "REPAIR R2 (commit e0ceb30)",
+      "observed": {
+        "enterOnTypingLine": { "typedChars": "6 -> 134", "liveChars": "0 -> 134", "label": "E · FINISH LINE -> E · NEXT" },
+        "enterOnCompleteNonLastLine": { "pastLines": "0 -> 1", "label": "E · NEXT -> E · FINISH LINE", "typedChars": 6 },
+        "eOnLastLine": { "typedChars": "6 -> 90", "liveChars": "0 -> 90", "label": "E · FINISH LINE -> E · CLOSE" }
+      },
+      "status": "passed"
+    },
+    {
+      "id": "F3-d",
+      "claim": "Escape closes one layer and returns focus to the canvas",
+      "measuredIn": "REPAIR R2 (commit e0ceb30)",
+      "observed": {
+        "dialogOpen": false,
+        "activeElement": "CANVAS",
+        "canvasTabIndex": -1,
+        "secondEscape": "no change"
+      },
+      "status": "passed"
+    }
+  ],
+  "checksRun": {
+    "typecheck": { "exitCode": 0 },
+    "mapCheck": { "exitCode": 0, "output": "hub map check passed" },
+    "webBuild": { "exitCode": 0 },
+    "bunTest": { "exitCode": 0, "summary": "34 pass / 0 fail / 128 expect() calls across 6 files" }
+  },
+  "limitations": [
+    "There is no DOM test harness in this repository, so this file is regression evidence rather than an automated gate.",
+    "The browser measurements are end-state assertions: the integrated browser throttles the requestAnimationFrame loop, so wall-clock timing is not asserted."
+  ]
+}

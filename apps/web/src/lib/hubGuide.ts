@@ -20,7 +20,7 @@ export type GuideAction =
   | { type: "dismiss" };
 
 function isUnlocked(bossId: BossId | null): bossId is BossId {
-  return bossId !== null && !findBoss(bossId).locked;
+  return bossId !== null && findBoss(bossId).status !== "locked";
 }
 
 /** Pure guide progression. Callers own storage and the Phaser scene. */

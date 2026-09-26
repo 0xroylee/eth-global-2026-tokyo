@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { BOSSES } from "../game/bosses";
 import { transitionGuide, type GuideState } from "./hubGuide";
 
 const welcome: GuideState = { step: "welcome", nearBoss: null };
@@ -26,13 +27,21 @@ describe("transitionGuide", () => {
     expect(state.nearBoss).toBe("macro-whale");
   });
 
-  test("ignores the locked gate", () => {
-    let state = transitionGuide({ step: "find", nearBoss: null }, { type: "near", bossId: "locked" });
-    expect(state).toEqual({ step: "find", nearBoss: "locked" });
-    state = transitionGuide({ step: "inspect", nearBoss: "cat" }, { type: "near", bossId: "locked" });
-    expect(state.step).toBe("find");
-    state = transitionGuide(state, { type: "opened", bossId: "locked" });
-    expect(state.step).toBe("find");
+  // Phase 1 ships every gate unlocked, so `transitionGuide`'s "locked" branch is
+  // dormant: no boss carries that status, which means `isUnlocked` can no longer be
+  // driven by a real entry. These two cases pin the contract that does matter
+  // instead. If a locked gate ever returns, add a dedicated case for the branch.
+  test("ships no locked gate in phase one", () => {
+    expect(BOSSES.filter((boss) => boss.status === "locked")).toEqual([]);
+  });
+
+  test("walks every gate from near to opened", () => {
+    for (const boss of BOSSES) {
+      const inspecting = transitionGuide({ step: "find", nearBoss: null }, { type: "near", bossId: boss.id });
+      expect(inspecting).toEqual({ step: "inspect", nearBoss: boss.id });
+      const opened = transitionGuide(inspecting, { type: "opened", bossId: boss.id });
+      expect(opened).toEqual({ step: "done", nearBoss: boss.id });
+    }
   });
 
   test("returns to find when the player leaves an unlocked gate", () => {

@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { getDefaultBossHook, type Address, type DeploymentManifest } from "@boss-pool/chain";
 import { confirmedBattleAttack } from "@/lib/battle";
-import { findBoss, type BossId } from "@/game/bosses";
+import { BOSSES, findBoss, type BossId } from "@/game/bosses";
 import { GameBridge, hubStageProgress } from "@/game/bridge";
+import { SAGE_DEFEATED_STORAGE_KEY, SAGE_TALKED_STORAGE_KEY, sageLines, type SageState } from "@/lib/sageLines";
 import { useHubGuide } from "@/lib/useHubGuide";
 import type { useBossPool, NetworkKey } from "@/lib/useBossPool";
 import { useArena } from "./BossPoolProvider";
 import { BossEntryPanel } from "./BossEntryPanel";
+import { BossRosterCard } from "./BossRosterCard";
 import { FullscreenControl } from "./FullscreenControl";
 import { GameCanvas, type CanvasPhase } from "./GameCanvas";
 import { HubGuide, ReplayGuide } from "./HubGuide";
@@ -17,6 +19,7 @@ import { HubHelp } from "./HubHelp";
 import { HubRouteNotice } from "./HubRouteNotice";
 import { HubSoundControl } from "./HubSoundControl";
 import { RoundStatePanel } from "./RoundStatePanel";
+import { SageDialog } from "./SageDialog";
 
 export function GameShell() {
   const bridge = useMemo(() => new GameBridge(), []);
@@ -25,6 +28,9 @@ export function GameShell() {
   const { deployment, writeState } = arena;
   const [nearBoss, setNearBoss] = useState<BossId | null>(null);
   const [openBoss, setOpenBoss] = useState<BossId | null>(null);
+  const [nearSage, setNearSage] = useState(false);
+  const [sageOpen, setSageOpen] = useState(false);
+  const [sageState, setSageState] = useState<SageState>({ firstVisit: true, defeated: false });
   const [showChain, setShowChain] = useState(false);
   const [nearRoute, setNearRoute] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
@@ -33,7 +39,24 @@ export function GameShell() {
   const guide = useHubGuide(bridge, nearBoss);
   const welcomeOpen = guide.hydrated && guide.state.step === "welcome" && canvasPhase !== "error";
   const gameDialogOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen;
-  const overlayOpen = gameDialogOpen || Boolean(arena.wallet.busy);
+  const overlayOpen = gameDialogOpen || sageOpen || Boolean(arena.wallet.busy);
+  const sageScript = useMemo(() => sageLines(sageState), [sageState]);
+
+  // Read progress when the conversation starts, so a repeat visit sees the latest lines.
+  const openSage = useCallback(() => {
+    setSageState({ firstVisit: !hasTalkedToSage(), defeated: isCatDefeated() });
+    setSageOpen(true);
+  }, []);
+  const closeSage = useCallback(() => {
+    markSageTalked();
+    setSageOpen(false);
+  }, []);
+
+  // The bridge listeners and the on-screen prompts share these. A click and an interact
+  // key must run the same side effects: panel routing plus the guide's panelOpened effect
+  // that rides on `openBoss`.
+  const enterGate = useCallback((bossId: BossId) => setOpenBoss(bossId), []);
+  const inspectRoute = useCallback(() => setRouteOpen(true), []);
 
   useEffect(() => {
     arena.selectDefaultEncounter(arena.network);
@@ -41,16 +64,23 @@ export function GameShell() {
 
   useEffect(() => {
     const offNear = bridge.on("gate:near", ({ bossId }) => setNearBoss(bossId));
-    const offEnter = bridge.on("gate:enter", ({ bossId }) => setOpenBoss(bossId));
+    const offEnter = bridge.on("gate:enter", ({ bossId }) => enterGate(bossId));
     const offRouteNear = bridge.on("region:near", ({ exitId }) => setNearRoute(exitId !== null));
-    const offRouteInspect = bridge.on("region:inspect", () => setRouteOpen(true));
+    const offRouteInspect = bridge.on("region:inspect", () => inspectRoute());
+    const offSageNear = bridge.on("npc:near", ({ npcId }) => setNearSage(npcId === "sage"));
+    const offSageTalk = bridge.on("npc:talk", ({ npcId }) => {
+      // Read the payload instead of assuming the sage: a second NPC lands here later.
+      if (npcId === "sage") openSage();
+    });
     return () => {
       offNear();
       offEnter();
       offRouteNear();
       offRouteInspect();
+      offSageNear();
+      offSageTalk();
     };
-  }, [bridge]);
+  }, [bridge, enterGate, inspectRoute, openSage]);
 
   useEffect(() => {
     guide.syncModal(overlayOpen);
@@ -92,6 +122,8 @@ export function GameShell() {
   }, [arena.network, arena.selectDefaultEncounter, openBoss]);
 
   useEffect(() => {
+    // Real chain state is the only thing allowed to move the sage's script on.
+    if (deployment.kind === "live" && deployment.round.status === CAT_DEFEATED_STATUS) markCatDefeated();
     if (isHubEncounter(deployment)) {
       bridge.send("round:state", {
         status: deployment.round.status,
@@ -161,7 +193,8 @@ export function GameShell() {
     (hintStep === "move" || hintStep === "find" || hintStep === "inspect" || hintStep === "done");
   const guideInspect = showHint && hintStep === "inspect";
   const showBossPrompt = nearBoss !== null && !overlayOpen && !guideInspect;
-  const showRoutePrompt = nearRoute && !showBossPrompt && !overlayOpen && !guideInspect;
+  const showSagePrompt = nearSage && !overlayOpen && !showBossPrompt && !guideInspect;
+  const showRoutePrompt = nearRoute && !showSagePrompt && !showBossPrompt && !overlayOpen && !guideInspect;
   const live = isHubEncounter(deployment);
   const chainLabel =
     deployment.kind === "loading" ? "CHECKING" : live ? "LIVE" : deployment.kind === "error" ? "RPC ERROR" : "NOT DEPLOYED";
@@ -177,15 +210,24 @@ export function GameShell() {
               <h1 className="text-sm font-semibold tracking-[0.14em] text-fog">GARDEN HUB</h1>
               <p className="font-mono text-[10px] tracking-[0.16em] text-dim">REGION 01</p>
             </div>
-            <span className="mt-1 inline-flex rounded-md border border-[#f5b04a]/40 bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-[#f5b04a]">
-              HUB · FIXTURE MAP
-            </span>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <span className="inline-flex rounded-md border border-[#f5b04a]/40 bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-[#f5b04a]">
+                HUB · FIXTURE MAP
+              </span>
+              <span className="inline-flex rounded-md border border-white/12 bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-dim">
+                {BOSSES.length} CHALLENGERS
+              </span>
+            </div>
           </div>
           <div className="pointer-events-auto flex w-full flex-wrap items-start gap-2 sm:w-auto sm:justify-end">
             <button
               type="button"
               disabled={overlayOpen || canvasPhase === "error"}
-              onClick={() => { arena.selectDefaultEncounter(arena.network); setOpenBoss("cat"); }}
+              onClick={(event) => {
+                blurOnMouseClick(event);
+                arena.selectDefaultEncounter(arena.network);
+                enterGate("cat");
+              }}
               aria-label="Open Pool Unis boss actions"
               className="rounded-lg border border-[#f5b04a]/35 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-[#ffd28a] disabled:opacity-40"
             >
@@ -229,7 +271,10 @@ export function GameShell() {
             ) : (
               <button
                 type="button"
-                onClick={connectWallet}
+                onClick={(event) => {
+                  blurOnMouseClick(event);
+                  connectWallet();
+                }}
                 disabled={overlayOpen || arena.wallet.busy || arena.wallet.status === "checking" || arena.wallet.status === "missing"}
                 className="rounded-lg border border-white/10 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-fog disabled:opacity-40"
               >
@@ -239,7 +284,10 @@ export function GameShell() {
             {arena.networkMismatch && (
               <button
                 type="button"
-                onClick={switchWallet}
+                onClick={(event) => {
+                  blurOnMouseClick(event);
+                  switchWallet();
+                }}
                 disabled={overlayOpen || arena.wallet.busy}
                 className="rounded-lg border border-danger/40 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-danger disabled:opacity-40"
               >
@@ -248,7 +296,10 @@ export function GameShell() {
             )}
             <button
               type="button"
-              onClick={() => setShowChain((open) => !open)}
+              onClick={(event) => {
+                blurOnMouseClick(event);
+                setShowChain((open) => !open);
+              }}
               aria-pressed={showChain}
               className={`rounded-lg border bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] ${live ? "border-live/25 text-live-soft" : "border-white/12 text-[#9da8c3]"}`}
             >
@@ -303,13 +354,17 @@ export function GameShell() {
         <div className="mt-auto flex flex-col gap-2">
           <div className="flex flex-wrap items-end justify-center gap-2">
             <span className="rounded-md bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.14em] text-dim">WASD / ARROWS · MOVE</span>
-            <GatePrompt bossId={nearBoss} hidden={!showBossPrompt} />
-            <RoutePrompt hidden={!showRoutePrompt} />
+            <GatePrompt bossId={nearBoss} hidden={!showBossPrompt} onEnter={enterGate} />
+            <SagePrompt hidden={!showSagePrompt} onTalk={openSage} />
+            <RoutePrompt hidden={!showRoutePrompt} onInspect={inspectRoute} />
           </div>
           <div className="pointer-events-auto flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setHelpOpen(true)}
+              onClick={(event) => {
+                blurOnMouseClick(event);
+                setHelpOpen(true);
+              }}
               disabled={overlayOpen || canvasPhase === "error"}
               className="rounded-md border border-white/12 px-2 py-1 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 hover:text-fog disabled:opacity-40 motion-reduce:transition-none"
             >
@@ -321,7 +376,7 @@ export function GameShell() {
         </div>
       </div>
 
-      {openBoss && (
+      {openBoss && isBattleGate(openBoss) && (
         <BossEntryPanel
           boss={findBoss(openBoss)}
           arena={arena}
@@ -331,8 +386,10 @@ export function GameShell() {
           onSwitch={switchWallet}
         />
       )}
+      {openBoss && !isBattleGate(openBoss) && <BossRosterCard boss={findBoss(openBoss)} onClose={closeBoss} />}
       {routeOpen && <HubRouteNotice onClose={closeRoute} />}
       {helpOpen && <HubHelp onClose={closeHelp} onReplay={replayFromHelp} />}
+      {sageOpen && <SageDialog lines={sageScript} onClose={closeSage} />}
       {showChain && (
         <div className="absolute inset-0 z-20 grid place-items-center overflow-y-auto bg-ink/70 p-4 backdrop-blur-[2px]">
           <div className="max-h-[min(32rem,calc(100dvh-2rem))] w-full max-w-3xl overflow-y-auto">
@@ -342,6 +399,15 @@ export function GameShell() {
       )}
     </main>
   );
+}
+
+/**
+ * A mouse click leaves the button focused, and a focused button swallows the next Enter:
+ * the interact key would re-fire the HUD control instead of reaching the map. Blur only for
+ * real pointer clicks — keyboard activation keeps the focus ring the user tabbed to.
+ */
+function blurOnMouseClick(event: ReactMouseEvent<HTMLButtonElement>) {
+  if (event.detail > 0) event.currentTarget.blur();
 }
 
 function focusHubCanvas() {
@@ -372,36 +438,126 @@ function GlobalWriteNotice({ state }: { state: ReturnType<typeof useBossPool>["w
   return <p className="text-xs text-muted" role="status">{message}{state.status !== "prompting" && state.hash ? ` · ${state.hash}` : ""}</p>;
 }
 
-function GatePrompt({ bossId, hidden }: { bossId: BossId | null; hidden: boolean }) {
+function GatePrompt({
+  bossId,
+  hidden,
+  onEnter,
+}: {
+  bossId: BossId | null;
+  hidden: boolean;
+  onEnter: (bossId: BossId) => void;
+}) {
   const boss = bossId ? findBoss(bossId) : null;
   const visible = boss !== null && !hidden;
   return (
-    <span
+    <button
+      type="button"
+      // Disabled keeps the faded-out prompt out of the tab order; opacity alone stays focusable.
+      disabled={!visible}
       aria-live="polite"
       aria-hidden={!visible}
-      className={`rounded-md border border-white/12 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
-        visible ? "translate-y-0 opacity-100" : "pointer-events-none absolute translate-y-1 opacity-0"
+      onClick={(event) => {
+        blurOnMouseClick(event);
+        if (boss) onEnter(boss.id);
+      }}
+      className={`cursor-pointer rounded-md border border-white/12 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
+        visible ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none absolute translate-y-1 opacity-0"
       }`}
     >
       {visible && boss ? (boss.locked ? "E · INSPECT LOCKED GATE" : `E · ENTER ${boss.name.toUpperCase()}`) : ""}
-    </span>
+    </button>
   );
 }
 
-function RoutePrompt({ hidden }: { hidden: boolean }) {
+function RoutePrompt({ hidden, onInspect }: { hidden: boolean; onInspect: () => void }) {
   return (
-    <span
+    <button
+      type="button"
+      disabled={hidden}
       aria-live="polite"
       aria-hidden={hidden}
-      className={`rounded-md border border-[#c48a45]/50 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-[#f3e2c4] transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
-        hidden ? "pointer-events-none absolute translate-y-1 opacity-0" : "translate-y-0 opacity-100"
+      onClick={(event) => {
+        blurOnMouseClick(event);
+        onInspect();
+      }}
+      className={`cursor-pointer rounded-md border border-[#c48a45]/50 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-[#f3e2c4] transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
+        hidden ? "pointer-events-none absolute translate-y-1 opacity-0" : "pointer-events-auto translate-y-0 opacity-100"
       }`}
     >
       {hidden ? "" : "E · INSPECT ROUTE"}
-    </span>
+    </button>
   );
 }
 
+/** The sage is a conversation, not a gate: the prompt says so and never says "enter". */
+function SagePrompt({ hidden, onTalk }: { hidden: boolean; onTalk: () => void }) {
+  return (
+    <button
+      type="button"
+      disabled={hidden}
+      aria-live="polite"
+      aria-hidden={hidden}
+      onClick={(event) => {
+        blurOnMouseClick(event);
+        onTalk();
+      }}
+      className={`cursor-pointer rounded-md border border-white/12 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
+        hidden ? "pointer-events-none absolute translate-y-1 opacity-0" : "pointer-events-auto translate-y-0 opacity-100"
+      }`}
+    >
+      {hidden ? "" : "E · TALK TO THE SAGE"}
+    </button>
+  );
+}
+
+/** Only the gate with contract semantics owns the battle-entry panel; every other gate shows the roster card. */
+function isBattleGate(bossId: BossId): boolean {
+  return findBoss(bossId).source === "chain";
+}
+
+function hasTalkedToSage(): boolean {
+  try {
+    return localStorage.getItem(SAGE_TALKED_STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function markSageTalked() {
+  try {
+    localStorage.setItem(SAGE_TALKED_STORAGE_KEY, "1");
+  } catch {
+    // Storage can be blocked. The conversation still works.
+  }
+}
+
+/** Written by the round-state owner once Roy is really defeated; the sage only reads it. */
+function isCatDefeated(): boolean {
+  try {
+    return localStorage.getItem(SAGE_DEFEATED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** `round.status` 3 is Defeated (`lib/format.ts` ROUND_STATUSES). */
+const CAT_DEFEATED_STATUS = 3;
+
+/**
+ * Remember a real defeat so the sage can talk about it later. Written once: the
+ * earlier value is checked first, so repeat renders do not touch storage again.
+ * Never called from fixture or mock data — only from a live deployment's round.
+ */
+function markCatDefeated() {
+  try {
+    if (localStorage.getItem(SAGE_DEFEATED_STORAGE_KEY) === "1") return;
+    localStorage.setItem(SAGE_DEFEATED_STORAGE_KEY, "1");
+  } catch {
+    // Storage can be blocked. The sage keeps the first-visit and repeat lines.
+  }
+}
+
+/** A hub encounter is the standalone demo Hook: only it owns the sage's round narration. */
 function isHubEncounter(state: ReturnType<typeof useBossPool>["deployment"]): state is Extract<ReturnType<typeof useBossPool>["deployment"], { kind: "live" }> {
   return state.kind === "live" && state.hookAddress.toLowerCase() === getDefaultBossHook(state.context.baseManifest).toLowerCase();
 }

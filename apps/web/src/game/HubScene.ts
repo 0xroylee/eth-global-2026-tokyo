@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { BOSSES, findBoss, isBossId, type BossDefinition, type BossId } from "./bosses";
+import { BOSSES, findBoss, isBossId, type BossDefinition } from "./bosses";
 import type { GameBridge, GameCommands } from "./bridge";
 import { HUB_LAYERS, HUB_TILESET } from "./hubTiles";
 import { makeCroppedTexture } from "./textures";
@@ -16,16 +16,75 @@ export function integerCameraZoom(viewWidth: number, viewHeight: number, worldWi
 }
 const PLAYER_SPEED = 80;
 const GATE = { width: 48, height: 32 } as const;
+/**
+ * The hub's one NPC. The map marker owns the position; everything about how the
+ * sage looks is data here so the scene code stays layout-only.
+ */
+const SAGE = {
+  marker: "sage",
+  masterKey: "portrait-master-sage",
+  textureKey: "npc-sage",
+  image: "/images/npc-thesis-wizard.png",
+  label: "THE SAGE",
+  /** Upper body down to the robe hem: drops the boots and the art's name plate. */
+  crop: { x: 233, y: 83, w: 697, h: 960, targetHeight: 30 },
+} as const;
+/**
+ * The hub's one roaming body: SOL, the roster gate whose tagline is "it wandered
+ * onto Base and never left". Waypoints are hand-picked tile centres on SOL's own
+ * stone spur (`generate-hub-map.ts` reserves cols 11-13, rows 4-14), all of them
+ * below that gate's approach zone. `buildRoamer` still drops any point that lands
+ * in a gate approach or the sage's zone, so a future map redraw cannot park it in
+ * a doorway. There is no pathfinding: each leg is one quadratic curve.
+ */
+const ROAMER = {
+  bossId: "sol",
+  /** Patrol loop in order; index 0 is also where reduced motion parks it. */
+  waypoints: [
+    { col: 12, row: 8 },
+    { col: 11, row: 11 },
+    { col: 13, row: 11 },
+    { col: 12, row: 14 },
+  ],
+  /** World pixels per second along the curve. */
+  speed: 20,
+  /** Pause between legs, in milliseconds. */
+  idleMin: 1_000,
+  idleMax: 4_000,
+  /** How far the control point sits off the leg's midpoint, perpendicular to it. */
+  bend: 12,
+  radius: 4.5,
+  /** World pixels around the body that count as "at the gate"; it has no fixed zone. */
+  interactRadius: 22,
+} as const;
+
 /** Overhead tiles (fences, canopies) draw above every y-sorted sprite. */
 const OVERHEAD_DEPTH = 5_000;
 /** Labels sit above every y-sorted prop and the overhead layer. */
 const LABEL_DEPTH = 10_000;
 
-const GATE_COLORS: Record<BossId, number> = {
-  cat: 0xf5b04a,
-  "macro-whale": 0x5aa9ff,
-  locked: 0x6b7080,
-};
+/** Gate accents are authored as hex strings; Phaser draws with packed integers. */
+function accentColor(hex: string): number {
+  return Phaser.Display.Color.HexStringToColor(hex).color;
+}
+
+/**
+ * Canvas 2D parses the font string itself and cannot resolve CSS custom properties,
+ * so `"6px var(--font-dm-mono), monospace"` is invalid and the context silently keeps
+ * its previous font (10px sans-serif), doubling every label. Resolve the token to a
+ * real family list once, on the client.
+ */
+let labelFont: string | null = null;
+function labelFontFamily(): string {
+  if (labelFont === null) {
+    const token =
+      typeof document === "undefined"
+        ? ""
+        : getComputedStyle(document.documentElement).getPropertyValue("--font-dm-mono").trim();
+    labelFont = token ? `${token}, monospace` : "monospace";
+  }
+  return labelFont;
+}
 
 type Gate = {
   boss: BossDefinition;
@@ -48,7 +107,21 @@ type Facing = (typeof WALK_ROWS)[number];
 const IDLE_COLUMN = 1;
 /** Foot pixel row inside the 32×32 cell. Origin and the feet collider share it. */
 const FOOT_ROW = 31;
-const PAGE_CONTROL = "button, a, input, select, textarea, [contenteditable='true'], [role='button']";
+/**
+ * Controls that own the keyboard while they hold focus. Text entry and comboboxes want
+ * every key they are given, so while one is focused the map must not also move the player
+ * or run its interact keys.
+ *
+ * Buttons and links are deliberately NOT in this list. Clicking a HUD button leaves it
+ * focused, and a focused button must not freeze the map — that stranded the player with no
+ * way back except clicking the canvas. `isPageControlTarget` still keeps Space/Enter on a
+ * focused button from also reaching the game, so the two lists are not the same list.
+ */
+const KEYBOARD_CAPTURING_CONTROLS =
+  'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="combobox"], [role="textbox"]';
+/** Anything that activates on Space/Enter, or wants raw typing: the interact listener skips it. */
+const PAGE_CONTROL =
+  'button, a, input, select, textarea, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="combobox"], [role="textbox"]';
 
 function isPageControlTarget(event: KeyboardEvent): boolean {
   const target = event.target;
@@ -69,6 +142,8 @@ export class HubScene extends Phaser.Scene {
   private gates: Gate[] = [];
   private tileset!: Phaser.Tilemaps.Tileset;
   private nearGate: Gate | null = null;
+  /** The walking gate has no zone, so proximity is tracked as a radius. */
+  private nearRoamer = false;
   private modalOpen = false;
   private domControlFocused = false;
   private reduceMotion = false;
@@ -88,6 +163,20 @@ export class HubScene extends Phaser.Scene {
   private hintArrow: Phaser.GameObjects.Triangle | null = null;
   private regionZone: Phaser.Geom.Rectangle | null = null;
   private nearRegion = false;
+  private sage: Phaser.GameObjects.Image | null = null;
+  private sageBob: Phaser.Tweens.Tween | null = null;
+  private sageBaseY = 0;
+  private sageZone: Phaser.Geom.Rectangle | null = null;
+  private nearSage = false;
+  private roamer: Phaser.GameObjects.Container | null = null;
+  private roamerLabel: Phaser.GameObjects.Text | null = null;
+  private roamerPath: Phaser.Math.Vector2[] = [];
+  private roamerTarget = 0;
+  private roamerBend = 1;
+  private roamerTween: Phaser.Tweens.Tween | null = null;
+  private roamerIdle: Phaser.Time.TimerEvent | null = null;
+  /** Reused by the leg tween, so walking allocates nothing per frame. */
+  private readonly roamerPoint = new Phaser.Math.Vector2();
   private unsubscribe: (() => void)[] = [];
   private atmosphere!: HubAtmosphere;
   private crispLabels: Phaser.GameObjects.Text[] = [];
@@ -109,17 +198,36 @@ export class HubScene extends Phaser.Scene {
     for (const boss of BOSSES) {
       if (boss.portrait) this.load.image(`portrait-master-${boss.id}`, boss.portrait);
     }
+    this.load.image(SAGE.masterKey, SAGE.image);
   }
 
   create() {
     this.gates = [];
     this.nearGate = null;
+    this.nearRoamer = false;
     this.regionZone = null;
     this.nearRegion = false;
+    this.sage = null;
+    this.sageBob = null;
+    this.sageZone = null;
+    this.nearSage = false;
+    // Scene shutdown tears these down; drop the handles so a restart cannot reuse them.
+    this.roamer = null;
+    this.roamerLabel = null;
+    this.roamerPath = [];
+    this.roamerTarget = 0;
+    this.roamerBend = 1;
+    this.roamerTween = null;
+    this.roamerIdle = null;
     this.crispLabels = [];
     this.registerWalk();
-    makeCroppedTexture(this, "portrait-cat", "portrait-master-cat", { x: 120, y: 60, w: 880, h: 1240 }, 28);
-    makeCroppedTexture(this, "portrait-macro-whale", "portrait-master-macro-whale", { x: 160, y: 80, w: 940, h: 940 }, 28);
+    // Crop specs live on the boss definition, so adding a portrait needs no scene edit.
+    for (const boss of BOSSES) {
+      if (boss.portrait && boss.crop) {
+        makeCroppedTexture(this, `portrait-${boss.id}`, `portrait-master-${boss.id}`, boss.crop, boss.crop.targetHeight);
+      }
+    }
+    makeCroppedTexture(this, SAGE.textureKey, SAGE.masterKey, SAGE.crop, SAGE.crop.targetHeight);
 
     const map = this.make.tilemap({ key: "hub" });
     const tileset = map.addTilesetImage(HUB_TILESET.name, "tiles");
@@ -151,6 +259,8 @@ export class HubScene extends Phaser.Scene {
     this.buildPlayer(spawn.x, spawn.y);
     this.physics.add.collider(this.player, collision);
     this.physics.add.collider(this.player, gateBodies);
+    this.buildSage(map);
+    this.buildRoamer();
 
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.cameras.main.setRoundPixels(true);
@@ -193,7 +303,12 @@ export class HubScene extends Phaser.Scene {
         if (this.modalOpen === open) return;
         this.modalOpen = open;
         this.resetKeyboardState();
-        if (open) this.showIdle();
+        if (open) {
+          this.showIdle();
+          this.holdRoamer();
+        } else {
+          this.releaseRoamer();
+        }
       }),
       this.bridge.onCommand("round:state", (state) => this.applyRoundState(state)),
       this.bridge.onCommand("round:unavailable", ({ label }) => this.showRoundUnavailable(label)),
@@ -213,6 +328,19 @@ export class HubScene extends Phaser.Scene {
       this.hintArrow = null;
       this.regionZone = null;
       this.nearRegion = false;
+      this.sageBob?.stop();
+      this.sageBob = null;
+      this.sage = null;
+      this.sageZone = null;
+      this.nearSage = false;
+      this.nearRoamer = false;
+      this.roamerTween?.stop();
+      this.roamerTween = null;
+      this.roamerIdle?.remove();
+      this.roamerIdle = null;
+      this.roamer = null;
+      this.roamerLabel = null;
+      this.roamerPath = [];
       this.unsubscribe.forEach((u) => u());
       this.unsubscribe = [];
       document.removeEventListener("focusin", handleFocusIn);
@@ -225,6 +353,7 @@ export class HubScene extends Phaser.Scene {
 
     this.exposeDevProbe();
     this.bridge.emit("region:near", { exitId: null });
+    this.bridge.emit("npc:near", { npcId: null });
     this.bridge.emit("scene:ready", {});
   }
 
@@ -239,6 +368,7 @@ export class HubScene extends Phaser.Scene {
       frame: this.player.frame.name,
       walking: this.player.anims.isPlaying,
       nearGate: this.nearGate?.boss.id ?? null,
+      roamerNear: this.nearRoamer,
       glowScale: this.nearGate?.glow.scaleX ?? null,
       glowAlpha: this.nearGate?.glow.alpha ?? null,
       reduceMotion: this.reduceMotion,
@@ -246,6 +376,29 @@ export class HubScene extends Phaser.Scene {
       guideDistance: this.guideDistance,
       hintVisible: this.hintArrow?.visible ?? false,
       nearRegion: this.nearRegion,
+      nearSage: this.nearSage,
+      sage: this.sage && this.sage.body
+        ? {
+            x: this.sage.x,
+            y: this.sage.y,
+            bob: Math.round((this.sage.y - this.sageBaseY) * 10) / 10,
+            body: {
+              x: (this.sage.body as Phaser.Physics.Arcade.StaticBody).position.x,
+              y: (this.sage.body as Phaser.Physics.Arcade.StaticBody).position.y,
+              w: (this.sage.body as Phaser.Physics.Arcade.StaticBody).width,
+              h: (this.sage.body as Phaser.Physics.Arcade.StaticBody).height,
+            },
+          }
+        : null,
+      roamer: this.roamer
+        ? {
+            x: this.roamer.x,
+            y: this.roamer.y,
+            target: this.roamerTarget,
+            path: this.roamerPath.length,
+            moving: this.roamerTween !== null,
+          }
+        : null,
       cameraZoom: this.cameras.main.zoom,
       gates: this.gates.map((g) => ({ id: g.boss.id, zone: { x: g.zone.x, y: g.zone.y, w: g.zone.width, h: g.zone.height } })),
     });
@@ -259,6 +412,7 @@ export class HubScene extends Phaser.Scene {
     this.atmosphere.update(time, this.reduceMotion);
     this.updateMovement();
     this.updateGateProximity();
+    this.updateSageProximity();
     this.updateRegionProximity();
     this.updateGuideHint(time);
   }
@@ -276,7 +430,8 @@ export class HubScene extends Phaser.Scene {
       if (obj.x === undefined || obj.y === undefined) continue;
 
       const boss = findBoss(bossId);
-      const color = GATE_COLORS[boss.id];
+      const color = accentColor(boss.accent);
+      const locked = boss.status === "locked";
       const cx = obj.x + GATE.width / 2;
       const base = obj.y + GATE.height;
 
@@ -289,36 +444,41 @@ export class HubScene extends Phaser.Scene {
       this.add.rectangle(cx, base - 32, GATE.width + 4, 5, 0x4a4e60).setDepth(base);
 
       // Portal glow behind the portrait.
-      const glow = this.add.circle(cx, base - 18, 16, color, boss.locked ? 0.18 : 0.32).setDepth(base - 1);
+      const glow = this.add.circle(cx, base - 18, 16, color, locked ? 0.18 : 0.32).setDepth(base - 1);
       this.add.circle(cx, base - 18, 13, 0x0b0e18, 0.85).setDepth(base - 1);
 
-      if (boss.locked) {
-        this.add.rectangle(cx, base - 16, 10, 8, 0x8a8fa3).setDepth(base + 1);
-        this.add.circle(cx, base - 22, 4, 0x000000, 0).setStrokeStyle(2, 0x8a8fa3).setDepth(base + 1);
-        this.add.rectangle(cx, base - 16, 2, 3, 0x2a2d38).setDepth(base + 2);
+      const portraitKey = `portrait-${boss.id}`;
+      if (this.textures.exists(portraitKey)) {
+        this.add.image(cx, base - 19, portraitKey).setDepth(base + 1);
       } else {
-        this.add.image(cx, base - 19, `portrait-${boss.id}`).setDepth(base + 1);
+        this.drawTickerShield(cx, base - 18, color, boss.ticker, base + 1);
       }
 
       // Name plate. Rendered at 3x resolution so the zoomed camera keeps it crisp.
       const label = this.add
-        .text(cx, base + 6, boss.locked ? "LOCKED" : boss.name.toUpperCase(), {
-          fontFamily: "var(--font-dm-mono), monospace",
+        .text(cx, base + 6, boss.ticker.toUpperCase(), {
+          fontFamily: labelFontFamily(),
           fontSize: "6px",
-          color: boss.locked ? "#9aa0b4" : "#f3f3f8",
+          color: locked ? "#9aa0b4" : "#f3f3f8",
           letterSpacing: 1,
           resolution: ZOOM,
         })
         .setOrigin(0.5, 0)
         .setDepth(LABEL_DEPTH + 1);
       this.crispLabels.push(label);
-      const caption = boss.locked
+      // Roster gates name their Launch Boost rank; the playable gates share the pool caption.
+      const captionText = locked
+        ? null
+        : boss.rosterMeta
+          ? `LB #${boss.rosterMeta.rank} · ${boss.rosterMeta.chain.toUpperCase()}`
+          : "BOSS POOL";
+      const caption = captionText === null
         ? null
         : this.add
-            .text(cx, label.y + label.height, "BOSS POOL", {
-              fontFamily: "var(--font-dm-mono), monospace",
+            .text(cx, label.y + label.height, captionText, {
+              fontFamily: labelFontFamily(),
               fontSize: "4px",
-              color: "#f5b04a",
+              color: boss.accent,
               letterSpacing: 0.6,
               resolution: ZOOM,
             })
@@ -337,9 +497,24 @@ export class HubScene extends Phaser.Scene {
         )
         .setDepth(LABEL_DEPTH);
       plate.setStrokeStyle(1, color, 0.6);
+      // Availability marker. Gates without a contract say so instead of implying a live round.
+      const chipText = locked ? "LOCKED" : boss.status === "no-contract" ? "NO CONTRACT" : null;
+      const chip = chipText === null
+        ? null
+        : this.add
+            .text(cx, label.y + blockHeight + 3, chipText, {
+              fontFamily: labelFontFamily(),
+              fontSize: "4px",
+              color: "#9aa0b4",
+              letterSpacing: 0.5,
+              resolution: ZOOM,
+            })
+            .setOrigin(0.5, 0)
+            .setDepth(LABEL_DEPTH + 1);
+      if (chip) this.crispLabels.push(chip);
       const stageLabel = boss.id === "cat"
         ? this.add.text(cx, label.y + blockHeight + 4, "CHECKING ROUND", {
-            fontFamily: "var(--font-dm-mono), monospace",
+            fontFamily: labelFontFamily(),
             fontSize: "9px",
             color: "#f5b04a",
             letterSpacing: 1,
@@ -358,6 +533,47 @@ export class HubScene extends Phaser.Scene {
     }
 
     return bodies;
+  }
+
+  /**
+   * Placeholder for a gate that has no portrait yet: a small shield plate with the
+   * ticker's initials, drawn from the same dark-plate vocabulary as the name plate.
+   */
+  private drawTickerShield(cx: number, cy: number, color: number, ticker: string, depth: number) {
+    const halfW = 7;
+    const top = -8;
+    const shoulder = 1;
+    const bottom = 7;
+    const chamfer = 2;
+    const shield = this.add.polygon(
+      cx,
+      cy,
+      [
+        { x: -halfW + chamfer, y: top },
+        { x: halfW - chamfer, y: top },
+        { x: halfW, y: top + chamfer },
+        { x: halfW, y: shoulder },
+        { x: chamfer + 1, y: bottom - 3 },
+        { x: 0, y: bottom },
+        { x: -(chamfer + 1), y: bottom - 3 },
+        { x: -halfW, y: shoulder },
+        { x: -halfW, y: top + chamfer },
+      ],
+      0x1b1f2e,
+      0.95,
+    );
+    shield.setStrokeStyle(1, color, 0.9).setDepth(depth);
+    const initials = this.add
+      .text(cx, cy - 1, ticker.slice(0, 2).toUpperCase(), {
+        fontFamily: labelFontFamily(),
+        fontSize: "6px",
+        color: "#f3f3f8",
+        letterSpacing: 0.5,
+        resolution: ZOOM,
+      })
+      .setOrigin(0.5)
+      .setDepth(depth + 1);
+    this.crispLabels.push(initials);
   }
 
   private registerWalk() {
@@ -394,6 +610,44 @@ export class HubScene extends Phaser.Scene {
     this.add.ellipse(0, 0, 14, 4, 0x000000, 0.3).setDepth(2).setName("player-shadow");
   }
 
+  /**
+   * The sage stands on its map marker and blocks the path, so walking into the
+   * NPC is already a hint about where the conversation starts.
+   */
+  private buildSage(map: Phaser.Tilemaps.Tilemap) {
+    const marker = map.findObject(HUB_LAYERS.markers, (o) => o.name === SAGE.marker);
+    if (!marker || marker.x === undefined || marker.y === undefined) {
+      throw new Error(`hub.json is missing the ${SAGE.marker} marker`);
+    }
+    const x = marker.x;
+    const y = marker.y;
+    this.sageBaseY = y;
+
+    const sage = this.add.image(x, y, SAGE.textureKey).setOrigin(0.5, 1).setDepth(y);
+    this.sage = sage;
+    // Static feet collider, same 12x8 vocabulary as the player.
+    this.physics.add.existing(sage, true);
+    const body = sage.body as Phaser.Physics.Arcade.StaticBody;
+    body.setSize(12, 8);
+    body.setOffset(sage.displayWidth / 2 - body.halfWidth, sage.displayHeight - body.height);
+    this.physics.add.collider(this.player, sage);
+
+    const label = this.add
+      .text(x, y + 2, SAGE.label, {
+        fontFamily: labelFontFamily(),
+        fontSize: "6px",
+        color: "#f3f3f8",
+        letterSpacing: 1,
+        resolution: ZOOM,
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(LABEL_DEPTH + 1);
+    this.crispLabels.push(label);
+
+    this.sageZone = new Phaser.Geom.Rectangle(x - 10, y - 8, 28, 28);
+    this.applySageBob();
+  }
+
   private setupInput() {
     const keyboard = this.input.keyboard;
     if (!keyboard) return;
@@ -415,6 +669,10 @@ export class HubScene extends Phaser.Scene {
         this.bridge.emit("gate:enter", { bossId: this.nearGate.boss.id });
         return;
       }
+      if (this.nearSage) {
+        this.bridge.emit("npc:talk", { npcId: "sage" });
+        return;
+      }
       if (this.nearRegion) this.bridge.emit("region:inspect", { exitId: "east-route" });
     };
     window.addEventListener("keydown", interact, true);
@@ -430,6 +688,8 @@ export class HubScene extends Phaser.Scene {
       this.player.setScale(1);
       this.showIdle();
       if (this.nearGate) this.startGatePulse(this.nearGate);
+      this.applySageBob();
+      this.applyRoamerMotion();
       this.applyTileAnimation();
     };
     apply();
@@ -466,8 +726,8 @@ export class HubScene extends Phaser.Scene {
   private startGatePulse(gate: Gate) {
     gate.pulse?.stop();
     gate.glow.setScale(1);
-    const lo = gate.boss.locked ? 0.25 : 0.45;
-    const hi = gate.boss.locked ? 0.35 : 0.7;
+    const lo = gate.boss.status === "locked" ? 0.25 : 0.45;
+    const hi = gate.boss.status === "locked" ? 0.35 : 0.7;
     gate.pulse = this.tweens.add({
       targets: gate.glow,
       // Reduced motion keeps the alpha cue and drops the scale movement.
@@ -478,6 +738,158 @@ export class HubScene extends Phaser.Scene {
       repeat: -1,
       ease: "Sine.easeInOut",
     });
+  }
+
+  /** Idle bob. Reduced motion leaves the sage planted, keeping the cue non-moving. */
+  private applySageBob() {
+    if (!this.sage) return;
+    this.sageBob?.stop();
+    this.sageBob = null;
+    if (this.reduceMotion) {
+      this.sage.setY(this.sageBaseY);
+      return;
+    }
+    this.sage.setY(this.sageBaseY + 2);
+    this.sageBob = this.tweens.add({
+      targets: this.sage,
+      y: { from: this.sageBaseY + 2, to: this.sageBaseY - 2 },
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  /**
+   * SOL leaves its own gate and walks the stone spur below it. The shrine stays
+   * built and interactive: it is the roamer's home, not its body, and it is the
+   * only way to open the gate.
+   */
+  private buildRoamer() {
+    const gate = this.gates.find((candidate) => candidate.boss.id === ROAMER.bossId);
+    if (!gate) return;
+
+    const tile = HUB_TILESET.tileSize;
+    // A gate approach or the sage's talk zone would leave SOL hovering in a doorway.
+    const sageZone = this.sageZone;
+    const forbidden: Phaser.Geom.Rectangle[] = [
+      ...this.gates.map((candidate) => candidate.zone),
+      ...(sageZone ? [sageZone] : []),
+    ];
+    this.roamerPath = ROAMER.waypoints
+      .map(({ col, row }) => new Phaser.Math.Vector2(col * tile + tile / 2, row * tile + tile / 2))
+      .filter((point) => !forbidden.some((rect) => Phaser.Geom.Rectangle.Contains(rect, point.x, point.y)));
+    const start = this.roamerPath[0];
+    if (!start || this.roamerPath.length < 2) {
+      this.roamerPath = [];
+      return;
+    }
+
+    const accent = accentColor(gate.boss.accent);
+    // A small ghost in SOL's accent: the shape says "not a gate", the accent says which one.
+    this.roamer = this.add.container(start.x, start.y, [
+      this.add.circle(0, 0, ROAMER.radius, 0x1b1f2e, 0.92).setStrokeStyle(1, accent, 0.95),
+      this.add.circle(-1.6, -0.9, 0.9, accent, 0.95),
+      this.add.circle(1.6, -0.9, 0.9, accent, 0.95),
+    ]);
+
+    const label = this.add
+      .text(start.x, start.y + 6, gate.boss.ticker, {
+        fontFamily: labelFontFamily(),
+        fontSize: "5px",
+        color: gate.boss.accent,
+        letterSpacing: 0.6,
+        resolution: ZOOM,
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(LABEL_DEPTH + 1);
+    this.roamerLabel = label;
+    this.crispLabels.push(label);
+
+    this.applyRoamerMotion();
+  }
+
+  /** Park the marker and its label, y-sorted against the player. */
+  private parkRoamer(x: number, y: number) {
+    this.roamer?.setPosition(x, y).setDepth(y);
+    this.roamerLabel?.setPosition(x, y + 6);
+  }
+
+  /**
+   * Reduced motion parks SOL at the gate-front waypoint: the marker stays, the
+   * loop does not. Same deal as the sage's bob, one level up (it travels).
+   */
+  private applyRoamerMotion() {
+    if (!this.roamer) return;
+    this.roamerTween?.stop();
+    this.roamerTween = null;
+    this.roamerIdle?.remove();
+    this.roamerIdle = null;
+    this.roamerTarget = 0;
+    this.roamerBend = 1;
+    const start = this.roamerPath[0];
+    if (!start) return;
+    this.parkRoamer(start.x, start.y);
+    if (this.reduceMotion || this.modalOpen) return;
+    this.startRoamerIdle();
+  }
+
+  /** FSM: `idle(random 1-4s) -> pick(next waypoint) -> curve(20px/s)` and back. */
+  private startRoamerIdle() {
+    this.roamerTween = null;
+    this.roamerIdle?.remove();
+    this.roamerIdle = null;
+    if (!this.roamer || this.roamerPath.length < 2 || this.reduceMotion) return;
+    this.roamerIdle = this.time.delayedCall(
+      Phaser.Math.Between(ROAMER.idleMin, ROAMER.idleMax),
+      () => this.stepRoamer(),
+    );
+  }
+
+  /** One leg of the loop: a quadratic curve bowed off the straight line. */
+  private stepRoamer() {
+    this.roamerIdle = null;
+    const roamer = this.roamer;
+    // Walking is the whole cue, so reduced motion and open panels park the loop.
+    if (!roamer || this.reduceMotion || this.modalOpen) return;
+
+    const from = new Phaser.Math.Vector2(roamer.x, roamer.y);
+    this.roamerTarget = (this.roamerTarget + 1) % this.roamerPath.length;
+    const to = this.roamerPath[this.roamerTarget]!;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const span = Math.hypot(dx, dy) || 1;
+    // Bowing the midpoint sideways, alternating per leg, is what reads as wandering.
+    this.roamerBend = -this.roamerBend;
+    const control = new Phaser.Math.Vector2(
+      (from.x + to.x) / 2 + (-dy / span) * ROAMER.bend * this.roamerBend,
+      (from.y + to.y) / 2 + (dx / span) * ROAMER.bend * this.roamerBend,
+    );
+    const curve = new Phaser.Curves.QuadraticBezier(from, control, to);
+    const progress = { t: 0 };
+    this.roamerTween = this.tweens.add({
+      targets: progress,
+      t: 1,
+      duration: Math.max(1, (curve.getLength() / ROAMER.speed) * 1_000),
+      ease: "Linear",
+      onUpdate: () => {
+        const point = curve.getPoint(progress.t, this.roamerPoint);
+        this.parkRoamer(point.x, point.y);
+      },
+      onComplete: () => this.startRoamerIdle(),
+    });
+  }
+
+  /** A dialog or panel holds the roamer where it stands instead of letting it drift behind it. */
+  private holdRoamer() {
+    this.roamerTween?.pause();
+    this.roamerIdle?.remove();
+    this.roamerIdle = null;
+  }
+
+  private releaseRoamer() {
+    if (this.roamerTween) this.roamerTween.resume();
+    else this.startRoamerIdle();
   }
 
   private updateMovement() {
@@ -578,9 +990,7 @@ export class HubScene extends Phaser.Scene {
 
   private refreshDomKeyboardFocus() {
     const active = document.activeElement;
-    const focusedOnControl = active instanceof Element && Boolean(active.closest(
-      'input, textarea, select, button, a[href], [contenteditable]:not([contenteditable="false"]), [role="button"], [role="combobox"], [role="textbox"]',
-    ));
+    const focusedOnControl = active instanceof Element && Boolean(active.closest(KEYBOARD_CAPTURING_CONTROLS));
     if (focusedOnControl !== this.domControlFocused) {
       this.domControlFocused = focusedOnControl;
       this.resetKeyboardState();
@@ -633,7 +1043,7 @@ export class HubScene extends Phaser.Scene {
 
   /** Nearest unlocked gate, keeping the current target until another is clearly closer. */
   private chooseHintGate(): Gate | null {
-    const unlocked = this.gates.filter((gate) => !gate.boss.locked);
+    const unlocked = this.gates.filter((gate) => gate.boss.status !== "locked");
     if (unlocked.length === 0) return null;
     const distance = (gate: Gate) => {
       const centerX = gate.zone.x + gate.zone.width / 2;
@@ -673,7 +1083,7 @@ export class HubScene extends Phaser.Scene {
     const cy = obj.y - 14;
     const title = this.add
       .text(cx, cy - 4, "NEXT REGION", {
-        fontFamily: "var(--font-dm-mono), monospace",
+        fontFamily: labelFontFamily(),
         fontSize: "5px",
         color: "#f5b04a",
         letterSpacing: 0.4,
@@ -684,7 +1094,7 @@ export class HubScene extends Phaser.Scene {
     this.crispLabels.push(title);
     const subtitle = this.add
       .text(cx, cy + 4, "COMING SOON", {
-        fontFamily: "var(--font-dm-mono), monospace",
+        fontFamily: labelFontFamily(),
         fontSize: "4px",
         color: "#f3e2c4",
         letterSpacing: 0.4,
@@ -710,17 +1120,31 @@ export class HubScene extends Phaser.Scene {
   private updateGateProximity() {
     const px = this.player.x;
     const py = this.player.y;
-    const hit = this.gates.find((g) => Phaser.Geom.Rectangle.Contains(g.zone, px, py)) ?? null;
+    const roamer = this.roamer;
+    // SOL walks its spur instead of standing in a zone, so "at the gate" is a radius
+    // around the body. Recomputed every frame so the probe never reports a stale value.
+    this.nearRoamer = roamer !== null && Phaser.Math.Distance.Between(px, py, roamer.x, roamer.y) <= ROAMER.interactRadius;
+    const hit =
+      this.gates.find((g) => Phaser.Geom.Rectangle.Contains(g.zone, px, py)) ??
+      (this.nearRoamer ? this.gates.find((g) => g.boss.id === ROAMER.bossId) ?? null : null);
     if (hit === this.nearGate) return;
 
     if (this.nearGate) {
       this.nearGate.pulse?.stop();
       this.nearGate.pulse = undefined;
-      this.nearGate.glow.setScale(1).setAlpha(this.nearGate.boss.locked ? 0.18 : 0.32);
+      this.nearGate.glow.setScale(1).setAlpha(this.nearGate.boss.status === "locked" ? 0.18 : 0.32);
     }
     this.nearGate = hit;
     if (hit) this.startGatePulse(hit);
     this.bridge.emit("gate:near", { bossId: hit?.boss.id ?? null });
+  }
+
+  private updateSageProximity() {
+    if (!this.sageZone) return;
+    const inside = Phaser.Geom.Rectangle.Contains(this.sageZone, this.player.x, this.player.y);
+    if (inside === this.nearSage) return;
+    this.nearSage = inside;
+    this.bridge.emit("npc:near", { npcId: inside ? "sage" : null });
   }
 }
 
