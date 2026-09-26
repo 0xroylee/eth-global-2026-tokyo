@@ -57,9 +57,7 @@ export type DeploymentSummary = {
 };
 
 export function loadTestnetConfig(): TestnetConfig {
-  const rpcUrl = process.env.ROBINHOOD_RPC_URL ?? DEFAULT_ROBINHOOD_RPC_URL;
-  const url = new URL(rpcUrl);
-  if (url.protocol !== "https:" || !url.hostname) throw new Error("ROBINHOOD_RPC_URL must be an HTTPS endpoint.");
+  const { rpcUrl, client } = loadTestnetPublicConfig();
 
   const deployerKey = readPrivateKey("TESTNET_DEPLOYER_PRIVATE_KEY");
   const playerBKey = readPrivateKey("TESTNET_PLAYER_PRIVATE_KEY");
@@ -75,6 +73,18 @@ export function loadTestnetConfig(): TestnetConfig {
     throw new Error("TESTNET_PLAYER_PRIVATE_KEY must identify a second test wallet.");
   }
 
+  return { rpcUrl, deployerKey, playerBKey, deployerAddress, playerBAddress, client };
+}
+
+export function loadTestnetPublicConfig(): { rpcUrl: string; client: PublicClient } {
+  const rpcUrl = process.env.ROBINHOOD_RPC_URL ?? DEFAULT_ROBINHOOD_RPC_URL;
+  let url: URL;
+  try {
+    url = new URL(rpcUrl);
+  } catch {
+    throw new Error("ROBINHOOD_RPC_URL must be a valid HTTPS endpoint.");
+  }
+  if (url.protocol !== "https:" || !url.hostname) throw new Error("ROBINHOOD_RPC_URL must be an HTTPS endpoint.");
   const chain = defineChain({
     id: ROBINHOOD_CHAIN_ID,
     name: "Robinhood Testnet",
@@ -85,7 +95,7 @@ export function loadTestnetConfig(): TestnetConfig {
     chain,
     transport: http(rpcUrl, { retryCount: 0, timeout: 10_000 }),
   });
-  return { rpcUrl, deployerKey, playerBKey, deployerAddress, playerBAddress, client };
+  return { rpcUrl, client };
 }
 
 export function readPrivateKey(name: string): Hex {
@@ -224,6 +234,7 @@ export async function readRouterCreationReceipt(summary: DeploymentSummary) {
   } catch {
     throw new Error("Foundry broadcast record is missing or invalid.");
   }
+  if (!broadcast.receipts?.length) throw new Error("Foundry broadcast record contains no transaction receipts.");
   const router = summary.addresses.router.toLowerCase();
   const receipt = broadcast.receipts?.find(
     (item) => typeof item.contractAddress === "string" && item.contractAddress.toLowerCase() === router,
@@ -234,23 +245,22 @@ export async function readRouterCreationReceipt(summary: DeploymentSummary) {
   const routerTransactionHash = receipt.transactionHash;
   const blockNumber = parseQuantity(receipt.blockNumber);
   if (blockNumber === undefined) throw new Error("Router creation receipt is missing its block number.");
-  const receipts = (broadcast.receipts ?? []).flatMap((item): ReceiptEvidence[] => {
+  const receipts = broadcast.receipts.map((item): ReceiptEvidence => {
     const transactionHash = item.transactionHash;
     const receiptBlock = parseQuantity(item.blockNumber);
     if (
       typeof transactionHash !== "string" || !/^0x[\da-fA-F]{64}$/.test(transactionHash) ||
       receiptBlock === undefined || !isSuccessfulReceipt(item.status)
-    ) return [];
+    ) throw new Error("Foundry broadcast record contains an invalid or unsuccessful transaction receipt.");
     const evidence: ReceiptEvidence = {
       transactionHash: transactionHash as Hex,
       blockNumber: Number(receiptBlock),
       status: "success",
     };
-    if (typeof item.gasUsed === "string" && /^0x[\da-fA-F]+$/.test(item.gasUsed)) {
-      evidence.gasUsed = BigInt(item.gasUsed).toString();
-    }
+    const gasUsed = parseQuantity(item.gasUsed);
+    if (gasUsed !== undefined) evidence.gasUsed = gasUsed.toString();
     if (isAddressValue(item.contractAddress)) evidence.contractAddress = item.contractAddress;
-    return [evidence];
+    return evidence;
   });
   if (!receipts.some((item) => item.transactionHash.toLowerCase() === routerTransactionHash.toLowerCase())) {
     throw new Error("The Router creation receipt is missing from successful deployment evidence.");
@@ -263,105 +273,126 @@ export async function verifyDeploymentOnChain(
   summary: DeploymentSummary,
   transactionHash: Hex,
   blockNumber: bigint,
-): Promise<void> {
-  const [chainId, receipt, ...code] = await Promise.all([
+  verificationBlock = blockNumber,
+): Promise<bigint> {
+  if (verificationBlock < blockNumber) throw new Error("Final setup verification block precedes the Router creation receipt.");
+  const [chainId, receipt] = await Promise.all([
     client.getChainId(),
     client.getTransactionReceipt({ hash: transactionHash }),
-    ...Object.values(summary.addresses).map((address) => client.getCode({ address })),
   ]);
   if (chainId !== ROBINHOOD_CHAIN_ID) throw new Error("RPC chain changed during deployment verification.");
   if (receipt.status !== "success" || receipt.blockNumber !== blockNumber) {
     throw new Error("Router creation receipt does not match the successful Foundry receipt block.");
   }
-  if (code.some((bytecode) => !bytecode || bytecode === "0x")) {
-    throw new Error("A test deployment address has no on-chain contract code.");
+  if (!receipt.contractAddress || receipt.contractAddress.toLowerCase() !== summary.addresses.router.toLowerCase()) {
+    throw new Error("Router deployment receipt does not create the Router address in the summary.");
   }
 
-  const hook = summary.addresses.hook;
-  const router = summary.addresses.router;
-  const bossHP = summary.addresses.bossHP;
-  const roy = summary.addresses.roy;
-  const mockUSD = summary.addresses.mockUSD;
-  const collectibles = summary.addresses.collectibles;
-  const manager = summary.addresses.poolManager;
-  const [
-    hookManager, hookRouter, hookMockUSD, hookRoy, hookBossHP, hookCollectibles,
-    roundStatus, currentStage, prize, prizeFunded, poolInitialized, deadline,
-    finalEligibleHP, redeemedHP, paidPrize, stageSold0, stageSold1, stageSold2,
-    lowerTick, upperTick, bossIsCurrency0, sqrtLower, sqrtUpper, initialBossPrice,
-    routerManager, routerMockUSD, routerRoy, routerBossHP, routerHook, routerActivated,
-    minimumBossHP, bossHPSupply, hpInHook, hpInRouter, hpInManager,
-    roySupply, royInHook, royInRouter, royInManager, royInDeployer,
-    mockUSDBalance, collectibleMinter, latestBlock,
-  ] = await Promise.all([
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "manager" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "router" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "mockUSD" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "roy" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "bossHP" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "collectibles" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "status" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "currentStage" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "originalPrize" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "prizeFunded" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "poolInitialized" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "deadline" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "finalEligibleHP" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "redeemedHP" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "paidPrize" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [0] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [1] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [2] }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "LOWER_TICK" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "UPPER_TICK" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "bossIsCurrency0" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "sqrtLowerX96" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "sqrtUpperX96" }),
-    client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "lastSqrtPriceX96" }),
-    client.readContract({ address: router, abi: bossRouterAbi, functionName: "manager" }),
-    client.readContract({ address: router, abi: bossRouterAbi, functionName: "mockUSD" }),
-    client.readContract({ address: router, abi: bossRouterAbi, functionName: "roy" }),
-    client.readContract({ address: router, abi: bossRouterAbi, functionName: "bossHP" }),
-    client.readContract({ address: router, abi: bossRouterAbi, functionName: "bossHook" }),
-    client.readContract({ address: router, abi: bossRouterAbi, functionName: "activated" }),
-    client.readContract({ address: router, abi: bossRouterAbi, functionName: "minimumBossHPForVictoryPath" }),
-    client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "totalSupply" }),
-    client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [hook] }),
-    client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [router] }),
-    client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [manager] }),
-    client.readContract({ address: roy, abi: royTokenAbi, functionName: "totalSupply" }),
-    client.readContract({ address: roy, abi: royTokenAbi, functionName: "balanceOf", args: [hook] }),
-    client.readContract({ address: roy, abi: royTokenAbi, functionName: "balanceOf", args: [router] }),
-    client.readContract({ address: roy, abi: royTokenAbi, functionName: "balanceOf", args: [manager] }),
-    client.readContract({ address: roy, abi: royTokenAbi, functionName: "balanceOf", args: [summary.deployer] }),
-    client.readContract({ address: mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [hook] }),
-    client.readContract({ address: collectibles, abi: bossCollectiblesAbi, functionName: "minter" }),
-    client.getBlock({ blockTag: "latest" }),
-  ]);
-  const sameAddress = (left: Address, right: Address) => left.toLowerCase() === right.toLowerCase();
-  if (
-    !sameAddress(hookManager, manager) || !sameAddress(hookRouter, router) ||
-    !sameAddress(hookMockUSD, mockUSD) || !sameAddress(hookRoy, roy) ||
-    !sameAddress(hookBossHP, bossHP) || !sameAddress(hookCollectibles, collectibles) ||
-    !sameAddress(routerManager, manager) || !sameAddress(routerMockUSD, mockUSD) ||
-    !sameAddress(routerRoy, roy) || !sameAddress(routerBossHP, bossHP) ||
-    !sameAddress(routerHook, hook) || !sameAddress(collectibleMinter, hook) ||
-    !routerActivated || roundStatus !== 1 || currentStage !== 0 ||
-    prize !== 1_000_000_000n || !prizeFunded || !poolInitialized ||
-    deadline <= BigInt(latestBlock.timestamp) || mockUSDBalance < prize ||
-    finalEligibleHP !== 0n || redeemedHP !== 0n || paidPrize !== 0n ||
-    stageSold0 !== 0n || stageSold1 !== 0n || stageSold2 !== 0n ||
-    lowerTick !== (bossIsCurrency0 ? 0 : -1_920) ||
-    upperTick !== (bossIsCurrency0 ? 1_920 : 0) ||
-    initialBossPrice !== (bossIsCurrency0 ? sqrtLower : sqrtUpper) ||
-    bossHPSupply !== 2_000n * 10n ** 18n ||
-    hpInHook + hpInRouter + hpInManager !== bossHPSupply ||
-    minimumBossHP > bossHPSupply || roySupply !== 100_000n * 10n ** 18n ||
-    royInHook + royInRouter + royInManager + royInDeployer !== roySupply ||
-    royInRouter < 10_000n * 10n ** 18n
-  ) {
-    throw new Error("Live deployment state, contract identities, or locked-token custody failed verification.");
+  await retryPinnedRead(verificationBlock, async () => {
+    const hook = summary.addresses.hook;
+    const router = summary.addresses.router;
+    const bossHP = summary.addresses.bossHP;
+    const roy = summary.addresses.roy;
+    const mockUSD = summary.addresses.mockUSD;
+    const collectibles = summary.addresses.collectibles;
+    const manager = summary.addresses.poolManager;
+    const code = await Promise.all(Object.values(summary.addresses).map((address) =>
+      client.getCode({ address, blockNumber: verificationBlock }),
+    ));
+    const [
+      hookManager, hookRouter, hookMockUSD, hookRoy, hookBossHP, hookCollectibles,
+      roundStatus, currentStage, prize, prizeFunded, poolInitialized, deadline,
+      finalEligibleHP, redeemedHP, paidPrize, stageSold0, stageSold1, stageSold2,
+      lowerTick, upperTick, bossIsCurrency0, sqrtLower, sqrtUpper, initialBossPrice,
+      routerManager, routerMockUSD, routerRoy, routerBossHP, routerHook, routerActivated,
+      minimumBossHP, bossHPSupply, hpInHook, hpInRouter, hpInManager,
+      roySupply, royInHook, royInRouter, royInManager, royInDeployer,
+      mockUSDBalance, collectibleMinter,
+    ] = await Promise.all([
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "manager", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "router", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "mockUSD", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "roy", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "bossHP", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "collectibles", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "status", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "currentStage", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "originalPrize", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "prizeFunded", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "poolInitialized", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "deadline", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "finalEligibleHP", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "redeemedHP", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "paidPrize", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [0], blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [1], blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [2], blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "LOWER_TICK", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "UPPER_TICK", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "bossIsCurrency0", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "sqrtLowerX96", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "sqrtUpperX96", blockNumber: verificationBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "lastSqrtPriceX96", blockNumber: verificationBlock }),
+      client.readContract({ address: router, abi: bossRouterAbi, functionName: "manager", blockNumber: verificationBlock }),
+      client.readContract({ address: router, abi: bossRouterAbi, functionName: "mockUSD", blockNumber: verificationBlock }),
+      client.readContract({ address: router, abi: bossRouterAbi, functionName: "roy", blockNumber: verificationBlock }),
+      client.readContract({ address: router, abi: bossRouterAbi, functionName: "bossHP", blockNumber: verificationBlock }),
+      client.readContract({ address: router, abi: bossRouterAbi, functionName: "bossHook", blockNumber: verificationBlock }),
+      client.readContract({ address: router, abi: bossRouterAbi, functionName: "activated", blockNumber: verificationBlock }),
+      client.readContract({ address: router, abi: bossRouterAbi, functionName: "minimumBossHPForVictoryPath", blockNumber: verificationBlock }),
+      client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "totalSupply", blockNumber: verificationBlock }),
+      client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [hook], blockNumber: verificationBlock }),
+      client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [router], blockNumber: verificationBlock }),
+      client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [manager], blockNumber: verificationBlock }),
+      client.readContract({ address: roy, abi: royTokenAbi, functionName: "totalSupply", blockNumber: verificationBlock }),
+      client.readContract({ address: roy, abi: royTokenAbi, functionName: "balanceOf", args: [hook], blockNumber: verificationBlock }),
+      client.readContract({ address: roy, abi: royTokenAbi, functionName: "balanceOf", args: [router], blockNumber: verificationBlock }),
+      client.readContract({ address: roy, abi: royTokenAbi, functionName: "balanceOf", args: [manager], blockNumber: verificationBlock }),
+      client.readContract({ address: roy, abi: royTokenAbi, functionName: "balanceOf", args: [summary.deployer], blockNumber: verificationBlock }),
+      client.readContract({ address: mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [hook], blockNumber: verificationBlock }),
+      client.readContract({ address: collectibles, abi: bossCollectiblesAbi, functionName: "minter", blockNumber: verificationBlock }),
+    ]);
+    const verificationTimestamp = await client.getBlock({ blockNumber: verificationBlock });
+    if (code.some((bytecode) => !bytecode || bytecode === "0x")) {
+      throw new Error("A test deployment address has no on-chain contract code at the final setup block.");
+    }
+    const sameAddress = (left: Address, right: Address) => left.toLowerCase() === right.toLowerCase();
+    if (
+      !sameAddress(hookManager, manager) || !sameAddress(hookRouter, router) ||
+      !sameAddress(hookMockUSD, mockUSD) || !sameAddress(hookRoy, roy) ||
+      !sameAddress(hookBossHP, bossHP) || !sameAddress(hookCollectibles, collectibles) ||
+      !sameAddress(routerManager, manager) || !sameAddress(routerMockUSD, mockUSD) ||
+      !sameAddress(routerRoy, roy) || !sameAddress(routerBossHP, bossHP) ||
+      !sameAddress(routerHook, hook) || !sameAddress(collectibleMinter, hook) ||
+      !routerActivated || roundStatus !== 1 || currentStage !== 0 ||
+      prize !== 1_000_000_000n || !prizeFunded || !poolInitialized ||
+      deadline <= BigInt(verificationTimestamp.timestamp) || mockUSDBalance < prize ||
+      finalEligibleHP !== 0n || redeemedHP !== 0n || paidPrize !== 0n ||
+      stageSold0 !== 0n || stageSold1 !== 0n || stageSold2 !== 0n ||
+      lowerTick !== (bossIsCurrency0 ? 0 : -1_920) ||
+      upperTick !== (bossIsCurrency0 ? 1_920 : 0) ||
+      initialBossPrice !== (bossIsCurrency0 ? sqrtLower : sqrtUpper) ||
+      bossHPSupply !== 2_000n * 10n ** 18n ||
+      hpInHook + hpInRouter + hpInManager !== bossHPSupply ||
+      minimumBossHP > bossHPSupply || roySupply !== 100_000n * 10n ** 18n ||
+      royInHook + royInRouter + royInManager + royInDeployer !== roySupply ||
+      royInRouter < 10_000n * 10n ** 18n
+    ) throw new Error("Live deployment state, contract identities, or locked-token custody failed verification.");
+  });
+  return verificationBlock;
+}
+
+async function retryPinnedRead<T>(blockNumber: bigint, read: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await read();
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 500));
+    }
   }
+  throw new Error(`Robinhood RPC did not expose final deployment state at block ${blockNumber} after bounded retries.`, { cause: lastError });
 }
 
 export function parseForgeGas(output: string): { gas: bigint; requiredWei: bigint } {

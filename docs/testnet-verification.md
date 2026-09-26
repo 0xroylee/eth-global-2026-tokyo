@@ -4,7 +4,7 @@ Verified 26 September 2026 on Robinhood Chain Testnet, chain `46630`. This is a 
 
 ## Deployment and setup
 
-The public source of truth for contract addresses, pool keys, configuration, provenance, and all 18 deployment receipts is [`robinhood-testnet.json`](../apps/web/public/deployments/robinhood-testnet.json). Each deployment and setup receipt was checked against the testnet RPC. Combined deployment and setup gas was `19,595,227`.
+The historical foundation addresses, pool keys, configuration, provenance, and all 18 deployment receipts are preserved in [`robinhood-foundation-deployment.json`](evidence/robinhood-foundation-deployment.json). Each deployment and setup receipt was checked against the testnet RPC. Combined deployment and setup gas was `19,595,227`. The app's current deployment manifest can point to a newer fixture; the receipts in this report belong to this archived foundation deployment.
 
 | Receipt | Block | Explorer transaction | Gas |
 | --- | ---: | --- | ---: |

@@ -4,20 +4,20 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   createWalletClient,
-  decodeEventLog,
+  custom,
   defineChain,
   http,
-  maxUint256,
   type Account,
   type Address,
   type Chain,
+  type EIP1193Provider,
   type Hex,
   type PublicClient,
   type TransactionReceipt,
   type Transport,
   type WalletClient,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import {
   bossCollectiblesAbi,
   bossHpAbi,
@@ -26,19 +26,26 @@ import {
   mockUsdAbi,
   royTokenAbi,
   createLocalPublicClient,
+  createBossPoolSdk,
   DEFAULT_LOCAL_RPC_URL,
   isLocalRpcUrl,
   LOCAL_CHAIN_ID,
+  parseDeployment,
   parseLocalDeployment,
-  verifyLocalDeployment,
+  verifyDeployment,
+  type BossPoolSdk,
+  type DeploymentManifest,
+  type PendingOperation,
+  type PendingRequest,
+  type AttackQuote,
+  type AttackResult,
+  BossPoolSdkError,
+  RequoteRequiredError,
 } from "@boss-pool/chain";
 import {
   assertCancunTransientStorage,
-  assertRobinhoodChain,
   loadTestnetConfig,
-  parseDeploymentSummary,
   sanitizeSecrets,
-  verifyDeploymentOnChain,
 } from "./testnet-common";
 
 const root = process.cwd();
@@ -49,7 +56,6 @@ const localPlayers = [
   "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
 ] as const satisfies readonly Address[];
 const requiredWalletUSD = 3_000_000_000n;
-const prizeFallbackSeconds = 300n;
 const partialAttackUSD = 1_000_000n;
 const clearingAttackUSD = 1_000_000_000n;
 const firstClaimHP = 1n * 10n ** 18n;
@@ -67,7 +73,8 @@ type ExerciseAddresses = {
 type ExerciseWallet = {
   name: "A" | "B";
   address: Address;
-  client: WalletClient<Transport, Chain, Account>;
+  client: WalletClient<Transport, Chain | undefined, Account | undefined>;
+  sdk: BossPoolSdk;
 };
 type ExerciseState = {
   schemaVersion: 1;
@@ -88,7 +95,9 @@ type ExerciseState = {
     step: string;
     from: Address;
     hash: Hex;
+    request: PendingRequest;
     status: "submitted" | "success" | "reverted";
+    confirmedHash?: Hex;
     blockNumber?: string;
     gasUsed?: string;
   }>;
@@ -103,6 +112,8 @@ type Runtime = {
   addresses: ExerciseAddresses;
   deploymentTxHash: Hex;
   deploymentBlock: bigint;
+  manifestInput: DeploymentManifest;
+  sdk: { public: BossPoolSdk; A: BossPoolSdk; B: BossPoolSdk };
   sanitize: (message: string) => string;
 };
 
@@ -159,21 +170,33 @@ async function localRuntime(): Promise<Runtime> {
   const client = createLocalPublicClient(manifest);
   const chainId = await client.getChainId();
   if (chainId !== LOCAL_CHAIN_ID) throw new Error(`Refusing local exercise on chain ${chainId}.`);
-  await verifyLocalDeployment(manifest, client);
+  const deployment = await verifyDeployment(client, manifest);
+  // Only after loopback and chain-ID guards: derive Anvil's public fixture accounts as local signers.
+  const anvilMnemonic = "test test test test test test test test test test test junk";
+  const accountA = mnemonicToAccount(anvilMnemonic, { addressIndex: 0 });
+  const accountB = mnemonicToAccount(anvilMnemonic, { addressIndex: 1 });
+  if (!sameAddress(accountA.address, localPlayers[0]) || !sameAddress(accountB.address, localPlayers[1])) {
+    throw new Error("Configured local Anvil fixture accounts do not match the default account derivation.");
+  }
   const chain = localChain(rpcUrl);
   const transport = http(rpcUrl, { retryCount: 0, timeout: 10_000 });
+  const publicSdk = createBossPoolSdk({ publicClient: client, deployment });
+  const walletClientA = createWalletClient({ account: accountA, chain, transport });
+  const walletClientB = createWalletClient({ account: accountB, chain, transport });
   const wallets = {
-    A: makeWallet("A", localPlayers[0], createWalletClient({ account: localPlayers[0], chain, transport })),
-    B: makeWallet("B", localPlayers[1], createWalletClient({ account: localPlayers[1], chain, transport })),
+    A: makeWallet("A", localPlayers[0], walletClientA, publicSdk.withWallet(walletClientA)),
+    B: makeWallet("B", localPlayers[1], walletClientB, publicSdk.withWallet(walletClientB)),
   };
   return {
     network: "local",
     chainId,
     client,
     wallets,
+    sdk: { public: publicSdk, A: wallets.A.sdk, B: wallets.B.sdk },
     addresses: manifest.addresses,
     deploymentTxHash: manifest.deploymentTxHash,
     deploymentBlock: BigInt(manifest.deployedAtBlock),
+    manifestInput: manifest,
     sanitize: redactUrls,
   };
 }
@@ -181,7 +204,6 @@ async function localRuntime(): Promise<Runtime> {
 async function testnetRuntime(onConfig: (config: ReturnType<typeof loadTestnetConfig>) => void): Promise<Runtime> {
   const config = loadTestnetConfig();
   onConfig(config);
-  await assertRobinhoodChain(config.client);
   await assertCancunTransientStorage(config.client);
   const manifestPath = path.join(root, "apps/web/public/deployments/robinhood-testnet.json");
   const raw = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
@@ -190,29 +212,35 @@ async function testnetRuntime(onConfig: (config: ReturnType<typeof loadTestnetCo
     raw.chainId !== 46_630 || typeof raw.deploymentTxHash !== "string" ||
     typeof raw.deployedAtBlock !== "number" || !Number.isSafeInteger(raw.deployedAtBlock) || raw.deployedAtBlock < 0
   ) throw new Error("The testnet manifest is missing its verified chain and deployment receipt metadata.");
-  const summary = parseDeploymentSummary(`BOSS_POOL_DEPLOYMENT_JSON=${JSON.stringify(raw)}`);
-  if (summary.deployer.toLowerCase() !== config.deployerAddress.toLowerCase()) {
+  const manifest = parseDeployment(raw);
+  if (!manifest.deployer || manifest.deployer.toLowerCase() !== config.deployerAddress.toLowerCase()) {
     throw new Error("TESTNET_DEPLOYER_PRIVATE_KEY does not match the manifest deployer.");
   }
   const deploymentTxHash = raw.deploymentTxHash as Hex;
   const deploymentBlockFromManifest = BigInt(raw.deployedAtBlock);
-  await verifyDeploymentOnChain(config.client, summary, deploymentTxHash, deploymentBlockFromManifest);
+  const deployment = await verifyDeployment(config.client, manifest);
 
   const chain = robinhoodChain(config.rpcUrl);
   const transport = http(config.rpcUrl, { retryCount: 0, timeout: 15_000 });
   const accountA = privateKeyToAccount(config.deployerKey);
   const accountB = privateKeyToAccount(config.playerBKey);
+  const publicSdk = createBossPoolSdk({ publicClient: config.client, deployment });
+  const walletClientA = createWalletClient({ account: accountA, chain, transport });
+  const walletClientB = createWalletClient({ account: accountB, chain, transport });
+  const wallets = {
+    A: makeWallet("A", accountA.address, walletClientA, publicSdk.withWallet(walletClientA)),
+    B: makeWallet("B", accountB.address, walletClientB, publicSdk.withWallet(walletClientB)),
+  };
   return {
     network: "testnet",
     chainId: 46_630,
     client: config.client,
-    wallets: {
-      A: makeWallet("A", accountA.address, createWalletClient({ account: accountA, chain, transport })),
-      B: makeWallet("B", accountB.address, createWalletClient({ account: accountB, chain, transport })),
-    },
-    addresses: summary.addresses,
+    wallets,
+    sdk: { public: publicSdk, A: wallets.A.sdk, B: wallets.B.sdk },
+    addresses: manifest.addresses,
     deploymentTxHash,
     deploymentBlock: deploymentBlockFromManifest,
+    manifestInput: manifest,
     sanitize: (message) => sanitizeSecrets(message, config),
   };
 }
@@ -238,9 +266,10 @@ function robinhoodChain(rpcUrl: string): Chain {
 function makeWallet(
   name: "A" | "B",
   address: Address,
-  client: WalletClient<Transport, Chain, Account>,
+  client: WalletClient<Transport, Chain | undefined, Account | undefined>,
+  sdk: BossPoolSdk,
 ): ExerciseWallet {
-  return { name, address, client };
+  return { name, address, client, sdk };
 }
 
 function isPathInside(parent: string, child: string): boolean {
@@ -288,6 +317,11 @@ async function saveEvidence(filePath: string, state: ExerciseState): Promise<voi
 async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: string): Promise<void> {
   const { addresses, client, wallets } = runtime;
   const players = [wallets.A, wallets.B] as const;
+  state.currentStep = "verify immutable SDK deployment boundary";
+  await verifySdkSnapshotBoundary(runtime);
+  if (runtime.network === "local") await verifyEip1193SelectionGuard(runtime);
+  await saveEvidence(evidencePath, state);
+
   state.currentStep = "verify active round and token configuration";
   const initial = await readSnapshot(runtime);
   assert(initial.status === 1 && initial.currentStage === 0, "round must be Active at zero-based stage 0");
@@ -304,29 +338,48 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
   checkpoint(state, "active-round", initial);
   await saveEvidence(evidencePath, state);
 
+  state.currentStep = "public quote before connection, enrollment, and approval";
+  const stageZeroQuoteA = await runtime.sdk.public.quoteAttack({
+    maxMockUSD: partialAttackUSD,
+    stage: 0,
+    account: wallets.A.address,
+    validitySeconds: 900n,
+  });
+  const staleStageZeroQuoteB = await runtime.sdk.public.quoteAttack({
+    maxMockUSD: clearingAttackUSD,
+    stage: 0,
+    account: wallets.B.address,
+    slippageBps: 0,
+    validitySeconds: 900n,
+  });
+  assert(stageZeroQuoteA.stage === 0 && staleStageZeroQuoteB.stage === 0, "public pre-enrollment quotes must use the active zero-based stage");
+  assert(stageZeroQuoteA.mockUSDSpent > 0n && staleStageZeroQuoteB.bossHPOut > 0n, "public pre-approval quotes must contain real route outputs");
+  await assertQuoteDidNotPersist(runtime, initial, "pre-enrollment public quote");
+  checkpoint(state, "public-preapproval-quotes", initial, {
+    quoteAStage: stageZeroQuoteA.stage,
+    quoteAOutput: stageZeroQuoteA.bossHPOut.toString(),
+    quoteBStage: staleStageZeroQuoteB.stage,
+    quoteBOutput: staleStageZeroQuoteB.bossHPOut.toString(),
+  });
+  await saveEvidence(evidencePath, state);
+
   state.currentStep = "fund players with MockUSD faucet tokens";
   const mockUSDTotalSupplyBeforeFaucet = initial.mockUSDTotalSupply;
   for (const player of players) {
-    const balance = await client.readContract({
-      address: addresses.mockUSD,
-      abi: mockUsdAbi,
-      functionName: "balanceOf",
-      args: [player.address],
-    });
+    const balance = (await player.sdk.readPlayer(player.address)).mockUSDBalance;
     if (balance < requiredWalletUSD) {
-      await sendAndConfirm(
+      const operation = await player.sdk.faucetMockUSD(requiredWalletUSD - balance);
+      const confirmed = await submitPendingOperation(
         runtime,
         state,
         evidencePath,
         player,
         `faucet MockUSD to player ${player.name}`,
-        () => player.client.writeContract({
-          address: addresses.mockUSD,
-          abi: mockUsdAbi,
-          functionName: "faucet",
-          args: [player.address, requiredWalletUSD - balance],
-        }),
+        operation,
       );
+      assert(confirmed.result.amount === requiredWalletUSD - balance, `player ${player.name} faucet amount changed`);
+      assert(confirmed.result.events.some((event) => event.eventName === "Transfer" && event.transactionHash === confirmed.hash), "faucet SDK result must expose its typed receipt log identity");
+      if (player.name === "A") await assertFaucetReceiptCannotVerifyDeployment(runtime, confirmed.hash, confirmed.receipt);
     }
   }
   const mockUSDTotalSupplyAfterFaucet = await client.readContract({
@@ -345,27 +398,26 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
 
   state.currentStep = "approve and enroll both wallets";
   for (const player of players) {
-    await approveIfNeeded(runtime, state, evidencePath, player, addresses.mockUSD, mockUsdAbi, addresses.hook, 10n * 10n ** 6n, `approve Hook enrollment fee for player ${player.name}`);
+    const enrollmentApproval = await player.sdk.approve({ kind: "enroll" });
+    if (!("request" in enrollmentApproval)) {
+      assert(enrollmentApproval.approval.currentAllowance >= enrollmentApproval.approval.requiredAllowance, "skipped enrollment approval must have enough allowance");
+    } else {
+      await submitPendingOperation(runtime, state, evidencePath, player, `approve Hook enrollment fee for player ${player.name}`, enrollmentApproval);
+    }
     const [usdBeforeEnroll, royBeforeEnroll] = await Promise.all([
       client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [player.address] }),
       client.readContract({ address: addresses.roy, abi: royTokenAbi, functionName: "balanceOf", args: [player.address] }),
     ]);
-    await sendAndConfirm(
+    const enrollment = await submitPendingOperation(
       runtime,
       state,
       evidencePath,
       player,
       `enroll player ${player.name}`,
-      () => player.client.writeContract({
-        address: addresses.hook,
-        abi: bossPoolHookAbi,
-        functionName: "enroll",
-      }),
+      await player.sdk.enroll(),
     );
-    const enrolledEvent = eventArgs(lastReceipt(state), addresses.hook, bossPoolHookAbi, "Enrolled");
-    assert(sameAddress(asAddress(enrolledEvent.player), player.address), `player ${player.name} enrollment event mismatch`);
-    const entryFee = asBigInt(enrolledEvent.entryFee);
-    const starterRoy = asBigInt(enrolledEvent.starterRoy);
+    const entryFee = enrollment.result.entryFee;
+    const starterRoy = enrollment.result.starterRoy;
     assert(entryFee === initial.enrollmentFee && starterRoy === 100n * 10n ** 18n, `player ${player.name} enrollment event amounts changed`);
     const [usdAfterEnroll, royAfterEnroll] = await Promise.all([
       client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [player.address] }),
@@ -373,7 +425,7 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
     ]);
     assert(usdBeforeEnroll - usdAfterEnroll === entryFee, `player ${player.name} paid the wrong enrollment fee`);
     assert(royAfterEnroll - royBeforeEnroll === starterRoy, `player ${player.name} received the wrong starter ROY amount`);
-    const entryTokenId = asBigInt(enrolledEvent.tokenId);
+    const entryTokenId = enrollment.result.entryTokenId;
     const entryOwner = await client.readContract({
       address: addresses.collectibles,
       abi: bossCollectiblesAbi,
@@ -390,8 +442,13 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
     await saveEvidence(evidencePath, state);
   }
 
-  for (const player of players) {
-    await approveIfNeeded(runtime, state, evidencePath, player, addresses.mockUSD, mockUsdAbi, addresses.router, maxUint256, `approve Router attack spend for player ${player.name}`);
+  const attackAllowanceA = await wallets.A.sdk.approve({ kind: "attack", maxMockUSD: stageZeroQuoteA.maxMockUSD });
+  if ("request" in attackAllowanceA) {
+    await submitPendingOperation(runtime, state, evidencePath, wallets.A, "approve Router attack spend for player A", attackAllowanceA);
+  }
+  const attackAllowanceB = await wallets.B.sdk.approve({ kind: "attack", maxMockUSD: staleStageZeroQuoteB.maxMockUSD });
+  if ("request" in attackAllowanceB) {
+    await submitPendingOperation(runtime, state, evidencePath, wallets.B, "approve Router attack spend for player B", attackAllowanceB);
   }
 
   const attackPlan = [
@@ -402,103 +459,67 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
   ] as const;
   let priorRefills = 0;
   let expectedStageSold = [0n, 0n, 0n];
-  for (const attack of attackPlan) {
-    state.currentStep = attack.label;
-    const before = await readSnapshot(runtime);
-    assert(before.status === 1, `${attack.label}: round is no longer Active`);
-    assert(before.currentStage === attack.stage, `${attack.label}: zero-based stage changed unexpectedly`);
-    const playerBeforeUSD = attack.player.address === wallets.A.address ? before.mockUSDA : before.mockUSDB;
-    const playerBeforeHP = attack.player.address === wallets.A.address ? before.bossHPA : before.bossHPB;
-    const playerBeforeROY = attack.player.address === wallets.A.address ? before.royA : before.royB;
-    const call = await simulateAttack(runtime, attack.player, attack.maxUSD, attack.stage);
-    await sendAndConfirm(
-      runtime,
-      state,
-      evidencePath,
-      attack.player,
-      attack.label,
-      () => attack.player.client.writeContract({
-        address: addresses.router,
-        abi: bossRouterAbi,
-        functionName: "attackWithMockUSD",
-        args: [attack.maxUSD, call.minRoyOut, call.minHPOut, attack.stage, call.deadline],
-      }),
-    );
-    const receipt = lastReceipt(state);
-    const executed = eventArgs(receipt, addresses.router, bossRouterAbi, "AttackExecuted");
-    assert(sameAddress(asAddress(executed.player), attack.player.address), `${attack.label}: router emitted another player`);
-    assert(asBigInt(executed.stage) === BigInt(attack.stage), `${attack.label}: router event has wrong stage`);
-    const usdSpent = asBigInt(executed.mockUSDSpent);
-    const royBought = asBigInt(executed.royBought);
-    const roySpent = asBigInt(executed.roySpent);
-    const hpOut = asBigInt(executed.bossHPReceived);
-    const mockUSDRefunded = asBigInt(executed.mockUSDRefunded);
-    const royRefunded = asBigInt(executed.royRefunded);
-    assert(usdSpent > 0n && usdSpent <= attack.maxUSD, `${attack.label}: MockUSD spend is outside its cap`);
-    assert(royBought > 0n && roySpent > 0n && roySpent <= royBought, `${attack.label}: two-hop ROY accounting is invalid`);
-    assert(mockUSDRefunded === attack.maxUSD - usdSpent, `${attack.label}: Router MockUSD refund event is wrong`);
-    assert(royRefunded === royBought - roySpent, `${attack.label}: Router ROY refund event is wrong`);
-    assert(hpOut >= call.minHPOut && hpOut > 0n, `${attack.label}: HP output missed its simulated minimum`);
+  let partialStageZeroResult = await runSdkAttack(runtime, state, evidencePath, attackPlan[0], stageZeroQuoteA, expectedStageSold, priorRefills, initial);
+  expectedStageSold = partialStageZeroResult.expectedStageSold;
+  priorRefills = partialStageZeroResult.priorRefills;
 
-    const after = await readSnapshot(runtime);
-    const playerAfterUSD = attack.player.address === wallets.A.address ? after.mockUSDA : after.mockUSDB;
-    const playerAfterHP = attack.player.address === wallets.A.address ? after.bossHPA : after.bossHPB;
-    const playerAfterROY = attack.player.address === wallets.A.address ? after.royA : after.royB;
-    assert(playerBeforeUSD - playerAfterUSD === usdSpent, `${attack.label}: actual MockUSD balance delta mismatch`);
-    assert(playerAfterROY - playerBeforeROY === royRefunded, `${attack.label}: actual player ROY refund delta mismatch`);
-    assert(playerAfterHP - playerBeforeHP === hpOut, `${attack.label}: player did not receive the full BossHP output`);
-    assert(after.bossHPTotalSupply === initial.bossHPTotalSupply, `${attack.label}: BossHP was minted or burned`);
-    assert(after.royTotalSupply === initial.royTotalSupply, `${attack.label}: ROY was minted or burned`);
-    assert(after.bossHPCustody === after.bossHPTotalSupply, `${attack.label}: BossHP custody failed to reconcile`);
+  const beforeStaleSameStage = await readSnapshot(runtime);
+  const transactionCountBeforeStaleSameStage = state.transactions.length;
+  await expectRequote(
+    () => wallets.B.sdk.prepareAttack(staleStageZeroQuoteB),
+    "slippage",
+    "stage-0 same-stage quote must be rejected after A moves the pool price",
+  );
+  assert(state.transactions.length === transactionCountBeforeStaleSameStage, "stale same-stage quote must not submit a transaction");
+  const afterStaleSameStage = await readSnapshot(runtime);
+  assertSnapshotUnchanged(beforeStaleSameStage, afterStaleSameStage, "failed stale same-stage simulation");
+  state.checkpoints.push({
+    name: "stale-same-stage-quote-rejected",
+    reason: "slippage",
+    quotedBlock: staleStageZeroQuoteB.quotedBlock.toString(),
+    actualStage: afterStaleSameStage.currentStage,
+    transactionsBefore: transactionCountBeforeStaleSameStage,
+    transactionsAfter: state.transactions.length,
+  });
+  await saveEvidence(evidencePath, state);
 
-    expectedStageSold[attack.stage] += hpOut;
-    assert(after.stageSold.every((value, index) => value === expectedStageSold[index]), `${attack.label}: stageSold does not match actual outputs`);
-    for (let index = 0; index <= after.currentStage; index++) {
-      if (after.status === 1 && index === after.currentStage) continue;
-      assert(after.stageSold[index] <= after.stageCapacity[index], `${attack.label}: stage ${index} exceeded capacity`);
-      assert(after.roundingDust[index] === after.stageCapacity[index] - after.stageSold[index], `${attack.label}: stage ${index} dust does not reconcile`);
-    }
+  const freshStageZeroQuoteB = await runtime.sdk.public.quoteAttack({
+    maxMockUSD: attackPlan[1].maxUSD,
+    stage: attackPlan[1].stage,
+    account: wallets.B.address,
+    validitySeconds: 900n,
+  });
+  const clearStageZeroResult = await runSdkAttack(runtime, state, evidencePath, attackPlan[1], freshStageZeroQuoteB, expectedStageSold, priorRefills, initial);
+  expectedStageSold = clearStageZeroResult.expectedStageSold;
+  priorRefills = clearStageZeroResult.priorRefills;
 
-    const refillEvents = findEvents(receipt, addresses.router, bossRouterAbi, "StageRefilled");
-    const defeatedEvents = findEvents(receipt, addresses.hook, bossPoolHookAbi, "BossDefeated");
-    if (attack.label === "partial stage 0 attack") {
-      assert(refillEvents.length === 0 && defeatedEvents.length === 0, "partial stage 0 attack must not refill or defeat the round");
-      assert(after.status === 1 && after.currentStage === 0, "partial attack must remain at zero-based stage 0");
-      assert(after.stageSold[0] > 0n && after.stageSold[1] === 0n, "partial attack must record damage only in stage 0");
-    } else if (attack.stage < 2) {
-      assert(refillEvents.length === 1, `${attack.label}: expected exactly one refill receipt`);
-      const refill = refillEvents[0];
-      assert(asBigInt(refill.clearedStage) === BigInt(attack.stage), `${attack.label}: refill cleared the wrong stage`);
-      assert(asBigInt(refill.nextStage) === BigInt(attack.stage + 1), `${attack.label}: refill released the wrong next stage`);
-      priorRefills++;
-      assert(after.status === 1 && after.currentStage === attack.stage + 1, `${attack.label}: round did not activate the next zero-based stage`);
-      assert(after.stageSold[attack.stage + 1] === 0n, `${attack.label}: clearing attack spilled into the next stage`);
-    } else {
-      assert(refillEvents.length === 0, "final stage must not refill or advance to stage 3");
-      assert(defeatedEvents.length === 1, "final attack must emit one BossDefeated event");
-      assert(after.status === 3 && after.currentStage === 2, "victory must remain Defeated at zero-based stage 2");
-      const finalEligibleHP = after.stageSold.reduce((sum, amount) => sum + amount, 0n);
-      assert(after.finalEligibleHP === finalEligibleHP && finalEligibleHP > 0n, "final claim denominator must equal actual HP sold outputs");
-      assert(asBigInt(defeatedEvents[0].finalEligibleHP) === finalEligibleHP, "BossDefeated denominator differs from actual sold output");
-      assert(after.stageSold.every((value) => value > 0n), "all three stages must have positive actual damage");
-      assert(priorRefills === 2, "the complete fight must contain exactly two reserve refills");
-    }
-    checkpoint(state, `attack-${attack.stage}-${attack.player.name}`, after, {
-      maxMockUSD: attack.maxUSD.toString(),
-      minRoyOut: call.minRoyOut.toString(),
-      minBossHPOut: call.minHPOut.toString(),
-      simulatedMockUSDSpent: call.simulated.mockUSDSpent.toString(),
-      simulatedRoyBought: call.simulated.royBought.toString(),
-      simulatedRoySpent: call.simulated.roySpent.toString(),
-      simulatedBossHPOut: call.simulated.bossHPOut.toString(),
-      actualMockUSDSpent: usdSpent.toString(),
-      actualRoyBought: royBought.toString(),
-      actualRoySpent: roySpent.toString(),
-      actualMockUSDRefunded: mockUSDRefunded.toString(),
-      actualRoyRefunded: royRefunded.toString(),
-      actualBossHPOut: hpOut.toString(),
+  const transactionCountBeforeStaleStage = state.transactions.length;
+  await expectRequote(
+    () => wallets.A.sdk.attack(stageZeroQuoteA),
+    "stage-changed",
+    "A's retained zero-based stage-0 quote must fail after B clears stage 0",
+  );
+  assert(state.transactions.length === transactionCountBeforeStaleStage, "stale-stage quote must not submit a transaction");
+  state.checkpoints.push({
+    name: "stale-stage-quote-rejected",
+    reason: "stage-changed",
+    quotedStage: stageZeroQuoteA.stage,
+    actualStage: (await readSnapshot(runtime)).currentStage,
+    transactionsBefore: transactionCountBeforeStaleStage,
+    transactionsAfter: state.transactions.length,
+  });
+  await saveEvidence(evidencePath, state);
+
+  for (const attack of attackPlan.slice(2)) {
+    const quote = await runtime.sdk.public.quoteAttack({
+      maxMockUSD: attack.maxUSD,
+      stage: attack.stage,
+      account: attack.player.address,
+      validitySeconds: 900n,
     });
-    await saveEvidence(evidencePath, state);
+    const result = await runSdkAttack(runtime, state, evidencePath, attack, quote, expectedStageSold, priorRefills, initial);
+    expectedStageSold = result.expectedStageSold;
+    priorRefills = result.priorRefills;
   }
 
   state.currentStep = "transfer eligible BossHP rights from player B to A";
@@ -506,19 +527,15 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
   assert(beforeTransfer.status === 3, "HP transfer requires a defeated round");
   const transferAmount = beforeTransfer.bossHPB;
   assert(transferAmount > 0n, "player B must hold BossHP earned from attacks");
-  await sendAndConfirm(
+  const transfer = await submitPendingOperation(
     runtime,
     state,
     evidencePath,
     wallets.B,
     "transfer all player B BossHP to player A",
-    () => wallets.B.client.writeContract({
-      address: addresses.bossHP,
-      abi: bossHpAbi,
-      functionName: "transfer",
-      args: [wallets.A.address, transferAmount],
-    }),
+    await wallets.B.sdk.transferBossHP(wallets.A.address, transferAmount),
   );
+  assert(transfer.result.amount === transferAmount && sameAddress(transfer.result.recipient, wallets.A.address), "SDK transfer result does not match the request");
   const afterTransfer = await readSnapshot(runtime);
   assert(afterTransfer.stageSold.every((amount, index) => amount === beforeTransfer.stageSold[index]), "BossHP transfer changed stage damage");
   assert(afterTransfer.finalEligibleHP === beforeTransfer.finalEligibleHP, "BossHP transfer changed eligible reward denominator");
@@ -552,22 +569,16 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
 
   state.currentStep = "claim both victory NFTs";
   for (const player of players) {
-    assert(await client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "hasAttacked", args: [player.address] }), `player ${player.name} has no attack record`);
-    await sendAndConfirm(
+    assert((await player.sdk.readPlayer(player.address)).hasAttacked, `player ${player.name} has no attack record`);
+    const victory = await submitPendingOperation(
       runtime,
       state,
       evidencePath,
       player,
       `claim victory NFT for player ${player.name}`,
-      () => player.client.writeContract({
-        address: addresses.hook,
-        abi: bossPoolHookAbi,
-        functionName: "claimVictoryNFT",
-      }),
+      await player.sdk.claimVictoryNFT(),
     );
-    const victoryEvent = eventArgs(lastReceipt(state), addresses.hook, bossPoolHookAbi, "VictoryNFTClaimed");
-    const tokenId = asBigInt(victoryEvent.tokenId);
-    assert(sameAddress(asAddress(victoryEvent.player), player.address), `victory NFT event mismatch for player ${player.name}`);
+    const tokenId = victory.result.tokenId;
     assert(await client.readContract({ address: addresses.collectibles, abi: bossCollectiblesAbi, functionName: "isVictoryToken", args: [tokenId] }), `token ${tokenId} is not marked as a victory NFT`);
     const owner = await client.readContract({ address: addresses.collectibles, abi: bossCollectiblesAbi, functionName: "ownerOf", args: [tokenId] });
     assert(sameAddress(owner, player.address), `victory NFT for player ${player.name} was not delivered`);
@@ -589,64 +600,199 @@ async function runJourney(runtime: Runtime, state: ExerciseState, evidencePath: 
   await saveEvidence(evidencePath, state);
 }
 
-async function approveIfNeeded(
+async function verifySdkSnapshotBoundary(runtime: Runtime): Promise<void> {
+  const expectedRouter = runtime.sdk.public.deployment.manifest.addresses.router;
+  const manifest = runtime.manifestInput;
+  const mutableAddresses = manifest.addresses as { router: Address };
+  mutableAddresses.router = "0x0000000000000000000000000000000000000001";
+  assert(runtime.sdk.public.deployment.manifest.addresses.router === expectedRouter, "verified deployment must snapshot caller-owned manifest data");
+  assert(Object.isFrozen(runtime.sdk.public.deployment.manifest) && Object.isFrozen(runtime.sdk.public.deployment.manifest.addresses), "verified deployment identity must be immutable");
+  mutableAddresses.router = expectedRouter;
+
+  const approval = await runtime.sdk.public.getApproval({ kind: "attack", maxMockUSD: 1n }, runtime.wallets.A.address);
+  assert(approval.spenderAddress.toLowerCase() === expectedRouter.toLowerCase(), "unlimited attack approval spender must come from the verified deployment snapshot");
+
+  const invalidReceiptManifest = {
+    ...runtime.manifestInput,
+    deployedAtBlock: runtime.sdk.public.deployment.manifest.deployedAtBlock + 1,
+    addresses: { ...runtime.sdk.public.deployment.manifest.addresses },
+  } as DeploymentManifest;
+  let rejected = false;
+  try {
+    await verifyDeployment(runtime.client, invalidReceiptManifest);
+  } catch {
+    rejected = true;
+  }
+  assert(rejected, "SDK must reject a deployment receipt/block mismatch before producing a verified identity");
+}
+
+async function verifyEip1193SelectionGuard(runtime: Runtime): Promise<void> {
+  const accountA = runtime.wallets.A.address;
+  const accountB = runtime.wallets.B.address;
+  const chain = runtime.sdk.public.deployment.chain;
+
+  async function expectNoWrite(accountsForRead: (read: number) => Address[]): Promise<void> {
+    let accountRead = 0;
+    let sendCount = 0;
+    const provider = {
+      async request({ method }: { method: string }) {
+        if (method === "eth_chainId") return `0x${runtime.chainId.toString(16)}`;
+        if (method === "eth_accounts") return accountsForRead(accountRead++);
+        if (method === "eth_sendTransaction" || method === "eth_sendRawTransaction") {
+          sendCount++;
+          return `0x${"1".repeat(64)}`;
+        }
+        throw new Error(`Unexpected provider method in account-order regression: ${method}`);
+      },
+    } as unknown as EIP1193Provider;
+    const walletClient = createWalletClient({ account: accountA, chain, transport: custom(provider) });
+    const testSdk = runtime.sdk.public.withWallet(walletClient);
+    let rejected = false;
+    try {
+      await testSdk.approve({ kind: "enroll" });
+    } catch (error) {
+      rejected = error instanceof BossPoolSdkError && error.code === "WALLET_ACCOUNT_CHANGED";
+    }
+    assert(rejected, "JSON-RPC account-order change must produce a typed account mismatch");
+    assert(sendCount === 0, "JSON-RPC account-order mismatch reached transaction submission");
+  }
+
+  await expectNoWrite(() => [accountB, accountA]);
+  await expectNoWrite((read) => read === 0 ? [accountA, accountB] : [accountB, accountA]);
+}
+
+async function assertFaucetReceiptCannotVerifyDeployment(
+  runtime: Runtime,
+  faucetHash: Hex,
+  receipt: TransactionReceipt,
+): Promise<void> {
+  assert(receipt.status === "success" && receipt.contractAddress === null, "faucet boundary fixture must be a successful non-creation receipt");
+  const unrelatedManifest = {
+    ...runtime.manifestInput,
+    deploymentTxHash: faucetHash,
+    deployedAtBlock: Number(receipt.blockNumber),
+    addresses: { ...runtime.manifestInput.addresses },
+  } as DeploymentManifest;
+  let rejected = false;
+  try {
+    await verifyDeployment(runtime.client, unrelatedManifest);
+  } catch {
+    rejected = true;
+  }
+  assert(rejected, "SDK must reject an unrelated successful faucet receipt whose contractAddress is null");
+}
+
+async function runSdkAttack(
   runtime: Runtime,
   state: ExerciseState,
   evidencePath: string,
-  player: ExerciseWallet,
-  token: Address,
-  abi: typeof mockUsdAbi | typeof bossHpAbi,
-  spender: Address,
-  amount: bigint,
-  label: string,
+  attack: { player: ExerciseWallet; maxUSD: bigint; stage: number; label: string },
+  quote: AttackQuote,
+  expectedStageSold: readonly bigint[],
+  priorRefills: number,
+  initial: Awaited<ReturnType<typeof readSnapshot>>,
 ) {
-  const allowance = await runtime.client.readContract({
-    address: token,
-    abi,
-    functionName: "allowance",
-    args: [player.address, spender],
-  });
-  if (allowance >= amount) return;
-  await sendAndConfirm(runtime, state, evidencePath, player, label, () => player.client.writeContract({
-    address: token,
-    abi,
-    functionName: "approve",
-    args: [spender, amount],
-  }));
-}
+  state.currentStep = attack.label;
+  const before = await readSnapshot(runtime);
+  assert(before.status === 1 && before.currentStage === attack.stage, `${attack.label}: round/stage changed before the quote-bound attack`);
+  const playerBeforeUSD = attack.player.address === runtime.wallets.A.address ? before.mockUSDA : before.mockUSDB;
+  const playerBeforeHP = attack.player.address === runtime.wallets.A.address ? before.bossHPA : before.bossHPB;
+  const playerBeforeROY = attack.player.address === runtime.wallets.A.address ? before.royA : before.royB;
 
-async function simulateAttack(runtime: Runtime, player: ExerciseWallet, maxUSD: bigint, expectedStage: number) {
-  const { client, addresses } = runtime;
-  const [currentStage, deadline, block] = await Promise.all([
-    client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "currentStage" }),
-    client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "deadline" }),
-    client.getBlock({ blockTag: "latest" }),
-  ]);
-  assert(currentStage === expectedStage, `stage ${expectedStage} is no longer active`);
-  const desiredDeadline = block.timestamp + prizeFallbackSeconds;
-  const callDeadline = desiredDeadline < deadline ? desiredDeadline : deadline - 1n;
-  assert(callDeadline >= block.timestamp, "round is at or past its attack deadline");
-  const exploratory = await client.simulateContract({
-    address: addresses.router,
-    abi: bossRouterAbi,
-    functionName: "attackWithMockUSD",
-    args: [maxUSD, 0n, 1n, expectedStage, callDeadline],
-    account: player.address,
+  const confirmed = await submitPendingOperation(
+    runtime,
+    state,
+    evidencePath,
+    attack.player,
+    attack.label,
+    await attack.player.sdk.attack(quote),
+  );
+  const actual = confirmed.result;
+  assert(actual.stage === attack.stage, `${attack.label}: typed receipt stage mismatch`);
+  assert(actual.mockUSDSpent === quote.mockUSDSpent, `${attack.label}: public pre-approval quote MockUSD spend did not match execution without a pool mutation`);
+  assert(actual.royBought === quote.royBought && actual.roySpent === quote.roySpent, `${attack.label}: public ROY quote did not match execution without a pool mutation`);
+  assert(actual.bossHPOut === quote.bossHPOut, `${attack.label}: public BossHP quote did not match execution without a pool mutation`);
+  assert(actual.mockUSDRefunded === quote.mockUSDRefunded && actual.royRefunded === quote.royRefunded, `${attack.label}: quote refunds do not match actual settlement`);
+  assert(actual.mockUSDSpent > 0n && actual.mockUSDSpent <= attack.maxUSD, `${attack.label}: MockUSD spend is outside its cap`);
+  assert(actual.royBought > 0n && actual.roySpent > 0n && actual.roySpent <= actual.royBought, `${attack.label}: two-hop ROY accounting is invalid`);
+  assert(actual.bossHPOut >= quote.minBossHPOut && actual.bossHPOut > 0n, `${attack.label}: output missed the floor the player accepted`);
+  assert(actual.events.some((event) => event.eventName === "AttackExecuted" && event.transactionHash === confirmed.hash), `${attack.label}: SDK omitted its typed Router event`);
+  assert(actual.events.some((event) => event.eventName === "AttackRecorded"), `${attack.label}: SDK omitted its typed Hook damage event`);
+
+  const after = await readSnapshot(runtime);
+  const playerAfterUSD = attack.player.address === runtime.wallets.A.address ? after.mockUSDA : after.mockUSDB;
+  const playerAfterHP = attack.player.address === runtime.wallets.A.address ? after.bossHPA : after.bossHPB;
+  const playerAfterROY = attack.player.address === runtime.wallets.A.address ? after.royA : after.royB;
+  assert(playerBeforeUSD - playerAfterUSD === actual.mockUSDSpent, `${attack.label}: actual MockUSD balance delta mismatch`);
+  assert(playerAfterROY - playerBeforeROY === actual.royRefunded, `${attack.label}: actual player ROY refund delta mismatch`);
+  assert(playerAfterHP - playerBeforeHP === actual.bossHPOut, `${attack.label}: player did not receive the full BossHP output`);
+  assert(after.bossHPTotalSupply === initial.bossHPTotalSupply, `${attack.label}: BossHP was minted or burned`);
+  assert(after.royTotalSupply === initial.royTotalSupply, `${attack.label}: ROY was minted or burned`);
+  assert(after.bossHPCustody === after.bossHPTotalSupply, `${attack.label}: BossHP custody failed to reconcile`);
+
+  const updatedStageSold = [...expectedStageSold];
+  updatedStageSold[attack.stage] += actual.bossHPOut;
+  assert(after.stageSold.every((value, index) => value === updatedStageSold[index]), `${attack.label}: stageSold does not match actual outputs`);
+  for (let index = 0; index <= after.currentStage; index++) {
+    if (after.status === 1 && index === after.currentStage) continue;
+    assert(after.stageSold[index] <= after.stageCapacity[index], `${attack.label}: stage ${index} exceeded capacity`);
+    assert(after.roundingDust[index] === after.stageCapacity[index] - after.stageSold[index], `${attack.label}: stage ${index} dust does not reconcile`);
+  }
+
+  const hasEvent = (name: string) => actual.events.some((event) => event.eventName === name);
+  if (quote.stageCleared) {
+    const clear = actual.events.find((event) => event.eventName === "StageCleared");
+    assert(clear, `${attack.label}: quote predicted a stage clear but the receipt lacked StageCleared`);
+    if (clear.eventName !== "StageCleared") throw new Error(`${attack.label}: stage clear event type mismatch`);
+    assert(clear.args.stage === attack.stage, `${attack.label}: clear event identifies another stage`);
+    assert(clear.args.sold === after.stageSold[attack.stage], `${attack.label}: clear event sold amount disagrees with the stage counter`);
+    assert(clear.args.capacity === after.stageCapacity[attack.stage], `${attack.label}: clear event capacity disagrees with the stage configuration`);
+    assert(clear.args.roundingDust === after.roundingDust[attack.stage], `${attack.label}: clear event dust disagrees with recorded dust`);
+    assert(clear.args.sold + clear.args.roundingDust === clear.args.capacity, `${attack.label}: sold amount plus dust does not reconcile to the stage capacity`);
+    if (quote.bossDefeated) {
+      assert(hasEvent("BossDefeated") && after.status === 3 && after.currentStage === 2, "final quote predicted defeat but the confirmed result did not");
+      const finalEligibleHP = after.stageSold.reduce((sum, amount) => sum + amount, 0n);
+      assert(after.finalEligibleHP === finalEligibleHP && finalEligibleHP > 0n, "final claim denominator must equal actual HP sold outputs");
+      assert(after.stageSold.every((value) => value > 0n), "all three stages must have positive actual damage");
+      assert(priorRefills === 2, "the complete fight must contain exactly two reserve refills");
+    } else {
+      assert(hasEvent("StageRefilled") && hasEvent("StageActivated"), `${attack.label}: nonfinal clear omitted refill or activation events`);
+      assert(after.status === 1 && after.currentStage === attack.stage + 1, `${attack.label}: round did not activate the next zero-based stage`);
+      assert(after.stageSold[attack.stage + 1] === 0n, `${attack.label}: clearing attack spilled into the next stage`);
+    }
+  } else {
+    assert(!hasEvent("StageCleared") && !hasEvent("StageRefilled") && !hasEvent("BossDefeated"), `${attack.label}: quote predicted a partial hit but receipt included transition events`);
+    assert(after.status === 1 && after.currentStage === attack.stage, `${attack.label}: partial hit must remain in its original stage`);
+  }
+  assert(quote.nextStage === after.currentStage, `${attack.label}: quote nextStage differs from the confirmed round state`);
+
+  checkpoint(state, `attack-${attack.stage}-${attack.player.name}`, after, {
+    quoteBlock: quote.quotedBlock.toString(),
+    maxMockUSD: quote.maxMockUSD.toString(),
+    minRoyOut: quote.minRoyOut.toString(),
+    minBossHPOut: quote.minBossHPOut.toString(),
+    quotedMockUSDSpent: quote.mockUSDSpent.toString(),
+    quotedRoyBought: quote.royBought.toString(),
+    quotedRoySpent: quote.roySpent.toString(),
+    quotedBossHPOut: quote.bossHPOut.toString(),
+    quoteStageCleared: quote.stageCleared,
+    quoteBossDefeated: quote.bossDefeated,
+    actualMockUSDSpent: actual.mockUSDSpent.toString(),
+    actualRoyBought: actual.royBought.toString(),
+    actualRoySpent: actual.roySpent.toString(),
+    actualMockUSDRefunded: actual.mockUSDRefunded.toString(),
+    actualRoyRefunded: actual.royRefunded.toString(),
+    actualBossHPOut: actual.bossHPOut.toString(),
+    attackEventId: eventIdentity(actual.events.find((event) => event.eventName === "AttackExecuted")),
+    transitionEventIds: actual.events
+      .filter((event) => ["StageCleared", "StageRefilled", "StageActivated", "BossDefeated"].includes(event.eventName))
+      .map((event) => `${event.transactionHash}:${event.logIndex}`),
   });
-  const quote = attackResult(exploratory.result);
-  assert(quote.royBought > 0n && quote.bossHPOut > 0n, "attack simulation produced no usable output");
-  const minRoyOut = minimumOutput(quote.royBought);
-  const minHPOut = minimumOutput(quote.bossHPOut);
-  const finalSimulation = await client.simulateContract({
-    address: addresses.router,
-    abi: bossRouterAbi,
-    functionName: "attackWithMockUSD",
-    args: [maxUSD, minRoyOut, minHPOut, expectedStage, callDeadline],
-    account: player.address,
-  });
-  const simulated = attackResult(finalSimulation.result);
-  assert(simulated.royBought >= minRoyOut && simulated.bossHPOut >= minHPOut, "bounded attack simulation failed its output floor");
-  return { minRoyOut, minHPOut, deadline: callDeadline, simulated };
+  await saveEvidence(evidencePath, state);
+  return {
+    expectedStageSold: updatedStageSold,
+    priorRefills: priorRefills + (quote.stageCleared && !quote.bossDefeated ? 1 : 0),
+  };
 }
 
 async function claim(
@@ -657,111 +803,105 @@ async function claim(
   hpAmount: bigint,
   label: string,
 ) {
-  const hook = runtime.addresses.hook;
-  await approveIfNeeded(runtime, state, evidencePath, player, runtime.addresses.bossHP, bossHpAbi, hook, hpAmount, `approve Hook for ${label}`);
-  const simulated = await runtime.client.simulateContract({
-    address: hook,
-    abi: bossPoolHookAbi,
-    functionName: "claimReward",
-    args: [hpAmount],
-    account: player.address,
-  });
-  const simulatedPayout = simulated.result;
-  assert(simulatedPayout > 0n, `${label} would pay zero MockUSD`);
-  const [mockUSDBefore, bossHPBefore, bossHPInHookBefore, redeemedHPBefore, paidPrizeBefore, finalEligibleHP, originalPrize] = await Promise.all([
-    runtime.client.readContract({ address: runtime.addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [player.address] }),
-    runtime.client.readContract({ address: runtime.addresses.bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [player.address] }),
-    runtime.client.readContract({ address: runtime.addresses.bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [hook] }),
-    runtime.client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "redeemedHP" }),
-    runtime.client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "paidPrize" }),
-    runtime.client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "finalEligibleHP" }),
-    runtime.client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "originalPrize" }),
-  ]);
-  const expectedPayout = originalPrize * hpAmount / finalEligibleHP;
-  assert(simulatedPayout === expectedPayout, `${label} does not match floor(originalPrize * HP / finalEligibleHP)`);
-  await sendAndConfirm(runtime, state, evidencePath, player, label, () => player.client.writeContract({
-    address: hook,
-    abi: bossPoolHookAbi,
-    functionName: "claimReward",
-    args: [hpAmount],
-  }));
-  const claimed = eventArgs(lastReceipt(state), hook, bossPoolHookAbi, "RewardClaimed");
-  assert(sameAddress(asAddress(claimed.player), player.address), `${label} event has wrong player`);
-  assert(asBigInt(claimed.bossHPIn) === hpAmount, `${label} event surrendered the wrong amount of HP`);
-  assert(asBigInt(claimed.mockUSDOut) === simulatedPayout, `${label} event payout differs from simulated contract output`);
-  const [mockUSDAfter, bossHPAfter, bossHPInHookAfter, redeemedHPAfter, paidPrizeAfter] = await Promise.all([
-    runtime.client.readContract({ address: runtime.addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [player.address] }),
-    runtime.client.readContract({ address: runtime.addresses.bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [player.address] }),
-    runtime.client.readContract({ address: runtime.addresses.bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [hook] }),
-    runtime.client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "redeemedHP" }),
-    runtime.client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "paidPrize" }),
-  ]);
-  assert(mockUSDAfter - mockUSDBefore === simulatedPayout, `${label} MockUSD balance delta mismatch`);
-  assert(bossHPBefore - bossHPAfter === hpAmount, `${label} did not surrender the requested HP`);
-  assert(bossHPInHookAfter - bossHPInHookBefore === hpAmount, `${label} HP did not remain in Hook custody`);
-  assert(redeemedHPAfter - redeemedHPBefore === hpAmount, `${label} redeemedHP ledger mismatch`);
-  assert(paidPrizeAfter - paidPrizeBefore === simulatedPayout, `${label} paidPrize ledger mismatch`);
+  const before = await readSnapshot(runtime);
+  const preview = await player.sdk.previewReward(hpAmount, player.address);
+  assert(preview.claimable && preview.payout > 0n, `${label} would pay zero MockUSD`);
+  assert(preview.payout === before.originalPrize * hpAmount / before.finalEligibleHP, `${label} SDK preview changed the frozen reward formula`);
+  const approval = await player.sdk.approve({ kind: "claimReward", hpAmount });
+  if ("request" in approval) {
+    await submitPendingOperation(runtime, state, evidencePath, player, `approve Hook for ${label}`, approval);
+  }
+  const confirmed = await submitPendingOperation(runtime, state, evidencePath, player, label, await player.sdk.claimReward(hpAmount));
+  assert(confirmed.result.hpAmount === hpAmount && confirmed.result.payout === preview.payout, `${label} confirmed claim differs from its public reward preview`);
+  assert(confirmed.result.events.some((event) => event.eventName === "RewardClaimed" && event.transactionHash === confirmed.hash), `${label} SDK result omitted typed RewardClaimed log`);
+
+  const after = await readSnapshot(runtime);
+  const playerBeforeUSD = player.address === runtime.wallets.A.address ? before.mockUSDA : before.mockUSDB;
+  const playerAfterUSD = player.address === runtime.wallets.A.address ? after.mockUSDA : after.mockUSDB;
+  const playerBeforeHP = player.address === runtime.wallets.A.address ? before.bossHPA : before.bossHPB;
+  const playerAfterHP = player.address === runtime.wallets.A.address ? after.bossHPA : after.bossHPB;
+  assert(playerAfterUSD - playerBeforeUSD === preview.payout, `${label} MockUSD balance delta mismatch`);
+  assert(playerBeforeHP - playerAfterHP === hpAmount, `${label} did not surrender the requested HP`);
+  assert(after.bossHPInHook - before.bossHPInHook === hpAmount, `${label} HP did not remain in Hook custody`);
+  assert(after.redeemedHP - before.redeemedHP === hpAmount, `${label} redeemedHP ledger mismatch`);
+  assert(after.paidPrize - before.paidPrize === preview.payout, `${label} paidPrize ledger mismatch`);
 }
 
-async function sendAndConfirm(
+async function submitPendingOperation<T>(
   runtime: Runtime,
   state: ExerciseState,
   evidencePath: string,
   player: ExerciseWallet,
   step: string,
-  send: () => Promise<Hex>,
-): Promise<TransactionReceipt> {
+  pending: PendingOperation<T>,
+): Promise<{ result: T; receipt: TransactionReceipt; hash: Hex }> {
   state.currentStep = step;
-  const hash = await send();
-  const transaction: ExerciseState["transactions"][number] = { step, from: player.address, hash, status: "submitted" };
+  const transaction: ExerciseState["transactions"][number] = {
+    step,
+    from: player.address,
+    hash: pending.hash,
+    request: pending.request,
+    status: "submitted",
+  };
   state.transactions.push(transaction);
   await saveEvidence(evidencePath, state);
-  const receipt = await runtime.client.waitForTransactionReceipt({ hash, confirmations: 1 });
-  transaction.status = receipt.status === "success" ? "success" : "reverted";
-  transaction.blockNumber = receipt.blockNumber.toString();
-  transaction.gasUsed = receipt.gasUsed.toString();
-  await saveEvidence(evidencePath, state);
-  if (receipt.status !== "success") throw new Error(`${step} transaction reverted (${hash}).`);
-  if (!sameAddress(receipt.from, player.address)) throw new Error(`${step} receipt sender did not match player ${player.name}.`);
-  receiptCache.set(state, receipt);
-  return receipt;
-}
-
-const receiptCache = new WeakMap<ExerciseState, TransactionReceipt>();
-function lastReceipt(state: ExerciseState): TransactionReceipt {
-  const receipt = receiptCache.get(state);
-  if (!receipt) throw new Error("The latest transaction receipt is unavailable.");
-  return receipt;
-}
-
-function findEvents<const TAbi extends readonly unknown[]>(
-  receipt: TransactionReceipt,
-  emitter: Address,
-  abi: TAbi,
-  eventName: string,
-): Array<Record<string, unknown>> {
-  const found: Array<Record<string, unknown>> = [];
-  for (const log of receipt.logs) {
-    if (!sameAddress(log.address, emitter)) continue;
-    try {
-      const decoded = decodeEventLog({ abi: abi as never, data: log.data, topics: log.topics, strict: true });
-      if (decoded.eventName === eventName) found.push(decoded.args as unknown as Record<string, unknown>);
-    } catch {
-      // Other valid logs from the same contract are not the event being checked.
-    }
+  let waited = await pending.wait();
+  while (waited.status === "unresolved") {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    waited = await pending.wait();
   }
-  return found;
+  if (!sameAddress(waited.receipt.from, player.address)) throw new Error(`${step} SDK receipt sender did not match player ${player.name}.`);
+  transaction.status = "success";
+  transaction.confirmedHash = waited.hash;
+  transaction.blockNumber = waited.receipt.blockNumber.toString();
+  transaction.gasUsed = waited.receipt.gasUsed.toString();
+  await saveEvidence(evidencePath, state);
+  return { result: waited.result, receipt: waited.receipt, hash: waited.hash };
 }
 
-function eventArgs<const TAbi extends readonly unknown[]>(
-  receipt: TransactionReceipt,
-  emitter: Address,
-  abi: TAbi,
-  eventName: string,
-): Record<string, unknown> {
-  const found = findEvents(receipt, emitter, abi, eventName);
-  if (found.length !== 1) throw new Error(`Expected one ${eventName} event from ${emitter}, found ${found.length}.`);
-  return found[0];
+async function expectRequote(
+  run: () => Promise<unknown>,
+  expectedReason: RequoteRequiredError["reason"],
+  description: string,
+): Promise<void> {
+  try {
+    await run();
+  } catch (error) {
+    assert(error instanceof RequoteRequiredError, `${description}: expected a typed requote result, got ${String(error)}`);
+    assert(error.reason === expectedReason, `${description}: expected ${expectedReason}, got ${error.reason}`);
+    return;
+  }
+  throw new Error(`${description}: stale quote was unexpectedly accepted`);
+}
+
+async function assertQuoteDidNotPersist(
+  runtime: Runtime,
+  before: Awaited<ReturnType<typeof readSnapshot>>,
+  label: string,
+): Promise<void> {
+  const after = await readSnapshot(runtime);
+  assertSnapshotUnchanged(before, after, label);
+}
+
+function assertSnapshotUnchanged(
+  before: Awaited<ReturnType<typeof readSnapshot>>,
+  after: Awaited<ReturnType<typeof readSnapshot>>,
+  label: string,
+): void {
+  assert(before.status === after.status && before.currentStage === after.currentStage, `${label}: round state changed`);
+  assert(before.currentPrice === after.currentPrice, `${label}: current pool price changed`);
+  assert(before.stageSold.every((value, index) => value === after.stageSold[index]), `${label}: stage damage changed`);
+  assert(before.stageCapacity.every((value, index) => value === after.stageCapacity[index]), `${label}: stage capacity changed`);
+  assert(before.finalEligibleHP === after.finalEligibleHP && before.redeemedHP === after.redeemedHP && before.paidPrize === after.paidPrize, `${label}: reward accounting changed`);
+  assert(before.mockUSDInHook === after.mockUSDInHook && before.bossHPCustody === after.bossHPCustody, `${label}: contract token balances changed`);
+  assert(before.mockUSDA === after.mockUSDA && before.mockUSDB === after.mockUSDB, `${label}: player MockUSD changed`);
+  assert(before.royA === after.royA && before.royB === after.royB, `${label}: player ROY changed`);
+  assert(before.bossHPA === after.bossHPA && before.bossHPB === after.bossHPB, `${label}: player BossHP changed`);
+}
+
+function eventIdentity(event: { transactionHash: Hex; logIndex: number } | undefined): string {
+  if (!event) throw new Error("SDK did not return the AttackExecuted event identity.");
+  return `${event.transactionHash}:${event.logIndex}`;
 }
 
 async function readSnapshot(runtime: Runtime) {
@@ -785,6 +925,7 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
   const [
     status,
     currentStage,
+    currentPrice,
     sold0,
     sold1,
     sold2,
@@ -822,6 +963,7 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
   ] = await Promise.all([
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "status", ...read }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "currentStage", ...read }),
+    client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "lastSqrtPriceX96", ...read }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [0], ...read }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [1], ...read }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "stageSold", args: [2], ...read }),
@@ -864,6 +1006,7 @@ async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
     blockNumber,
     status,
     currentStage,
+    currentPrice,
     stageSold,
     stageCapacity,
     roundingDust,
@@ -950,26 +1093,6 @@ function checkpoint(
     bossHPCustody: snapshot.bossHPCustody.toString(),
     ...extra,
   });
-}
-
-function attackResult(value: readonly [bigint, bigint, bigint, bigint]) {
-  const [mockUSDSpent, royBought, roySpent, bossHPOut] = value;
-  return { mockUSDSpent, royBought, roySpent, bossHPOut };
-}
-
-function minimumOutput(quote: bigint): bigint {
-  return quote * 99n / 100n || 1n;
-}
-
-function asBigInt(value: unknown): bigint {
-  if (typeof value === "bigint") return value;
-  if (typeof value === "number" && Number.isSafeInteger(value)) return BigInt(value);
-  throw new Error("Decoded event field was not an integer.");
-}
-
-function asAddress(value: unknown): Address {
-  if (typeof value === "string" && /^0x[\da-fA-F]{40}$/.test(value)) return value as Address;
-  throw new Error("Decoded event field was not an address.");
 }
 
 function sameAddress(left: Address, right: Address): boolean {
