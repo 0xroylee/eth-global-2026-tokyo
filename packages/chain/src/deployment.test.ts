@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { baseSepolia } from "viem/chains";
 import {
   createBaseSepoliaPublicClient,
   createLocalPublicClient,
-  createRobinhoodPublicClient,
   getDefaultBossHook,
   parseBaseSepoliaDeployment,
   parseDeployment,
@@ -56,6 +56,16 @@ const previousFactoryBossManifest = {
     collectibles: "0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925",
   },
 };
+
+describe("public client explorer metadata", () => {
+  test("exposes the Base Sepolia explorer and leaves local clients without one", () => {
+    const baseSepoliaClient = createBaseSepoliaPublicClient("https://rpc.example");
+    const localClient = createLocalPublicClient();
+
+    expect(baseSepoliaClient.chain?.blockExplorers?.default.url).toBe(baseSepolia.blockExplorers.default.url);
+    expect(localClient.chain?.blockExplorers).toBeUndefined();
+  });
+});
 
 describe("default Boss Hook selection", () => {
   test("uses the configured Factory Hook while preserving the standalone deployment address", () => {
@@ -112,21 +122,5 @@ describe("Factory encounter origin", () => {
         factoryDeployedAtBlock: 47_332_648,
       },
     })).toThrow("Deployment manifest has an invalid Factory launch origin.");
-  });
-});
-
-describe("public client block explorers", () => {
-  test("base-sepolia client carries the BaseScan explorer url", () => {
-    const client = createBaseSepoliaPublicClient();
-
-    expect(client.chain?.blockExplorers?.default.url).toBe("https://sepolia.basescan.org");
-  });
-
-  test("local and robinhood clients expose no block explorer", () => {
-    const local = createLocalPublicClient();
-    const robinhood = createRobinhoodPublicClient();
-
-    expect(local.chain?.blockExplorers).toBeUndefined();
-    expect(robinhood.chain?.blockExplorers).toBeUndefined();
   });
 });

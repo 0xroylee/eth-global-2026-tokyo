@@ -2,19 +2,21 @@
   "schemaVersion": 1,
   "network": "base-sepolia",
   "chainId": 84532,
-  "bossId": "0x1adc03208b3c9dd978e16e71e8a354d7e173605cde85365baee117995ccbb9e2",
+  "bossId": "0xd9d21173a7144a6e5d632b1a33097331756c7c2fc1fdebc77725450d26bff4d7",
   "addresses": {
-    "bossFactory": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
-    "bossHook": "0xc11D07448948AC4757592E91D8f5155907Ef6AC0",
-    "bossRouter": "0x087D22c53082ED7841cB5716cB699111a02b0dEf",
-    "bossCollectibles": "0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925",
-    "bossToken": "0x5a5517f63714f44F19337d34ab29d5ACC652e4CF",
+    "bossFactory": "0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7",
+    "bossHook": "0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0",
+    "bossRouter": "0x824464AF219850Fde45d539FC9f754205Dbf2df7",
+    "bossCollectibles": "0xDE19925D3ECbB29cBbF2bed254452D1f6197c376",
+    "bossToken": "0x3A4AF1018EB5B9D774119C818a4eaC7CcdfBC1A2",
     "poolManager": "0x1EF1e7e79B14AFB530d9671A79B7B173FE41a1c3",
     "mockUSD": "0x184B037F95A8E7a6E956AACad2244E5ded40d487",
     "attackToken": "0x6e5390D3231beb061c1E49916806F2f26B3Feb22"
   },
   "transactions": {
-    "factoryDeployment": "0xae80726d3fe5edde233320fbacff7b32bf6f311c03964a844298d66d4b3a8214",
-    "bossLaunch": "0x757a887b2de2275dcd617b8daa8eeef6fa19d8dc469185b2aaa8f0aa1517a120"
+    "factoryDeployment": "0x48b3c5d6a87f4432d8c0e974bb21370c146f4134067092d3e2de1d71082a85ef",
+    "tokenDeployment": "0x521077b78ac96b6ac898a25448b0e7c8d60ecb9f69720b522e4822d6844707e7",
+    "tokenApproval": "0x5a812c7aef36d3c0a350f3a3193ece276d82196895a59bec993bc08440fa26eb",
+    "bossLaunch": "0x1db679d76d70c95281211f8f1f8f126430da729ab7a0accefed083d986ff04fa"
   }
 }

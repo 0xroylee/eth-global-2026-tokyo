@@ -80,6 +80,8 @@ export type {
 } from "./sdk";
 export {
   bossFactoryAbi,
+  bossFeeControllerAbi,
+  mockBossPriceSourceAbi,
   bossCollectiblesAbi,
   bossHpAbi,
   bossPoolHookAbi,

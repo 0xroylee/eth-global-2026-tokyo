@@ -16,6 +16,7 @@ import {BossHook} from "./BossHook.sol";
 import {BossRouter} from "./BossRouter.sol";
 import {BossCollectibles} from "./BossCollectibles.sol";
 import {IBossRouterContext} from "./interfaces/IBossRouterContext.sol";
+import {BossFeeController} from "./BossFeeController.sol";
 import {BossPricing} from "./libraries/BossPricing.sol";
 
 /// @notice Permissionless launchpad. Each round sells a creator-selected ERC-20 for measured MockUSD volume.
@@ -25,7 +26,7 @@ contract BossFactory is ReentrancyGuard {
     using StateLibrary for IPoolManager;
 
     uint16 public constant PRIZE_RATE_DENOMINATOR = 10_000;
-    uint16 public constant SALE_BUDGET_BPS = 9_900;
+    uint16 public constant SALE_BUDGET_BPS = 10_000;
 
     struct LaunchConfig {
         IERC20 token;
@@ -47,6 +48,7 @@ contract BossFactory is ReentrancyGuard {
         uint256 maxRoyPerMockUSDX128;
     }
 
+    BossFeeController public immutable feeController;
     IPoolManager public immutable manager;
     IERC20 public immutable mockUSD;
     IERC20 public immutable attackToken;
@@ -77,13 +79,16 @@ contract BossFactory is ReentrancyGuard {
         IERC20 mockUSD_,
         IERC20 attackToken_,
         bytes32 routerCodeHash_,
-        bytes32 hookCodeHash_
+        bytes32 hookCodeHash_,
+        BossFeeController feeController_
     ) {
         if (
             address(manager_).code.length == 0 || address(mockUSD_).code.length == 0
                 || address(attackToken_).code.length == 0 || mockUSD_ == attackToken_ || routerCodeHash_ == bytes32(0)
                 || hookCodeHash_ == bytes32(0)
         ) revert InvalidLaunch();
+        if (address(feeController_) != address(0) && (feeController_.mockUSD() != address(mockUSD_) || feeController_.attackToken() != address(attackToken_))) revert InvalidLaunch();
+        feeController = feeController_;
         manager = manager_;
         mockUSD = mockUSD_;
         attackToken = attackToken_;
@@ -98,6 +103,7 @@ contract BossFactory is ReentrancyGuard {
                 || config.volumeTargetMockUSD < 6 || config.deadline != 0
         ) revert InvalidLaunch();
 
+        if (address(feeController) != address(0) && feeController.bossToken() != address(config.token)) revert InvalidLaunch();
         quote.prizeAmount = FullMath.mulDiv(config.tokenAllocation, config.prizeBps, PRIZE_RATE_DENOMINATOR);
         quote.battleTokenBudget = config.tokenAllocation - quote.prizeAmount;
         quote.stageOneHP = FullMath.mulDiv(quote.battleTokenBudget, SALE_BUDGET_BPS, PRIZE_RATE_DENOMINATOR) / 6;
@@ -105,7 +111,7 @@ contract BossFactory is ReentrancyGuard {
         {
             revert InvalidLaunch();
         }
-        quote.saleHPBudget = quote.stageOneHP * 6;
+        quote.saleHPBudget = quote.battleTokenBudget;
 
         bool mockUSDIsCurrency0 = address(mockUSD) < address(attackToken);
         PoolKey memory supplyKey = PoolKey({
@@ -135,9 +141,9 @@ contract BossFactory is ReentrancyGuard {
         quote.estimatedAttackToken =
             FullMath.mulDivRoundingUp(config.volumeTargetMockUSD, quote.maxRoyPerMockUSDX128, 1 << 128);
         quote.hpPriceTick =
-            BossPricing.startTickForVolume(config.volumeTargetMockUSD, quote.saleHPBudget, quote.maxRoyPerMockUSDX128);
-        quote.requiredBattleTokenFunding = BossPricing.minimumBattleTokenFunding(
-            quote.stageOneHP, quote.hpPriceTick, address(config.token) < address(attackToken)
+            BossPricing.startTickForVolume(config.volumeTargetMockUSD + 2, quote.saleHPBudget - 2, quote.maxRoyPerMockUSDX128);
+        quote.requiredBattleTokenFunding = BossPricing.initialBattleTokenFunding(
+            quote.saleHPBudget, quote.hpPriceTick, address(config.token) < address(attackToken)
         );
         if (quote.requiredBattleTokenFunding == 0 || quote.requiredBattleTokenFunding > quote.battleTokenBudget) {
             revert InvalidLaunch();
@@ -257,7 +263,8 @@ contract BossFactory is ReentrancyGuard {
                 config.volumeTargetMockUSD,
                 quote.saleHPBudget,
                 quote.maxRoyPerMockUSDX128
-            )
+            ),
+            feeController
         );
     }
 }

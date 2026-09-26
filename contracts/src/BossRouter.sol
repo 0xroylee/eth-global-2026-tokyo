@@ -33,7 +33,17 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         Setup,
         Attack,
         Transition,
-        Quote
+        Quote,
+        Liquidity
+    }
+
+    struct LiquidityRequest {
+        int128 delta;
+        uint256 maxBossHPIn;
+        uint256 maxRoyIn;
+        uint256 minBossHPOut;
+        uint256 minRoyOut;
+        uint256 deadline;
     }
 
     struct AttackRequest {
@@ -113,6 +123,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         uint256 mockUSDRefunded,
         uint256 royRefunded
     );
+    event OwnerLiquidityModified(address indexed owner, int128 liquidityDelta, int256 bossHPDelta, int256 royDelta);
     event StageRefilled(uint8 indexed clearedStage, uint256 bossHPIn, uint256 royRecovered, uint8 nextStage);
 
     constructor(IPoolManager manager_, IERC20 mockUSD_, IERC20 roy_, IERC20 bossHP_, address initialOwner)
@@ -145,17 +156,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
             || address(hook_.mockUSD()) != address(mockUSD) || address(hook_.roy()) != address(roy)
             || address(hook_.bossHP()) != address(bossHP)) revert InvalidSetup();
         bossHook = hook_;
-        Currency bossCurrency = Currency.wrap(address(bossHP));
-        Currency royCurrency = Currency.wrap(address(roy));
-        Currency boss0 = Currency.unwrap(bossCurrency) < Currency.unwrap(royCurrency) ? bossCurrency : royCurrency;
-        Currency boss1 = Currency.unwrap(bossCurrency) < Currency.unwrap(royCurrency) ? royCurrency : bossCurrency;
-        _bossPoolKey = PoolKey({
-            currency0: boss0,
-            currency1: boss1,
-            fee: SWAP_FEE,
-            tickSpacing: TICK_SPACING,
-            hooks: IHooks(address(hook_))
-        });
+        _bossPoolKey = hook_.bossPoolKey();
     }
 
     function supplyPoolKey() external view returns (PoolKey memory) {
@@ -289,6 +290,22 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         emit AttackExecuted(msg.sender, attackStage, 0, 0, roySpent, bossHPOut, 0, maxRoy - roySpent);
     }
 
+    /// @notice Changes only the owner's surplus position. Positive delta adds, negative delta removes.
+    function modifyOwnerLiquidity(LiquidityRequest calldata request) external onlyOwner nonReentrant
+        returns (int256 bossHPDelta, int256 royDelta)
+    {
+        if (!activated || mode != Operation.Idle || bossHook.volumeTargetMockUSD() == 0
+            || request.delta == 0 || request.deadline < block.timestamp) revert InvalidSetup();
+        mode = Operation.Liquidity;
+        (bossHPDelta, royDelta) = abi.decode(manager.unlock(abi.encode(request)), (int256, int256));
+        mode = Operation.Idle;
+        emit OwnerLiquidityModified(msg.sender, request.delta, bossHPDelta, royDelta);
+    }
+
+    function ownerLiquidity() public view returns (uint128 surplus) {
+        return bossHook.poolLiquidity() - bossHook.stageLiquidity(0);
+    }
+
     /// @notice Retained for callers of the old ABI. Creator withdrawals are permanently disabled.
     function recoverAfterDeadline() external pure {
         revert InvalidSetup();
@@ -365,7 +382,38 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         if (mode == Operation.Setup) return _activateCallback();
         if (mode == Operation.Attack) return _attackCallback(data);
         if (mode == Operation.Quote) return _attackCallback(data);
+        if (mode == Operation.Liquidity) return _liquidityCallback(data);
         revert InvalidCallback();
+    }
+
+    function _liquidityCallback(bytes calldata data) private returns (bytes memory) {
+        LiquidityRequest memory request = abi.decode(data, (LiquidityRequest));
+        (BalanceDelta net, BalanceDelta fees) = manager.modifyLiquidity(_bossPoolKey, ModifyLiquidityParams(bossHook.LOWER_TICK(), bossHook.UPPER_TICK(), int256(request.delta), bytes32(uint256(4))), bytes(""));
+        BalanceDelta principal = net - fees;
+        _checkLiquidityBound(bossHook.bossIsCurrency0() ? principal.amount0() : principal.amount1(), request.maxBossHPIn, request.minBossHPOut);
+        _checkLiquidityBound(bossHook.bossIsCurrency0() ? principal.amount1() : principal.amount0(), request.maxRoyIn, request.minRoyOut);
+        Currency bossCurrency = Currency.wrap(address(bossHP));
+        Currency royCurrency = Currency.wrap(address(roy));
+        int256 bossDelta = manager.currencyDelta(address(this), bossCurrency);
+        int256 royDelta = manager.currencyDelta(address(this), royCurrency);
+        _settleOwnerCurrency(bossCurrency, bossDelta);
+        _settleOwnerCurrency(royCurrency, royDelta);
+        return abi.encode(bossDelta, royDelta);
+    }
+
+    function _checkLiquidityBound(int128 delta, uint256 maxIn, uint256 minOut) private pure {
+        if (delta < 0 ? uint128(-delta) > maxIn || minOut != 0 : uint128(delta) < minOut) revert SlippageExceeded();
+    }
+
+    function _settleOwnerCurrency(Currency currency, int256 delta) private {
+        if (delta < 0) {
+            manager.sync(currency);
+            IERC20(Currency.unwrap(currency)).safeTransferFrom(owner(), address(manager), uint256(-delta));
+            manager.settle();
+        } else {
+            if (delta > 0) manager.take(currency, owner(), uint256(delta));
+        }
+        _assertZero(currency);
     }
 
     function _seedSupplyCallback(bytes calldata data) private returns (bytes memory) {
@@ -416,10 +464,11 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         ) revert InvalidCallback();
 
         AttackResult memory result = request.maxMockUSD == 0 ? _executeDirect(request) : _executeTwoHop(request);
-        bool stageCleared = bossHook.status() == BossHook.RoundStatus.StageCleared
-            || bossHook.status() == BossHook.RoundStatus.Defeated;
+        if (bossHook.status() == BossHook.RoundStatus.StageCleared) {
+            _runTransition(request.stage);
+        }
         bool bossDefeated = bossHook.status() == BossHook.RoundStatus.Defeated;
-        if (bossHook.status() == BossHook.RoundStatus.StageCleared) _runTransition(request.stage);
+        bool stageCleared = bossHook.currentStage() != request.stage || bossDefeated;
         if (quoteMode) {
             revert QuoteSimulation(
                 result.mockUSDSpent,
@@ -499,7 +548,6 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         mode = Operation.Transition;
         activePlayer = address(0);
         pendingStage = clearedStage + 1;
-
         bool refillZeroForOne = bossHook.bossIsCurrency0();
         uint160 refillLimit = bossHook.bossIsCurrency0() ? bossHook.sqrtLowerX96() : bossHook.sqrtUpperX96();
         uint256 refillInput = bossHook.currentRefillInput();

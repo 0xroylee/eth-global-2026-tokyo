@@ -11,10 +11,10 @@ type Dialog = "error" | "menu" | null;
 
 const PILL =
   "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-[9px] tracking-[0.12em] transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] disabled:active:scale-100";
-const NEUTRAL = "border-white/12 text-[#9da8c3] hover:bg-white/5";
-const ACCENT = "border-accent-soft/40 text-accent-soft hover:bg-accent/10";
-const LIVE = "border-live/25 text-live-soft hover:bg-live/5";
-const WARN = "border-[#f5b04a]/40 text-[#f5b04a] hover:bg-[#f5b04a]/10";
+const NEUTRAL = "border-white/12 text-[#9da8c3]";
+const ACCENT = "border-accent-soft/40 text-accent-soft";
+const LIVE = "border-live/25 text-live-soft";
+const WARN = "border-[#f5b04a]/40 text-[#f5b04a]";
 
 export function shortAddress(address: Address): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
@@ -127,7 +127,7 @@ export function WalletControl() {
             CHAIN · {state.chainId ?? "UNKNOWN"}
           </p>
           <p className="mt-4 text-sm leading-relaxed text-muted">
-            This clears Boss Pool&apos;s local session. It does not revoke wallet permissions.
+            This clears Boss BoostPad&apos;s local session. It does not revoke wallet permissions.
           </p>
           <DialogActions>
             <PrimaryButton onClick={onDisconnect}>DISCONNECT APP</PrimaryButton>
@@ -173,7 +173,7 @@ export function WalletChooserHost() {
             <button
               type="button"
               onClick={() => void connect(wallet.info.uuid)}
-              className="flex w-full items-center gap-3 rounded-lg border border-white/12 px-4 py-3 text-left transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.98]"
+              className="flex w-full items-center gap-3 rounded-lg border border-white/12 px-4 py-3 text-left transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.98]"
             >
               <WalletIcon wallet={wallet} />
               <span className="min-w-0">
@@ -282,7 +282,7 @@ function PrimaryButton({ onClick, children }: { onClick: () => void; children: R
     <button
       type="button"
       onClick={onClick}
-      className="flex-1 rounded-lg bg-accent/20 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-accent-soft transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-accent/30 active:scale-[0.97]"
+      className="flex-1 rounded-lg bg-accent/20 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-accent-soft transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97]"
     >
       {children}
     </button>
@@ -294,7 +294,7 @@ function SecondaryButton({ onClick, children }: { onClick: () => void; children:
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg border border-white/12 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-fog transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.97]"
+      className="rounded-lg border border-white/12 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-fog transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97]"
     >
       {children}
     </button>

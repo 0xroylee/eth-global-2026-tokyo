@@ -468,7 +468,7 @@ function chainIdForNetwork(network: NetworkKey): typeof LOCAL_CHAIN_ID | typeof 
 }
 
 function networkName(network: NetworkKey): string {
-  if (network === "local") return "Boss Pool Local";
+  if (network === "local") return "Boss BoostPad Local";
   return "Base Sepolia";
 }
 
@@ -524,7 +524,7 @@ function readStoredPending(): StoredPending | null {
         : null;
     if (hookAddress === null) return null;
     const request = item.request as Partial<PendingRequest>;
-    const kinds: readonly PendingActionKind[] = ["approval", "attack", "claimReward", "claimVictoryNFT", "faucetMockUSD"];
+    const kinds: readonly PendingActionKind[] = ["approval", "attack", "claimReward", "claimVictoryNFT", "faucetMockUSD", "ownerLiquidity", "mockPrice"];
     if (
       typeof request.hash !== "string" || !/^0x[\da-fA-F]{64}$/.test(request.hash) ||
       !request.kind || !kinds.includes(request.kind) || typeof request.chainId !== "number" ||

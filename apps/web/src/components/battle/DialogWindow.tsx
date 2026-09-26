@@ -1,6 +1,6 @@
 import { displayAmount, displayEstimate } from "@/lib/format";
 import type { ReactNode } from "react";
-import { attackCapAmount, type AttackCap } from "@/lib/attackCommand";
+import { quoteMatchesAttackCap, attackCapAmount, type AttackCap } from "@/lib/attackCommand";
 import type { AttackQuotePreview } from "../BossActions";
 
 export function DialogWindow({
@@ -27,7 +27,7 @@ export function DialogWindow({
   showMessage?: boolean;
 }) {
   const selectedMaxMockUSD = attackCapAmount(selectedCap);
-  const quote = preview.quote?.maxMockUSD === selectedMaxMockUSD ? preview.quote : null;
+  const quote = quoteMatchesAttackCap(preview.quote, selectedCap) ? preview.quote : null;
   const outputUnit = preview.outputSymbol;
   const status = !walletConnected
     ? "Connect a wallet to attack. The public quote works without one."
@@ -42,21 +42,22 @@ export function DialogWindow({
             : !preview.playerReady || !preview.allowanceReady
               ? preview.allowanceLoading ? "Checking wallet balance and allowance…" : "Allowance read unavailable · retrying."
               : !preview.hasInputBalance
-                ? `At least ${selectedCap} MockUSD is needed for this maximum input cap.`
+                ? `Up to ${displayAmount(quote?.maxMockUSD ?? selectedMaxMockUSD, 6)} MockUSD is needed for this quoted input cap.`
                 : preview.allowanceMissing
                   ? "Approval needed · choose this attack again to continue."
                   : "Ready · choose this attack to submit.";
 
   return (
-    <div className="h-full bg-[#092B61] p-1 font-pixel shadow-[4px_4px_0_#041833]">
-      <div className="flex h-full min-h-[150px] flex-col border-2 border-white bg-[#FFF9E9] px-3 py-2 text-[#092B61] sm:px-4">
-        {showMessage && <div aria-live="polite" className="min-w-0 shrink-0">
+    <div className="flex h-full min-h-0 flex-col font-pixel text-[#092B61]">
+      {showMessage && <div className="window-chrome min-w-0 shrink-0 p-1">
+        <div aria-live="polite" className="border-2 border-white bg-[#FFF9E9] px-3 py-2 sm:px-4">
           <div className="window-title mb-1 inline-block px-2 py-1 text-[9px]">BATTLE MESSAGE</div>
           <p className="break-words text-xs leading-snug sm:text-sm">{title}</p>
           <p className="mt-0.5 break-words font-mono text-[10px] leading-snug sm:text-xs">{detail}</p>
-        </div>}
+        </div>
+      </div>}
 
-        {showAttackQuote && <section aria-label="Attack quote preview" className="mt-2 min-w-0 shrink-0 border-t border-[#2b4a8b]/30 pt-1.5 font-mono">
+        {/* {showAttackQuote && <section aria-label="Attack quote preview" className="mt-2 min-w-0 shrink-0 border-t border-[#2b4a8b]/30 pt-1.5 font-mono">
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-pixel text-[9px]">AUTO QUOTE · UP TO {selectedCap} MockUSD</h2>
             <span className={`shrink-0 text-[9px] ${quote && preview.fresh ? "text-[#286f43]" : "text-[#8c443e]"}`}>
@@ -79,9 +80,8 @@ export function DialogWindow({
           )}
           {!quote && preview.error && <p className="mt-1 truncate font-mono text-[9px] leading-snug text-[#8c443e]" role="status" title={preview.error}>Quote error: {preview.error.length > 100 ? `${preview.error.slice(0, 97)}…` : preview.error}</p>}
           <p className="mt-1 break-words font-mono text-[9px] leading-snug" role="status">{status}</p>
-        </section>}
+        </section>} */}
         {children}
-      </div>
     </div>
   );
 }

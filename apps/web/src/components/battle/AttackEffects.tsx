@@ -1,14 +1,18 @@
 "use client";
 
+import type { CSSProperties } from "react";
+
 export type AttackEffectPhase = "projectile" | "impact" | "stage-clear" | "victory" | "result";
 
 const SPARKS = [
-  { x: -18, y: -10 },
-  { x: 16, y: -14 },
-  { x: -10, y: 14 },
-  { x: 18, y: 8 },
-  { x: 0, y: -20 },
-  { x: 8, y: 18 },
+  { x: -70, y: -38 },
+  { x: 66, y: -48 },
+  { x: -52, y: 54 },
+  { x: 74, y: 30 },
+  { x: -8, y: -76 },
+  { x: 22, y: 68 },
+  { x: -82, y: 8 },
+  { x: 48, y: -72 },
 ] as const;
 
 /** Noninteractive token slash. Coordinates are relative to the battle field. */
@@ -30,46 +34,42 @@ export function AttackEffects({
   stageClear: boolean;
 }) {
   const landed = phase !== "projectile";
-  const x = reducedMotion || landed ? target.x : origin.x;
-  const y = reducedMotion || landed ? target.y : origin.y;
-  const showFlight = !reducedMotion && phase !== "result";
-  const showImpact = landed && phase !== "result";
+  const showFlight = !reducedMotion && phase === "projectile";
+  const showImpact = !reducedMotion && landed && phase !== "result";
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[19] overflow-hidden" aria-hidden>
+    <div key={effectId} className={`pointer-events-none absolute inset-0 z-[19] overflow-hidden ${reducedMotion ? "attack-effects-reduced" : ""}`} aria-hidden>
       {showFlight && (
         <span
-          key={`${effectId}-token`}
           className="attack-token"
-          style={{ transform: `translate(${x}px, ${y}px) rotate(${landed ? 180 : 0}deg)`, opacity: phase === "victory" ? 0 : 1 }}
+          style={{
+            left: origin.x,
+            top: origin.y,
+            "--attack-x": `${target.x - origin.x}px`,
+            "--attack-y": `${target.y - origin.y}px`,
+          } as CSSProperties}
         />
-      )}
-      {showImpact && !reducedMotion && (
-        <span className="attack-slash" style={{ transform: `translate(${target.x}px, ${target.y}px) rotate(-32deg)` }} />
       )}
       {showImpact && (
-        <span
-          className="attack-flash"
-          style={{ transform: `translate(${target.x}px, ${target.y}px)`, opacity: reducedMotion ? 0.85 : undefined }}
-        />
-      )}
-      {showImpact && !reducedMotion && SPARKS.map((spark, index) => (
-        <span
-          key={`${effectId}-spark-${index}`}
-          className="attack-spark"
-          style={{
-            transform: `translate(${target.x + spark.x}px, ${target.y + spark.y}px)`,
-            animationDelay: `${index * 30}ms`,
-          }}
-        />
-      ))}
-      {stageClear && showImpact && !reducedMotion && (
-        <span className="attack-clear-ring" style={{ left: target.x, top: target.y }} />
+        <div className="absolute" style={{ left: target.x, top: target.y }}>
+          <span className="attack-impact-ring" />
+          <span className="attack-slash" />
+          <span className="attack-slash attack-slash-cross" />
+          <span className="attack-flash" />
+          {SPARKS.map((spark, index) => (
+            <span
+              key={index}
+              className="attack-spark"
+              style={{ "--spark-x": `${spark.x}px`, "--spark-y": `${spark.y}px` } as CSSProperties}
+            />
+          ))}
+          {stageClear && <span className="attack-clear-ring" />}
+        </div>
       )}
       {landed && (
         <p
-          className="attack-result absolute font-pixel text-[10px] text-[#f6e7b2]"
-          style={{ transform: `translate(${target.x}px, ${target.y - 36}px) translateX(-50%)` }}
+          className="attack-result absolute font-pixel text-xs text-[#FFF9E9]"
+          style={{ left: target.x, top: target.y - 44, transform: "translateX(-50%)" }}
         >
           {label}
         </p>

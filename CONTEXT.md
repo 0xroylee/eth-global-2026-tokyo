@@ -22,8 +22,8 @@ One funded encounter with a deadline, three stages, and a fixed prize.
 _Avoid_: Treating a stage as another round.
 
 **Stage**:
-One boss form with an HP budget and a corresponding gated liquidity allocation.
-_Avoid_: A purely visual form change with all future liquidity already released.
+One boss form. Current Factory stages have volume goals and a shared 60/120-second cooldown, with all sale liquidity already active. Standalone stages have independent HP budgets and gated liquidity allocations.
+_Avoid_: Describing a Factory stage as a token-release allocation.
 
 **Attack Token**:
 The attack currency paid into the Boss pool to acquire BossHP.
@@ -38,7 +38,7 @@ The MockUSD / Attack Token market used to acquire the attack currency.
 _Avoid_: Prize pool.
 
 **Boss pool**:
-The Attack Token / BossHP market whose stage liquidity is released by the game rules.
+The Attack Token / BossHP market. Current Factory bosses activate all sale liquidity at launch; standalone bosses release liquidity by stage.
 _Avoid_: Magic pool, prize escrow.
 
 **Attack**:

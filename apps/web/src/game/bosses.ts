@@ -25,7 +25,11 @@ export type BossPresentation = {
   name: string;
   japaneseName?: string;
   stageImages: readonly [string, string, string];
+  stageVisibleBounds?: readonly [BossImageBounds, BossImageBounds, BossImageBounds];
 };
+
+/** Source canvas and exclusive alpha bounds for artwork rendered at a fixed visible height. */
+export type BossImageBounds = { sourceWidth: number; sourceHeight: number; x: number; y: number; width: number; height: number };
 
 /** Shared face for every gate that has no contract behind it. */
 export const HIDDEN_BOSS_PORTRAIT = "/images/boss-hidden-crowned-shadow-master.png";
@@ -41,11 +45,16 @@ export const POOL_UNIS_PRESENTATION: BossPresentation = {
     "/images/boss-cat-form-b.png?v=6",
     "/images/boss-cat-form-c.png?v=8",
   ],
+  stageVisibleBounds: [
+    { sourceWidth: 819, sourceHeight: 1024, x: 203, y: 98, width: 510, height: 869 },
+    { sourceWidth: 1024, sourceHeight: 847, x: 364, y: 11, width: 344, height: 812 },
+    { sourceWidth: 374, sourceHeight: 667, x: 84, y: 19, width: 256, height: 606 },
+  ],
 };
 
 /** A presentation is a checked-in choice for one chain and Hook; it never verifies a contract. */
 const BOSS_PRESENTATIONS: Readonly<Record<string, BossPresentation>> = {
-  "84532:0xc11d07448948ac4757592e91d8f5155907ef6ac0": POOL_UNIS_PRESENTATION,
+  "84532:0x1df6674f1c6b18d9c1b3df2480093ac831816ac0": POOL_UNIS_PRESENTATION,
 };
 
 export function findBossPresentation(chainId: number, hookAddress: string, localDefaultHookAddress?: string): BossPresentation | undefined {

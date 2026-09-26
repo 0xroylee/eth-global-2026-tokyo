@@ -14,11 +14,14 @@ import {
 import { baseSepolia } from "viem/chains";
 import {
   bossFactoryAbi,
+  bossFeeControllerAbi,
+  mockBossPriceSourceAbi,
   bossCollectiblesAbi,
   bossPoolHookAbi,
   bossRouterAbi,
 } from "./generated/abi";
-import { createBossFactorySdk, readErc20TokenInfo } from "./factory-sdk";
+import { bossFeeControllerRuntimeCode, bossFeeControllerImmutableRanges, mockBossPriceSourceRuntimeCode, mockBossPriceSourceImmutableRanges } from "./generated/bytecode";
+import { createBossFactorySdk, matchesCompiledRuntime, readErc20TokenInfo } from "./factory-sdk";
 
 const FACTORY_LOG_PAGE_SIZE = 1_000n;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
@@ -116,6 +119,8 @@ export type VerifiedDeployment = {
   /** Optional in the public shape for legacy serialized fixtures; every runtime verifier returns it. */
   readonly hookAddress?: Address;
   readonly encounterMode?: EncounterMode;
+  readonly liquidityMode?: "staged" | "continuous";
+  readonly mockOracle?: { controller: Address; source: Address; maxFee: number; maxAge: bigint };
   readonly provenance?: DeploymentProvenance;
   readonly hpToken?: TokenMetadata;
   readonly rewardToken?: TokenMetadata;
@@ -250,7 +255,8 @@ export function createPublicClientForNetwork(chainId: SupportedChainId, rpcUrl: 
     name: network,
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: { default: { http: [rpcUrl] } },
-    ...(isBaseSepolia ? { contracts: baseSepolia.contracts, blockExplorers: baseSepolia.blockExplorers } : {}),
+    ...(isBaseSepolia ? { contracts: baseSepolia.contracts } : {}),
+    ...(isBaseSepolia ? { blockExplorers: baseSepolia.blockExplorers } : {}),
   });
   return createPublicClient({
     chain,
@@ -551,8 +557,8 @@ async function verifyFactoryOrigin(
   if (receipt.status !== "success" || receipt.blockNumber !== BigInt(origin.launchBlockNumber)) {
     throw new DeploymentResolutionError("FACTORY_RECEIPT_MISMATCH", "Recorded Factory launch receipt is missing or does not match its block.");
   }
+  const liquidityMode = await assertFactoryBuild(client, manifest, factory);
   if (!factoryBuildAlreadyChecked) {
-    await assertFactoryBuild(client, manifest, factory);
     if (!sameAddress(factory, discoveryFactory)) await assertFactoryBuild(client, manifest);
   }
 
@@ -635,8 +641,39 @@ async function verifyFactoryOrigin(
       client.readContract({ address: discoveryFactory, abi: bossFactoryAbi, functionName: "attackToken", blockNumber: latestBlock }),
     ]);
   }
+  let mockOracle: VerifiedDeployment["mockOracle"];
+  if (liquidityMode === "continuous") {
+    const [factoryController, hookController] = await Promise.all([
+      client.readContract({ address: factory, abi: bossFactoryAbi, functionName: "feeController", blockNumber: latestBlock }),
+      client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "feeController", blockNumber: latestBlock }),
+    ]);
+    if (!sameAddress(factoryController, hookController)) throw new DeploymentResolutionError("ORACLE_WIRING_MISMATCH", "Factory and Hook fee controllers differ.");
+    if (!sameAddress(hookController, ZERO_ADDRESS)) {
+      const [controllerCode, boundBoss, boundUSD, boundAttack, source, maxFee, maxAge] = await Promise.all([
+        client.getCode({ address: hookController, blockNumber: latestBlock }),
+        client.readContract({ address: hookController, abi: bossFeeControllerAbi, functionName: "bossToken", blockNumber: latestBlock }),
+        client.readContract({ address: hookController, abi: bossFeeControllerAbi, functionName: "mockUSD", blockNumber: latestBlock }),
+        client.readContract({ address: hookController, abi: bossFeeControllerAbi, functionName: "attackToken", blockNumber: latestBlock }),
+        client.readContract({ address: hookController, abi: bossFeeControllerAbi, functionName: "source", blockNumber: latestBlock }),
+        client.readContract({ address: hookController, abi: bossFeeControllerAbi, functionName: "maxFee", blockNumber: latestBlock }),
+        client.readContract({ address: hookController, abi: bossFeeControllerAbi, functionName: "maxAge", blockNumber: latestBlock }),
+      ]);
+      const [sourceCode, sourceBoss, sourceUSD] = await Promise.all([
+        client.getCode({ address: source, blockNumber: latestBlock }),
+        client.readContract({ address: source, abi: mockBossPriceSourceAbi, functionName: "bossToken", blockNumber: latestBlock }),
+        client.readContract({ address: source, abi: mockBossPriceSourceAbi, functionName: "mockUSD", blockNumber: latestBlock }),
+      ]);
+      if (!controllerCode || !matchesCompiledRuntime(controllerCode, bossFeeControllerRuntimeCode, bossFeeControllerImmutableRanges)
+          || !sourceCode || !matchesCompiledRuntime(sourceCode, mockBossPriceSourceRuntimeCode, mockBossPriceSourceImmutableRanges)
+          || !sameAddress(boundBoss, bossHP) || !sameAddress(boundUSD, mockUSD) || !sameAddress(boundAttack, roy)
+          || !sameAddress(sourceBoss, bossHP) || !sameAddress(sourceUSD, mockUSD) || maxFee >= 1_000_000 || maxAge <= 0n) {
+        throw new DeploymentResolutionError("ORACLE_WIRING_MISMATCH", "Mock price source or fee-controller build and pair binding failed verification.");
+      }
+      mockOracle = { controller: hookController, source, maxFee, maxAge };
+    }
+  }
   const expectedVolumes = expectedStageVolumeTargets(event.args.volumeTargetMockUSD);
-  const expectedBossKey = canonicalPoolKey(roy, bossHP, hook);
+  const expectedBossKey = { ...canonicalPoolKey(roy, bossHP, hook), fee: mockOracle ? 0x800000 : 3_000 };
   const expectedSupplyKey = canonicalPoolKey(mockUSD, roy, ZERO_ADDRESS);
   if (
     !sameAddress(factoryManager, poolManager) || !sameAddress(factoryMockUSD, mockUSD) || !sameAddress(factoryAttackToken, roy) ||
@@ -679,6 +716,8 @@ async function verifyFactoryOrigin(
     verifiedAtTimestamp: block.timestamp,
     hookAddress: hook,
     encounterMode: "factory",
+    liquidityMode,
+    mockOracle,
     provenance: origin,
     hpToken: tokenMetadata(hpInfo),
     rewardToken: tokenMetadata(hpInfo),
@@ -692,7 +731,7 @@ async function assertFactoryBuild(
   client: PublicClient,
   manifest: DeploymentManifest,
   factory: Address = manifest.bossFactory!,
-): Promise<void> {
+): Promise<"staged" | "continuous"> {
   const status = await createBossFactorySdk({ publicClient: client, factory }).checkFactoryBuild();
   if (status.status === "not-deployed") {
     throw new DeploymentResolutionError("FACTORY_NOT_DEPLOYED", "No Boss Factory contract exists at the configured address.");
@@ -703,9 +742,14 @@ async function assertFactoryBuild(
     if (manifest.chainId === BASE_SEPOLIA_CHAIN_ID &&
         sameAddress(factory, "0x9039F58150F1fFDFB301A3D7218D47A44406a269") &&
         sameHex(status.routerCodeHash, "0x02091b890ff922b5f2493012b76a2993e6dd33a1aa7cdccd5da4e2545a67157c") &&
-        sameHex(status.hookCodeHash, "0xb26ab06541a7d6b2c04a84f01e865a2244fea4f031b87f4c453af475a76e92b5")) return;
+        sameHex(status.hookCodeHash, "0xb26ab06541a7d6b2c04a84f01e865a2244fea4f031b87f4c453af475a76e92b5")) return "staged";
+    if (manifest.chainId === BASE_SEPOLIA_CHAIN_ID &&
+        sameAddress(factory, "0x353749ffa9640c4152dd28068c416adfc2eb168e") &&
+        sameHex(status.routerCodeHash, "0xbb7be00bd329b2c956a14385249ea3b62580d07eefd42940b64b642916949ef2") &&
+        sameHex(status.hookCodeHash, "0x4c1c5a3bdd738476ede649c0a5d65d0740abfa27f53cfd5d3bdcb78d3cfa121b")) return "staged";
     throw new DeploymentResolutionError("FACTORY_BUILD_MISMATCH", "This Boss Factory does not match the supported Hook and Router build.");
   }
+  return "continuous";
 }
 
 async function findFactoryLaunch(
@@ -821,7 +865,7 @@ function canonicalPoolKey(currencyA: Address, currencyB: Address, hooks: Address
   const [currency0, currency1] = currencyA.toLowerCase() < currencyB.toLowerCase()
     ? [currencyA, currencyB]
     : [currencyB, currencyA];
-  return { currency0, currency1, fee: 3_000, tickSpacing: 60, hooks } as const;
+  return { currency0, currency1, fee: 3_000 as number, tickSpacing: 60, hooks } as const;
 }
 
 function samePoolKey(actual: { currency0: Address; currency1: Address; fee: number; tickSpacing: number; hooks: Address }, expected: ReturnType<typeof canonicalPoolKey>): boolean {

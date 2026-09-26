@@ -188,7 +188,7 @@ export function HubSoundControl({ bridge }: { bridge: GameBridge }) {
           void toggle();
           blurOnMouseClick(event);
         }}
-        className="inline-flex min-h-9 items-center rounded-md border border-white/20 bg-ink/85 px-2.5 font-mono text-[9px] tracking-[0.12em] text-fog transition-colors hover:bg-panel focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        className="inline-flex min-h-9 items-center rounded-md border border-white/20 bg-ink/85 px-2.5 font-mono text-[9px] tracking-[0.12em] text-fog focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         {failed ? "SOUND · RETRY" : `SOUND · ${on ? "ON" : "OFF"}`}
       </button>

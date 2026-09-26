@@ -2,7 +2,7 @@
 
 `BossFactory` launches funded EVM rounds that sell a creator-selected ERC-20 as HP. Each boss gets a new attack-token/MEME pool and its own prize escrow, volume counters, stages, and router. Players buy and keep the actual MEME. There is no wrapper token or mint.
 
-See the [interactive contract diagram](boss-factory-contract.html) and its [Archify source](boss-factory-contract.architecture.json).
+The current build follows [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`, checked on 27 September 2026. The current Base Sepolia launch Factory uses this continuous-liquidity build and stage cooldowns. Earlier Factory deployments and the retired timed demo Boss retain their historical staged-liquidity rules. The [hook design explanation](uniswap-v4-hooks.md) traces the current callbacks; the [earlier contract diagram](boss-factory-contract.html) describes historical transitions.
 
 The attack route is `MockUSD → attack token → MEME`. The MockUSD/attack-token supply market must already be initialized with the factory's canonical zero-hook pool key, a 3,000 fee, 60 tick spacing, and zero protocol fee. The factory creates the hooked attack-token/MEME pool for each launch. It rejects quotes when the supply market is missing or has no active liquidity.
 
@@ -10,7 +10,7 @@ Each launch creates a `BossHook`, `BossRouter`, and optional-claim `BossCollecti
 
 `bosses[keccak256(abi.encode(maker, userSalt))]` returns the registered hook. `bossCount` counts successful launches. `BossLaunched` reports token allocation, prize, volume target, tick, and contract addresses. Different creators can launch the same token. Each boss still has its own second pool and accounting.
 
-The factory has no administrator, token allowlist, upgrade function, or launch fee. Its constructor pins the router and hook creation-code hashes. Launch callers provide matching creation code, which the factory verifies before deploying the contracts.
+The factory has no administrator, upgrade function, or launch fee. Without a fee controller, it has no token allowlist. With a controller, it accepts only that controller's immutable Boss token. Its constructor pins the router and hook creation-code hashes. Launch callers provide matching creation code, which the factory verifies before deploying the contracts. The optional mock source has its own owner, independent of Factory launch permission.
 
 ## Launch inputs and quote
 
@@ -27,17 +27,17 @@ The factory has no administrator, token allowlist, upgrade function, or launch f
 
 For total allocation `N` and prize rate `r` basis points, the quote reserves `P = floor(N × r / 10,000)` MEME for rewards. The remaining battle capital is `B = N - P`.
 
-The factory sets the sellable battle budget to `S = 6 × floor(floor(B × 9,900 / 10,000) / 6)`. It uses stage-one HP `S / 6`, with a minimum of two MEME base units per stage. The remaining part of `B` stays in router custody for refill fees, LP rounding, and reserve headroom. The quote derives the exact initial and incremental LP funding requirements from the tick, v4 position amounts, and refill fees. It rejects the launch if the required funds exceed `B`.
+The entire post-prize allocation is the sale budget, `S = B`. The launch activates all sale liquidity in one initial position with salt `1`, subject to the exact LP amount rounding. There is no percentage token bucket or proportional release. Future stages add no sale allocations, price resets, or reverse refills. The retained `stageOneHP = floor(S / 6)` quote field is compatibility metadata, with a minimum of two token base units. It does not restrict active inventory. All three `stageLiquidity` values represent the same initial `L`. The exact initial deposit must fit within `B`. Any custody rounding residue remains locked in the Router.
 
 The quote reads the live MockUSD/attack-token spot from the supply pool and adds 10% headroom to the maximum attack-token output per MockUSD. It chooses the lowest supported 60-spacing start tick whose initial price is at least:
 
 ```text
-volumeTargetMockUSD × maxAttackTokenPerMockUSD / S
+(volumeTargetMockUSD + 2) × maxAttackTokenPerMockUSD / (S - 2)
 ```
 
 The calculation uses raw token units, so ERC-20 decimals are included in the price automatically. The tick range spans 1,920 ticks. `quoteLaunch(config)` returns the prize, battle and sale budgets, the required router funding, the estimated attack-token amount, stage-one HP, the start tick, and the allowed attack-token rate.
 
-The router checks each first-hop output against the allowed rate. The hook also caps cumulative MEME output at `floor(S × eligibleMockUSD / volumeTargetMockUSD)`. These limits keep accepted purchases within the launch budget as the supply pool price moves. The quote requires an initialized supply pool with active liquidity. It rejects unsupported ticks, unrepresentable funding, and supply output at zero or outside the configured rate. The 10% rate headroom is a per-attack guard. Changes beyond that bound pause attacks until the pool price returns inside the bound.
+The Hook checks each first-hop output against the accepted rate. Launch pricing reserves headroom for two earlier stage rounding exceptions, using raw token and MockUSD units. Purchases follow the standard AMM curve; there is no proportional token-release rule or fixed linear price. The quote requires an initialized supply pool with active liquidity. It rejects unsupported ticks, unrepresentable funding, and supply output at zero or outside the configured rate. The 10% rate headroom is a per-attack guard. Changes beyond that bound pause attacks until the pool price returns inside the bound.
 
 The discovery quote derives the rate from the live pool. A positive `maxAttackTokenPerMockUSDX128` freezes that accepted rate for the launch configuration. Subsequent quotes derive the tick, funding, and Hook constructor arguments from the frozen rate and separately check that the current supply spot remains within it. `hookInitCode` and `launchBoss` reject a zero rate. A supply trade within the accepted bound does not invalidate the mined Hook address.
 
@@ -53,7 +53,7 @@ The caller determines the creator identity. Copying another creator's call uses 
 
 ## Purchases, volume, and rewards
 
-Factory bosses require `attackWithMockUSD`. A player approves MockUSD to the per-boss router. The caller's MockUSD cap bounds the first hop, and the current stage's terminal pool price bounds the second hop. The router buys attack tokens in the supply pool, spends them in the boss pool, and refunds unused MockUSD and unused attack tokens. It does not cap the first hop to an exact remaining-volume tail, which could be too small to produce any tokens after fees and rounding. Factory bosses reject direct attacks with held attack tokens because those attacks have no MockUSD purchase amount to record.
+Factory bosses require `attackWithMockUSD`. A player approves MockUSD to the per-boss router. The caller's MockUSD cap bounds the first hop, and the canonical full-range terminal price bounds the second hop. The router buys attack tokens in the supply pool, spends them in the boss pool, and refunds unused MockUSD and unused attack tokens. It does not cap the first hop to an exact remaining-volume tail, which could be too small to produce any tokens after fees and rounding. Factory bosses reject direct attacks with held attack tokens because those attacks have no MockUSD purchase amount to record.
 
 The hook credits one MockUSD amount per completed two-hop purchase:
 
@@ -63,9 +63,13 @@ eligibleMockUSD = floor(MockUSD spent × attack token spent / attack token bough
 
 Returned attack tokens earn no volume. The first-hop purchase and second-hop purchase count once as one attack. Transfers, outside-market swaps, refills, and LP actions earn no volume.
 
-The volume target splits into three additional stage minimums in the ratio 1:2:3. For target `V`, they are `floor(V / 6)`, `floor(V / 3)`, and `V - floor(V / 6) - floor(V / 3)`. A `6,000 MockUSD` target requires at least `1,000`, `2,000`, and `3,000` additional eligible MockUSD in the respective stages. A purchase that reaches or exceeds its stage minimum clears that stage. Actual recorded volume can exceed a minimum within the caller's accepted cap; it is never fabricated or truncated to the target. Extra volume remains attributed to the starting stage and does not advance the next stage. The third stage's minimum defeats the boss.
+The volume target splits into three additional stage minimums in the ratio 1:2:3. For target `V`, they are `floor(V / 6)`, `floor(V / 3)`, and `V - floor(V / 6) - floor(V / 3)`. A `6,000 MockUSD` target requires at least `1,000`, `2,000`, and `3,000` additional eligible MockUSD in the respective stages. These are volume goals, not token allocations. The Hook accepts actual eligible volume up to the current stage's remaining goal plus one MockUSD base unit, or `0.000001 MockUSD`. A larger terminal purchase is accepted only if it outputs exactly one Boss token base unit. These exceptions cover indivisible fee and token rounding. Actual volume is never fabricated or truncated, and any overshoot stays in the attack's starting stage without reducing later goals. No attack advances more than one stage. The third stage's minimum defeats the boss.
 
-At each threshold, the router settles the attack, resets the boss-pool price with a controller refill, and adds the next stage's incremental liquidity within the same v4 unlock. Unsold MEME may remain in the positions. It does not block the stage. If the refill or LP addition fails, the purchase, volume credit, and stage change all revert.
+At a threshold, the Hook advances `currentStage` immediately and sets `nextAttackAt` to the chain timestamp plus 60 seconds after stage one, or 120 seconds after stage two. Status stays `Active`, but quotes and attacks reject while `block.timestamp < nextAttackAt`. No activation transaction is required. The existing pool price and liquidity remain in place. Volume bounds, output floors, fee failures, and cooldown failures roll back both swaps and all credit. The shared pause gives players time to observe a new stage and review quotes; it does not prevent bots or guarantee equal participation.
+
+`beforeSwap` authenticates PoolManager, the complete canonical pool ID, the configured Router, its active player, and expected stage before checking cooldown and fees. `afterSwap` records measured deltas and applies volume bounds. A different client calling the Router still obeys these rules, and another router cannot bypass them through PoolManager. See the [callback specification](technical-spec.md#factory-hook-callbacks).
+
+The SDK normally quotes an exact execution cap at most the remaining stage volume plus one raw MockUSD unit, within the selected button cap. If that produces no token output, it searches within the caller's cap for the one-token terminal exception. The transaction uses exactly the quoted cap. The real-v4 fixture proves 0-, 6-, and 18-decimal tokens in both orders. The SDK smoke also finishes a costly six-decimal token tail by quoting exactly one raw Boss unit. Exotic supply routes that require more than two raw MockUSD units for their first output can remain unquotable; arbitrary ERC-20 configurations are not universally supported.
 
 `stageSold(stage)` counts MEME delivered from authorized attacks. `stageVolume(stage)` counts eligible MockUSD for that stage. `totalVolume` is the round's eligible volume. At defeat, `finalEligibleHP` freezes the sum of actual player MEME output. Each buyer's `rewardCredit(player)` records the MEME they bought through attacks.
 
@@ -77,7 +81,9 @@ The standalone BossHP round retains its separate mode. It measures stage complet
 
 ## Permanent creator commitment
 
-New Factory bosses have a zero deadline and stay active until defeated. Creators cannot cancel a boss or withdraw its prize, LP assets, fees, or unused battle reserves, even after victory. `recoverAfterDeadline()` remains in the ABI but always reverts. The Hook rejects every liquidity removal. The predefined stage refill still uses battle reserves internally.
+New Factory bosses have a zero deadline and stay active until defeated. Creators cannot cancel a boss or withdraw its prize, initial LP position, initial-position fees, or custody rounding residue. `recoverAfterDeadline()` remains disabled.
+
+The Router owner can add and remove a separate position with salt `4` at the canonical ticks. Removal cannot reduce the locked salt-`1` initial liquidity `L`. This floor is a position size, not a guarantee of inventory value, active liquidity at every price, or a token-price floor. Adding or removing proportional LP at the current price mainly changes depth and later trade impact; it does not automatically set or reset price. `modifyOwnerLiquidity` uses owner authorization, a reentrancy guard, transaction expiry, maximum token inputs, and minimum principal outputs. It subtracts accrued fees before checking principal slippage. Net debts are settled directly from the owner to PoolManager, and net credits go to the owner. These actions earn no stage volume or reward credit. Router reserves, initial-position fees, reward credit, and Hook prize escrow remain separate. Owner liquidity remains available during cooldowns, stale mock prices, and after victory.
 
 `expire()` rejects perpetual bosses, so the creator cannot reach the expired-prize refund path. Players retain their earned prize claims indefinitely after victory. Attack purchases remain nonrefundable.
 
@@ -95,17 +101,21 @@ The current Factory and `bossFactoryDeployedAtBlock` select new launches. `previ
 
 ## Base Sepolia deployment
 
-The factory deployment script is `contracts/script/DeployBossFactory.s.sol:DeployBossFactory`. It reads `BOSS_POOL_MANAGER`, `BOSS_MOCK_USD_TOKEN`, and `BOSS_ATTACK_TOKEN`, and pins hashes from the current compiled artifacts. It supports local chain 31337 and Base Sepolia 84532. Base Sepolia uses `TESTNET_DEPLOYER_PRIVATE_KEY`, as the standalone deployment does. It creates no tokens, market liquidity, or boss encounters.
+The factory deployment script is `contracts/script/DeployBossFactory.s.sol:DeployBossFactory`. It reads `BOSS_POOL_MANAGER`, `BOSS_MOCK_USD_TOKEN`, and `BOSS_ATTACK_TOKEN`, and pins hashes from the current compiled artifacts. It supports local chain 31337 and Base Sepolia 84532. Base Sepolia uses `TESTNET_DEPLOYER_PRIVATE_KEY`, as the standalone deployment does. It creates no market liquidity or boss encounters. With `BOSS_DEMO_TOKEN` set, it also creates a pair-bound `MockBossPriceSource` and `BossFeeController`. That Factory accepts only the configured demo token.
 
 The creator form is available at `/boostpad`; `/launch` permanently redirects there. Direct visits open the Blacksmith form immediately. The game entry retains walking and the E interaction. There are three fixed stages with the default cat portraits. The form loads the Factory from the verified Base Sepolia manifest unless `NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_ADDRESS` overrides it. The chain SDK reads the submitted token's metadata and wallet balance, quotes the launch, freezes the accepted rate, checks the compiled Router and Hook bytecode against the factory, mines a valid hook salt, requests the required MEME approval, and submits the launch. Submitted operations are persisted before receipt waiting. Read-only recovery uses the saved transaction's original Factory address and validates the original call and events, and a root provider keeps the write lock across navigation and both approval steps. Token choices are entered by contract address; ERC-20 does not provide wallet-wide token discovery. Verified Factory battles are available at `/battle/<hook-address>?network=base-sepolia`.
 
-The perpetual Factory is deployed on Base Sepolia at `0x353749ffa9640c4152dd28068c416adfc2eb168e`, block `47334087`. Its constructor transaction, infrastructure wiring, and immutable Router/Hook build hashes are verified. The app manifest selects this Factory. No public boss was created during this migration. See the [deployment evidence](evidence/base-sepolia-perpetual-factory.json).
+The continuous-liquidity Factory is deployed on Base Sepolia at `0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7`, block `47341945`. Its constructor transaction, masked runtime, infrastructure wiring, and immutable Router/Hook build hashes match the PR #72 build. The app manifest selects this Factory, and the SDK reports `compatible`. A read-only launch quote confirms that the full post-prize allocation is the initial sale budget. This Factory uses a zero fee controller, so both pools charge 0.3%. The optional mock-oracle Factory has not been deployed publicly. See the [continuous Factory deployment evidence](evidence/base-sepolia-continuous-factory.json).
 
-The real-v4 core suite passes all twelve scenarios, including attacks after ten years, creator withdrawal rejection before and after victory, and later player claims. SDK checks cover zero-deadline and historical transaction recovery, plus short quote expiry for perpetual rounds. A local Anvil SDK smoke completed token approval, launch, read-only receipt recovery, and a ten-year-later attack quote.
+The current default Roy was created by this Factory at block `47342620`, with Hook `0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0`, Router `0x824464AF219850Fde45d539FC9f754205Dbf2df7`, and a fresh fixed-supply BHP token at `0x3A4AF1018EB5B9D774119C818a4eaC7CcdfBC1A2`. It deposits 10,000 BHP, escrows a 1,000 BHP prize, activates all 9,000 sale BHP at launch, and uses a 60 MockUSD volume target with 60/120-second cooldowns and no expiry. See the [Roy launch evidence](evidence/base-sepolia-roy-boss.json). Each launch deploys its own current-build Hook, Router, and collectibles.
+
+The older timed Roy has been removed from the default entry and Roy presentation mapping. Its original contracts and reward credit remain on chain; historical encounter reads and receipt recovery remain supported.
+
+The previous perpetual Factory at `0x353749ffa9640c4152dd28068c416adfc2eb168e`, block `47334087`, remains in `previousBossFactories`. It uses the earlier staged-liquidity build and is incompatible with current new launches. Its [deployment evidence](evidence/base-sepolia-perpetual-factory.json) records compatibility with its original build, not the PR #72 build.
 
 ### Earlier timed Factory deployments
 
-The earlier timed Factory was deployed at block `47332647` from commit `4efa8f01e73dbabdc3383d444ab03079f6c63493`. Its creation transaction matches the compiled artifact, its Router and Hook hashes match the SDK, and its infrastructure wiring is verified. This timed deployment remains historical. See the [current Factory evidence](evidence/base-sepolia-boss-factory-current.json).
+The earlier timed Factory was deployed at block `47332647` from commit `4efa8f01e73dbabdc3383d444ab03079f6c63493`. Its creation transaction matches its historical artifact, and the SDK pins its original Router and Hook hashes, and its infrastructure wiring is verified. This timed deployment remains historical. See the [current Factory evidence](evidence/base-sepolia-boss-factory-current.json).
 
 The first demo boss was created by the Factory at block `47332745`. It uses a fresh fixed-supply `BossHP` token as its selected ERC-20, with 10,000 BHP deposited, a 10% prize of 1,000 BHP, a 60 MockUSD volume target, and a deadline of 3 October 2026 at 14:42:42 UTC. This encounter uses Factory reward credit, so players keep purchased BHP when claiming the BHP prize.
 
@@ -117,21 +127,111 @@ The first demo boss was created by the Factory at block `47332745`. It uses a fr
 | BossRouter | `0x087D22c53082ED7841cB5716cB699111a02b0dEf` |
 | BossCollectibles | `0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925` |
 
-On-chain reads confirmed the registered boss, active stage one, creator ownership, prize custody, and current runtime bytecode. A read-only 1 MockUSD attack quote returned about 132.304 BHP. No player attack or claim transaction was sent, so the encounter remains fresh. See the [launch receipt](https://sepolia.basescan.org/tx/0x757a887b2de2275dcd617b8daa8eeef6fa19d8dc469185b2aaa8f0aa1517a120) and [demo boss evidence](evidence/base-sepolia-factory-demo-boss.json). Open this Factory encounter at `/battle/0xc11D07448948AC4757592E91D8f5155907Ef6AC0?network=base-sepolia`. Bare battle links and the hub also select this Factory encounter through `defaultBossHook`. The expired standalone encounter has been removed from the live manifest and presentation map, so its old Hook URL no longer resolves.
+The original launch reads confirmed the registered boss, active stage one, creator ownership, prize custody, and its runtime bytecode. By 27 September 2026, read-only checks at block `47341505` show the Boss active in stage three with 43 MockUSD of eligible volume; a 1 MockUSD quote returns about 124.8302 BHP. See the [launch receipt](https://sepolia.basescan.org/tx/0x757a887b2de2275dcd617b8daa8eeef6fa19d8dc469185b2aaa8f0aa1517a120) and [original demo boss evidence](evidence/base-sepolia-factory-demo-boss.json). Its explicit historical URL is `/battle/0xc11D07448948AC4757592E91D8f5155907Ef6AC0?network=base-sepolia`, but it is no longer the hub or bare battle default and has no Roy presentation mapping. The expired standalone encounter has been removed from the live manifest and presentation map, so its old Hook URL no longer resolves.
 
 The original Factory at block `47330324` remains in the [historical deployment record](evidence/base-sepolia-boss-factory-deployment.json). It predates the review fixes and is incompatible with the current SDK. The SDK checks build compatibility before quotes, approvals, and launches. Read-only receipt recovery remains independent of the current bundled code hashes.
 
-## Local verification
+## Swap fees
 
-Verified on 26 September 2026 against the merge-updated working tree for PR #38. The latest measured runtime sizes are:
+The current public Roy and general Factory use fixed LP fees on both swaps:
+
+| Hop | Swap | Fee rate | Currency charged |
+| --- | --- | --- | --- |
+| Supply | MockUSD → Attack Token | 3,000 millionths = 0.3% | MockUSD |
+| Boss | Attack Token → selected Boss token | 3,000 millionths = 0.3% | Attack Token |
+
+v4 uses a denominator of `D = 1,000,000`. A fee value `F` has fraction `F / D` and percentage `F / 10,000`. The fee is included in the swap's gross input. Router `mockUSDSpent` and `roySpent` report actual gross input from the respective swap deltas, including that hop's fee. Quotes already include both fees; the caller does not add another 0.3% to the quoted spend.
+
+For an exact-input step that exhausts its remaining gross input `G`, [v4 SwapMath](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/SwapMath.sol#L64-L84) computes:
+
+```text
+netInput = floor(G × (D - F) / D)
+feeAmount = G - netInput
+```
+
+When a step reaches its target tick or price before consuming all input, `netInput` is the amount needed to reach that price and `feeAmount = ceil(netInput × F / (D - F))`. The pool repeats this accounting across swap steps. Per-step rounding and partial fills make the exact receipt amounts differ from a single percentage multiplication.
+
+For a fee-only illustration, assume both fee-free exchange rates are 1:1, the input is fully used, and there is no price impact or integer rounding:
+
+| Hop | Gross input | LP fee | Input used for the swap |
+| --- | --- | --- | --- |
+| Supply | 1 MockUSD | 0.003 MockUSD | 0.997 MockUSD |
+| Boss | 0.997 Attack Token | 0.002991 Attack Token | 0.994009 Attack Token |
+
+The resulting output would be 0.994009 Boss tokens under those illustrative rates. Fee-only retention is `0.997² = 0.994009`, so the combined effect is `1 - 0.994009 = 0.005991`, or 0.5991%. This is not a live Roy quote. Actual output also reflects pool prices, both hops' price impact, liquidity, stage/price bounds, and base-unit rounding. If the Boss fee is dynamic, the corresponding approximation is `0.997 × (1 - bossFee / D)`.
+
+Unspent MockUSD is refunded and does not pay a swap fee. Unused Attack Token is refunded after the first hop; it has already incurred supply fees but does not incur a Boss fee until spent on that hop. The selected button cap can exceed the SDK's execution cap, so fee estimates use actual swap amounts rather than assuming the entire button cap is spent.
+
+These fees accrue to liquidity positions in PoolManager. Protocol fees must be zero for the supported route, the Hook returns zero custom accounting deltas, and Factory/Router add no separate platform, entry, or launch surcharge. The creator's prize deposit and player reward credit are separate accounting. Initial-position LP fees remain locked; the owner's separate surplus position follows its existing fee-collection rules.
+
+ETH gas pays transaction execution separately. Approval and launch transactions also require gas, but approval does not perform a swap. If an attack reverts, both swaps and their LP fees roll back; the failed transaction can still consume gas. Relevant implementation: [two-hop Router execution](../contracts/src/BossRouter.sol), [Hook fee selection](../contracts/src/BossHook.sol), and [fee controller](../contracts/src/BossFeeController.sol).
+
+## Testnet mock price and fees
+
+The UI's Mock Token Oracle uses `MockBossPriceSource`, an owner-controlled testnet demo artifact under `contracts/src`. It is not a live market oracle or real USD feed. Its immutable pair binds the selected Boss token and MockUSD. Prices are Q128 MockUSD raw units per Boss raw unit; the UI converts them to MockUSD per displayed token. A controller-enabled Factory is restricted to that Boss token, and its launches share the controller/source. The source owner need not be each boss's creator. No public deployment of this mock-enabled build is recorded here.
+
+`setInitialPrice` records a one-time reset reference. `setPrice` changes or refreshes the reference and always uses `block.timestamp`. A same-price refresh changes freshness without changing value. Zero prices are rejected. Invalid timestamps can be injected only through the test harness. Owner liquidity and claims remain readable and available when fee-source validation rejects attacks.
+
+| Parameter or bound | Meaning |
+| --- | --- |
+| `updatedAt` | Chain timestamp of the owner's last source update, not evidence of a recent external market observation. |
+| `maxAge` | Immutable reference-age limit. The demo script sets 600 seconds; age greater than 600, zero/missing data, or a future timestamp rejects quotes and attacks. |
+| `maxFee` | Immutable accepted fee limit. The demo script sets 900,000 millionths, or 90%. A higher required fee rejects; it is not clamped to 90%. |
+| Frozen supply-rate bound | `maxRoyPerMockUSDX128` limits measured Attack Token per MockUSD using the launch quote's 10% spot headroom. This is independent of the mock Boss reference. |
+| Player slippage bounds | `minRoyOut`, `minBossHPOut`, input cap, and transaction deadline constrain accepted execution after a quote. They do not set an AMM or external market price. |
+
+The supply pool fee stays at 0.3%. With a controller, the Boss PoolKey uses v4's dynamic fee sentinel `0x800000`, and `beforeSwap` returns the computed fee with the override flag `0x400000`, including when the applied fee is zero. These flags identify dynamic-fee handling; they are not fee percentages. Without a controller, the Boss fee is fixed at 0.3%.
+
+The controller derives the pre-swap Attack Token cost of one Boss token from the Boss pool's `sqrtPriceX96`, reversing the ratio when token ordering requires it. It converts that spot using the first hop's actual gross MockUSD spend and Attack Token output:
+
+```text
+poolPriceX128 = floor(attackPerBossX128 × mockUSDSpent / attackBought)
+```
+
+Both `poolPriceX128` and `referencePriceX128` use Q128 MockUSD raw units per Boss raw unit. The ratio in the fee formula is unchanged if both are converted to the same displayed-token units. This conversion includes supply fees and first-hop price impact; it uses the Boss spot before the second swap, not its average execution price. In integer millionths:
+
+```text
+fee = max(0, 1,000,000 - floor(997,000 × poolPrice / referencePrice))
+```
+
+A cheaper pool relative to the reference produces a larger fee. Example ratios give:
+
+| `poolPrice / referencePrice` | Required fee, millionths | Boss fee or result |
+| --- | --- | --- |
+| 0.25 | 750,750 | 75.075% |
+| 0.50 | 501,500 | 50.15% |
+| 1.00 | 3,000 | 0.3% |
+| 1.004 | 0 | 0% |
+| 4.00 | 0 | 0% |
+| 0.10 | 900,300 | Requires 90.03%; rejects above the demo's 90% limit |
+
+The zero-fee region begins at `poolPrice/referencePrice >= 1/0.997`, approximately 1.003009, or a pool price 0.3009% above the reference. The contract checks this region with a rounded-up integer threshold before division to avoid overflow. The actual quote fee is computed from the same pinned block as the first-hop amounts and Boss spot; a changed reference or pool state can change the execution fee. The SDK displays the calculated fee rather than the sentinel or stored dynamic LP fee. These are LP fees, separate from the prize. See the official [v4 dynamic fee mechanism](https://developers.uniswap.org/docs/protocols/v4/concepts/dynamic-fees).
+
+Dynamic fees change the fee component of buying tokens relative to the chosen reference. They do not reset the AMM price, replenish inventory, or execute a balancing trade. A zero Boss fee still leaves the supply fee, gas, and price impact. An owner-supplied or refreshed reference can be economically wrong. This demo cannot guarantee elimination of arbitrage, impermanent loss, or market losses. Real external-oracle integration and market-deviation controls remain [future work](../README.md#price-oracle-integration-and-volatility-controls).
+
+For a fresh source, `sdk.quoteMockInitialPrice` reads the verified Boss and supply spots at one block and accounts for the supply pool's 0.3% fee. It requires no attack or pre-existing oracle reference. The initial value is a documented spot estimate; a finite attack quote can differ because of supply price impact. No arbitrary price seed is required.
+
+Future demo deployment uses `DeployBossFactory.s.sol` with `BOSS_DEMO_TOKEN`. After launching its Boss, prepare the initial owner transaction with:
+
+```sh
+rtk proxy env BOSS_DEMO_DEPLOYMENT_PATH=.scratch/demo-manifest.json BOSS_DEMO_HOOK=0xYourHook BOSS_DEMO_RPC_URL=https://sepolia.base.org bun scripts/prepare-mock-price.ts
+```
+
+The preparation command prints the source, pinned block, human price, exact Q128 value, and `setInitialPrice` calldata. It broadcasts nothing. The owner submits that initialization separately. The UI can initialize a fresh source from those verified pool spots before the first attack. It labels the source `TESTNET MOCK PRICE` and provides initial-relative 1×, 4×, 0.25×, reset, custom-price, and same-price refresh actions. Each update follows normal receipt recovery. This task deploys and exercises the demo only on local Anvil; a future Base Sepolia broadcast needs explicit authorization.
+
+## Historical local verification
+
+The [Factory review evidence](evidence/factory-review-verification.json) records code commit `93ae695a24e57fca5b3c083bf80c82d9eae878d9` and later SDK/web commit `c64bcb5d8a020c5f074c8917813faa89f6fda369`. This predates PR #72. Its recorded runtime sizes and test results are historical, not measurements of the continuous-liquidity/mock-fee build:
 
 - `cd contracts && forge build --sizes` passes runtime and initcode limits. Factory 20,355 bytes, hook 21,404 bytes, and router 24,307 bytes. The router is 269 bytes under EIP-170.
-- `cd contracts && forge test --match-contract BossPoolCoreTest -vv` passes all twelve shared scenarios. Coverage includes the standalone round, factory rounds with either token ordering, three volume-gated stages, public quote simulation, MEME prizes, creators reusing a token and launch salt, six-decimal MEME, failed-transition rollback, funding errors, expiry, and LP recovery with outstanding claims. Review regressions cover a one-base-unit volume tail, stable mined addresses through a supply-price move, and partial-price bitmap fee rounding.
+- `cd contracts && forge test --match-contract BossPoolCoreTest -vv` recorded twelve passing scenarios. The historical review covered standalone and Factory routes, public quote simulation, MEME prizes, creator identity, token decimals, transition rollback, funding, expiry, and custody/recovery rules. Review regressions included a one-base-unit volume tail, stable mined addresses through a supply-price move, and partial-price bitmap fee rounding.
 
-These runs use the real pinned v4 PoolManager. They verify the corrected build locally. The current Base Sepolia Factory and demo boss use this build; the original Factory remains historical.
+These runs used the real pinned v4 PoolManager and verify the earlier corrected build locally. They are historical evidence for the timed demo Boss, not the current continuous-liquidity Factory. The current [Factory deployment evidence](evidence/base-sepolia-continuous-factory.json) records its exact source revision and bytecode hashes.
 
 The contract and local transaction results were verified through code commit `93ae695a24e57fca5b3c083bf80c82d9eae878d9`. After integrating main and adding the deployed-build guard, seventeen SDK/UI regression checks, typecheck, and production web build pass. Generated ABI/bytecode consistency also passes. A local Factory SDK smoke covered exact approval including a zero reset, frozen-rate launch, captured transaction identities, and read-only recovery without another transaction.
 
 The full standalone SDK journey caught renamed `RewardClaimed` arguments that broke the older public decoder fields. The SDK and activity reader now normalize those names. The already-mined claim was recovered without another transaction or changes to redemption totals; a fresh standalone journey then completed all fourteen transactions. [Review verification evidence](evidence/factory-review-verification.json) records the local results and contract sizes.
 
 Desktop browser checks covered the missing-Factory state, invalid token input, and reachable launch actions at 1280×720. A final desktop check loaded the published Base Sepolia address and showed the incompatible-build message with launch controls disabled; a direct SDK read confirmed the pinned hash mismatch. No mobile layout checks or public-chain transactions were performed by this review. Injected-wallet popup confirmation remains a manual check.
+
+Current behavior is defined by the PR #72 source and its shared real-v4 fixture in [BossPoolCore.t.sol](../contracts/test/BossPoolCore.t.sol), with the local integration path in [local-battle-routing-smoke.ts](../scripts/local-battle-routing-smoke.ts). Ordinary `local:seed` creates the standalone fixture, so it alone does not demonstrate the new Factory mode. This documentation update reviewed source, references, and diffs; it did not rerun application tests or deploy/broadcast.

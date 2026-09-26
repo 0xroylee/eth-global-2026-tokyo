@@ -1,8 +1,8 @@
 # Frontend contract SDK plan
 
-Approved for implementation on 26 September 2026. This plan extends the existing private `@boss-pool/chain` workspace. The user accepted public quotes before wallet connection or approval and a router-native quote entry with a fresh testnet deployment. Use GPT-6 Luna at xhigh for implementation and GPT-6 Sol at high for independent review. The user later selected CLI testnet plus page testing for this delivery and will perform real browser-wallet popup acceptance manually.
+Historical implementation plan, approved on 26 September 2026. It extends the existing private `@boss-pool/chain` workspace. The user accepted public quotes before wallet connection or approval and a Router-native quote entry. The implementation and local verification are complete; current deployment and verification status appears below and in the linked records.
 
-The SDK and player UI are implemented. The later chain-target change (`4cecdb3`) makes Base Sepolia `84532` the active testnet target. Robinhood `46630` support and receipts remain historical. The Base RPC is reachable, but there is no Boss Pool Base Sepolia manifest or deployment.
+The SDK and player UI are implemented. The later chain-target change (`4cecdb3`) makes Base Sepolia `84532` the active testnet target. Robinhood `46630` support and receipts remain historical. The current Base Sepolia manifest points to the Factory at `0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7` and its default Roy Hook at `0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0`. See the [Factory deployment reference](boss-factory.md#base-sepolia-deployment) and [SDK verification record](sdk-verification.md).
 
 Issue #28 supersedes the original entry flow. Fresh wallets attack directly after any required MockUSD-to-Router approval. The optional victory NFT remains; entry fees, starter Attack Token, enrollment, and entry NFTs do not.
 
@@ -16,7 +16,7 @@ The user selected these behaviors:
 
 Use the selected Next.js, React, TypeScript, Tailwind, Phaser, and direct-viem stack. Keep the SDK independent of React and Phaser. Do not add a second SDK package, publish to npm, add a backend signer, or introduce another wallet library for this work.
 
-The supported attack is `MockUSD -> Attack Token -> BossHP`. There is no deployed held-Attack Token attack entry point. Existing test scripts and the [contract usage guide](contract-usage.md) remain the starting point.
+The Factory attack is `MockUSD -> Attack Token -> MEME`. The standalone BossHP Router also retains `attackWithRoy` for wallets that already hold Attack Token; Factory bosses reject that route because volume credit requires a MockUSD purchase. See the [contract usage guide](contract-usage.md) for standalone operations and the [Factory reference](boss-factory.md) for current Factory behavior.
 
 ## Accepted quote decisions
 
@@ -25,7 +25,7 @@ The supported attack is `MockUSD -> Attack Token -> BossHP`. There is no deploye
 | Quote access | Public preview before wallet connection or approval. Check player balance and allowance separately before Attack. |
 | Quote implementation | Implement a router-native quote that cannot persist game changes. Deploy a Base Sepolia fixture before public-chain proof. |
 
-The historical Robinhood fixture is Defeated and redeemed. Preserve its receipts and do not reuse its manifest on Base Sepolia. Deploy a separate Base Sepolia fixture before running the full gameplay rehearsal. RPC storage overrides are not the shipping quote path.
+The historical Robinhood fixture is Defeated and redeemed. Preserve its receipts and do not reuse its manifest on Base Sepolia. The Base Sepolia Factory deployment and current default Roy are recorded in the manifest and deployment evidence. RPC storage overrides are not the shipping quote path.
 
 ## Existing code to reuse
 
@@ -54,7 +54,7 @@ flowchart LR
 
 The SDK accepts a public client, a verified deployment, and an optional wallet client for player writes. Public reads and previews work without a wallet. The app discovers the provider, requests accounts, switches networks, and owns React state. Private keys never enter browser imports.
 
-Use chain `31337` for local Anvil and chain `84532` for Base Sepolia. The SDK retains chain `46630` for the historical Robinhood manifest. Keep RPC selection separate from deployment addresses. Public testnet manifests omit the RPC URL. No Base Sepolia manifest is present until a real, verified deployment occurs.
+Use chain `31337` for local Anvil and chain `84532` for Base Sepolia. The SDK retains chain `46630` for the historical Robinhood manifest. Keep RPC selection separate from deployment addresses. Public testnet manifests omit the RPC URL. The current Base Sepolia manifest selects a Factory-launched encounter as the default.
 
 Verify chain ID, deployment evidence, deployed code, and immutable contract wiring when loading a deployment. Do not require an Active round, zero counters, an untouched prize, or a future deadline during ordinary verification. Recheck wallet chain and account before each write.
 
@@ -70,19 +70,19 @@ These operations are implemented in `@boss-pool/chain`; use the package README f
 | `readRound` | One-block status, stage, sold/capacity values, deadline, price, original prize, eligible HP, redeemed HP, and paid prize |
 | `readPlayer` | Account, native gas balance, token balances, allowances, attack participation, reward rights, and optional victory-NFT eligibility |
 | `quoteAttack` | Input cap, expected input spent, Attack Token bought/spent/refund, BossHP output, stage-clear prediction, stage, deployment identity, block, and expiry |
-| `getApproval` | Correct token/spender, current allowance, and whether approval is needed for an action |
-| `approve` | Unlimited approval to that action's verified spender, submitted hash, and confirmed receipt |
+| `getApproval` | Correct token/spender and allowance for the action; Factory reward claims require no token approval |
+| `approve` | Unlimited approval to the verified spender when the mode requires one; Factory reward claims need no approval |
 | `attack` | Normal authenticated simulation followed by submission and confirmed `AttackExecuted` plus transition events |
 | `previewReward` | Exact integer payout only when `finalEligibleHP` is frozen after defeat |
-| `claimReward` | Confirmed surrendered HP and paid MockUSD |
+| `claimReward` | Standalone: confirmed surrendered HP and paid MockUSD. Factory: confirmed reward credit consumed and MEME prize paid, with no MEME surrender. |
 | `claimVictoryNFT` | Confirmed token ID and owner |
 | `faucetMockUSD` | Test-token mint to the connected account on the configured local/testnet deployment |
 
 Use one shared receipt decoder and receipt-wait helper. Preserve the submitted hash before waiting so the app can recover after refresh. Expose confirmed typed results and decoded contract errors instead of asking components to decode raw logs.
 
-The approval map has two actions: Attack uses MockUSD to BossRouter, and redemption uses BossHP to BossHook. Unlimited approval does not remove the attack input cap or the HP amount selected for a claim. A new deployment has new spenders and therefore may need new approvals.
+In standalone mode, Attack uses MockUSD approval to BossRouter and redemption uses BossHP approval to BossHook. A standalone claim transfers the selected BossHP into permanent Hook custody. Factory claims use the player's reward credit and require no token approval or MEME surrender. Unlimited attack approval does not remove the signed input cap. A new deployment has new spenders and may need new approvals.
 
-Player reward ownership and optional NFT eligibility are separate. A transferred-HP holder can redeem without having attacked. An attacker who transferred all HP can still claim a victory NFT. SDK claim helpers must preserve both rules.
+Standalone BossHP ownership and optional NFT eligibility are separate. A transferred-HP holder can redeem without having attacked. In either mode, an attacker can claim a victory NFT after transferring tokens or consuming reward credit. SDK claim helpers must preserve both rules.
 
 ## Quote before approval
 
@@ -121,15 +121,15 @@ Filter decoded logs by the configured emitter before using [typed ABI event pars
 
 React keeps one public round poller, refreshes after receipts, and clears stale player results after wallet changes. Keep the bounded same-block read retry for the reproduced Robinhood error. Game state comes from confirmed reads and receipts. Pending animation does not decrement HP. Use transaction hash and log index to avoid replaying the same confirmed effect twice.
 
-## Delivery order for the two teammates
+## Historical delivery order from the original standalone plan
 
-| Slice | Owner | Deliverable and acceptance |
+| Slice | Status | Original deliverable and current evidence |
 | --- | --- | --- |
-| 1. Prove public quotes | Implemented and contract-reviewed | Quote parity, rollback behavior, stage-cap refunds, and clearing paths have focused coverage. A fresh direct-attack journey remains to be recorded. |
-| 2. Read a verified round through the SDK | Implemented | The SDK supports local, Base Sepolia, and historical Robinhood manifests with one-block reads. Base Sepolia has no deployment manifest yet. |
+| 1. Prove public quotes | Implemented and contract-reviewed | Quote parity, rollback behavior, stage-cap refunds, and clearing paths have focused coverage. The standalone fresh-wallet local journey is recorded; current Roy public-chain gameplay remains unverified. |
+| 2. Read a verified round through the SDK | Implemented | The SDK supports local, Base Sepolia, and historical Robinhood manifests with one-block reads. Base Sepolia selects the current Factory Roy deployment. |
 | 3. Attack through shared operations | Implemented | Fresh wallets attack directly with quote-before-approval, Router allowance, authenticated simulation, and stale-stage requotes. |
-| 4. Redeem HP and claim NFTs | A owns operations; B owns screens | Reuse frozen-denominator math, HP surrender, and independent NFT eligibility. Show actual payout from receipts. Extends BP07, issue #8. |
-| 5. Use the SDK in the existing game and exercise | A owns CLI evidence; B owns React/Phaser | Replace duplicate polling, feed confirmed round/results across the existing bridge, and make the existing two-wallet script call the SDK on a new real testnet round. Verify the public page and disconnected-wallet states. Hand the browser-wallet popup checklist to the user. Extends BP06/BP11, issues #7 and #12. |
+| 4. Redeem HP and claim NFTs | Implemented | Standalone claims use frozen-denominator math and surrender BossHP; Factory claims consume per-player reward credit and pay the MEME prize without surrendering purchased tokens. Victory-NFT eligibility is independent. The standalone local journey is recorded. |
+| 5. Use the SDK in the existing game and exercise | Implemented; current Roy checks remain open | The SDK is integrated with the game and shared exercise. The Base Sepolia Factory and default Roy deployment are verified, but the current Roy gameplay journey and manual browser-wallet popup acceptance remain unverified. |
 
 B can prepare wallet state and controlled UI components once result shapes are agreed. Contract quote implementation is the dependency for final attack wiring. Do not build a second fake SDK while waiting.
 
@@ -143,4 +143,4 @@ Add a focused contract regression only for the new quote trust boundary: a quote
 
 Run the existing typecheck and production web build to catch browser imports of Node or signer code. Verify public quoting, network selection, canonical state display, and missing-wallet handling in the browser. Record allowance prompts, rejection, account/chain changes, and popup interactions as the user's manual acceptance checklist. Do not claim those wallet interactions were automated. Reuse viem for provider and receipt mechanics instead of rebuilding them.
 
-The SDK and UI integration are implemented. The Base Sepolia milestone remains open until a fresh deployment and player journey succeed. The manual wallet-popup checklist also remains open.
+The SDK and UI integration are implemented. Base Sepolia now has a verified Factory and default Roy deployment. The [verification record](sdk-verification.md) distinguishes deployment evidence from the browser-wallet acceptance checklist; it does not claim a completed browser-wallet journey for the current Roy.

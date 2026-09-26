@@ -1,24 +1,52 @@
 # Boss Pool technical specification
 
-Status (26 September 2026): The standalone demo, volume-based Boss Factory, shared SDK, and real-v4 fixture are implemented. `/boostpad` now uses the Blacksmith UI for real launches. New Factory bosses have no expiry or creator withdrawals. The compatible perpetual Factory is deployed on Base Sepolia at block `47334087`; the public manifest selects it. Existing timed bosses and the standalone demo retain their rules. The twelve core contract scenarios, local Factory SDK launch/recovery, and deadline regressions pass. Hook-address battle routing from main is retained. Public browser-wallet signing remains unverified. See the [Factory reference](boss-factory.md) and [deployment evidence](evidence/base-sepolia-perpetual-factory.json).
+Status: the current Factory build activates all sale liquidity at launch, bounds purchases to each volume stage, and enforces 60/120-second cooldowns. The current Base Sepolia launch Factory matches that build and supports a separate owner liquidity position, using fixed 0.3% fees. The owner-controlled mock-price/dynamic-fee configuration remains a local demo. Earlier public Factories and the retired timed Roy retain their historical behavior. New launches require a compatible bundled build. See the [Factory reference](boss-factory.md).
+
+The source baseline is [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`, checked on 27 September 2026. The [hook design explanation](uniswap-v4-hooks.md) owns the rationale, benefits, limitations, and execution diagram; this specification defines interfaces and accounting.
 
 ## Factory volume settlement
 
-New Factory bosses have no expiry or cancellation. Creator withdrawals of LP assets, fees, reserves, and prizes are permanently disabled, including after victory. Stage refills and earned player prize claims remain available. Short attack-quote and transaction deadlines remain enforced. Existing deployed contracts retain their original behavior. See the [approved BoostPad migration](specs/boostpad-launch.md).
+`BossFactory.quoteLaunch` reserves the creator-selected token prize and uses the full remaining allocation as the initial sale inventory. The supported start tick prices `(V + 2)/(S - 2)` in raw units using a frozen supply-rate bound. One base LP position with salt `1` holds the inventory, subject to exact LP rounding. All sale liquidity is active from launch; there is no percentage token bucket or proportional release. Stages never refill, add initial inventory, or reset price. `stageOneHP = floor(S / 6)` is retained quote/constructor metadata. All three `stageLiquidity` values represent the same initial `L`, not successive allocations.
 
+Each attack uses one authenticated PoolManager unlock for MockUSD to Attack Token and Attack Token to MEME. The Hook credits `floor(MockUSDSpent * attackTokenSpent / attackTokenBought)` to the attack's starting stage. Eligible volume is bounded to the remaining stage goal plus one MockUSD base unit, or a terminal purchase with exactly one Boss base unit of output. These exceptions cover indivisible fee/token rounding; all actual credited volume, including overshoot, stays in that stage. The 1:2:3 ratio splits additional volume goals, not token inventory. Clearing increments `currentStage` immediately and sets `nextAttackAt` for a 60-second or 120-second cooldown. Status remains `Active`; quotes and attacks reject while `block.timestamp < nextAttackAt`. No activation transaction is required. The final stage freezes actual eligible output for MEME prize claims.
 
-`BossFactory.quoteLaunch` accepts the creator's MEME token, total allocation, prize percentage, MockUSD volume target, and a required zero deadline. Zero represents a perpetual Factory boss; the standalone mode requires a future timestamp. It reserves the chosen MEME prize, leaves one percent of the post-prize allocation as battle headroom, and computes a discovery quote from the live MockUSD/Attack Token pool price. The accepted rate is then frozen in the launch configuration before Hook salt mining; launch checks the live spot separately against that bound. The factory funds the prize escrow separately from the battle router.
+`quoteAttackWithMockUSD` retains its seven-word ABI and simulates the real route in a reverting frame. The SDK distinguishes the selected button cap from the exact signed cap. Both quote amounts and the computed dynamic fee use the same block. Mock reference changes invalidate UI quotes even when stage and pool price stay unchanged. `readRound` reports stale and invalid mock sources without blocking claims or LP reads.
 
-Each factory attack uses one authenticated PoolManager unlock for MockUSD to Attack Token and Attack Token to MEME. The Hook credits eligible volume as `floor(MockUSDSpent * attackTokenSpent / attackTokenBought)`, so returned intermediate Attack Token does not count. Compatibility event and SDK fields retain the names `roySpent` and `royBought`. It limits cumulative MEME output against the funded sale budget and target volume. The caller's input cap and the active stage's terminal price bound each trade. The 1:2:3 stage values are minimum additional volumes; crossing a minimum records the complete actual purchase and releases incremental liquidity after a controller refill in the same unlock. Extra volume stays in the starting stage. A failed transition rolls the attack back. Final-stage completion freezes player MEME output and enables proportional MEME prize claims.
+`modifyOwnerLiquidity` modifies only canonical salt `4`, while salt `1` stays intact. It checks owner authorization, reentrancy, deadline, maximum inputs, and minimum principal outputs. Principal is v4's net delta minus accrued fees. Owner debts settle directly into PoolManager, and owner credits are paid to that owner. Initial-position fees, reserves, prize escrow, and reward credit remain separate. LP quotes and saved transactions bind chain, Hook, Router, owner, and calldata.
 
+The demo `MockBossPriceSource` binds one Boss token and MockUSD. Normal price setters use `block.timestamp`. Invalid timestamp injection lives only in the test harness. A Factory with a controller accepts only its configured Boss token; its controller/source are shared by its launches. Source ownership, pair, and compiled runtime are verified before the SDK exposes demo controls. This is an owner-controlled testnet reference, not a live USD market feed.
 
-`quoteAttackWithMockUSD` simulates both swaps and a possible transition in a reverting execution frame. It returns the hop amounts and stage result without changing balances, volume, or pool state. Factory and quote ABIs are exported from `@boss-pool/chain`. See [Boss Factory](boss-factory.md) for the public inputs, quote fields, and expiry flow.
+`BossFeeController.feeForSwap` computes `poolPrice` in Q128 MockUSD raw units per Boss raw unit from the pre-swap Boss spot multiplied by measured `MockUSDSpent / AttackTokenBought`. It returns `max(0, 1,000,000 - floor(997,000 * poolPrice / referencePrice))` in millionths. A cheaper pool raises the fee; a sufficiently more expensive pool lowers it to zero. The demo script sets `maxAge = 600` seconds and `maxFee = 900,000`. Missing, zero, future-dated, or older references reject quotes/attacks. A required fee above 90% also rejects rather than clamping. The supply fee remains 0.3%, with zero protocol fee. Without a controller, the Boss fee is fixed at 0.3%.
+
+With a controller, the Boss PoolKey uses `LPFeeLibrary.DYNAMIC_FEE_FLAG`. Its stored LP fee is initially zero and stays zero in this implementation; `beforeSwap` returns the computed fee with `OVERRIDE_FEE_FLAG` for the individual swap. The sentinel and stored fee are not the executed percentage. `BeforeSwapDeltaLibrary.ZERO_DELTA` and the zero `afterSwap` return delta preserve ordinary v4 output settlement. Dynamic fees accrue as LP fees and do not replenish the prize. See [v4 dynamic fees](https://developers.uniswap.org/docs/protocols/v4/concepts/dynamic-fees).
+
+`maxAge` bounds reference age, `maxFee` bounds accepted execution fees, and `maxRoyPerMockUSDX128` separately bounds the first-hop output rate frozen at launch. Player `minRoyOut`, `minBossHPOut`, spend cap, and deadline bound a signed attack against later state changes. None resets pool price or guarantees fair valuation, arbitrage removal, or protection from market losses. External-oracle integration remains future work. Claims and owner LP changes do not require a fresh reference.
+
+## Factory hook callbacks
+
+The contract enables `beforeInitialize`, `beforeAddLiquidity`, `beforeRemoveLiquidity`, `beforeSwap`, and `afterSwap`, with address permission mask `0x2ac0`. Return-delta permissions are off. PoolManager calls these callbacks because the Hook is part of the canonical Boss PoolKey. The Router initiates operations separately so v4 hook self-call suppression does not skip the checks. The supply pool has no game hook.
+
+| Callback | Checks and state changes |
+| --- | --- |
+| `beforeInitialize` | PoolManager caller, configured Router, setup mode, complete canonical key, and one-time initialization. |
+| `beforeAddLiquidity` | Manager/Router/pool authentication, canonical ticks, exact salt-`1` initial `L` during setup, or positive salt-`4` owner addition in liquidity mode with the base intact. |
+| `beforeRemoveLiquidity` | Manager/Router/pool authentication and negative salt-`4` removal in liquidity mode. Initial salt `1` cannot be removed or fee-collected through a zero-delta call. |
+| `beforeSwap` | Exact-input buy, Router active player and mode, expected stage, active status, canonical range limit, intact base position, protocol/LP fee configuration, cooldown, and optional fee-controller result. Player reverse trades are rejected. |
+| `afterSwap` | Read actual output/input from `BalanceDelta`, validate direction and price movement, check measured first-hop rate and current volume allowance, update `stageSold`, `eligibleHP`, `rewardCredit`, and volume, then call `_clearVolumeStage` if the goal is reached. |
+
+`BossRouter.attackWithMockUSD` derives the player from `msg.sender`, validates the requested stage and transaction bounds, receives the input cap, then establishes a non-reentrant attack context. `unlockCallback` accepts only PoolManager. `_executeTwoHop` makes the supply swap, exposes its actual spend/output to the Hook, and makes the Boss swap. After callbacks return, the Router checks output floors, delivers exactly the purchased MEME, returns unused Attack Token, and resolves deltas. Unused MockUSD is returned after unlock. A failure at any point rolls back both swaps, all credit, and stage changes.
+
+Calling callbacks directly fails PoolManager authentication. Another router calling the canonical Boss pool fails initiating-sender/context checks. A script calling BossRouter still obeys the same cooldown, fee, and volume rules as the browser. Free-form `hookData`, transfers, and external markets cannot create game credit. Cooldowns therefore remain enforceable even when the frontend is bypassed. See the [official hooks overview](https://developers.uniswap.org/docs/protocols/v4/concepts/hooks).
+
+The remaining staged LP, refill, and transferable HP descriptions in this document describe the standalone BossHP mode. Historical public Factory battles retain their original staged behavior and bypass new getters through their pinned build identities.
 
 ## BoostPad creation
 
 `/boostpad` hosts the existing Blacksmith scene and pixel form. Direct visits open the form; `?from=game` starts walking. `/launch` redirects permanently to `/boostpad`. `useBoostPadForm` owns the reused live launch logic while `FactoryWalk` stays mounted, so hiding the panel preserves fields and in-flight work. The root `FactoryOperationProvider` persists submitted transactions and confirmed results across navigation. Receipt recovery uses the saved Factory address, including after a deployment upgrade. Recovery errors and actions remain visible alongside a confirmed result when browser persistence fails.
 
 ## Architecture
+
+This diagram shows the standalone BossHP path. The Factory uses the same two swaps, with all inventory active and a cooldown instead of refill maintenance.
 
 ```mermaid
 flowchart LR
@@ -39,9 +67,9 @@ Use two custom core contracts: BossHook and BossRouter. BossRouter combines the 
 
 BossHook is attached to the Attack Token/BossHP pool. The MockUSD/Attack Token supply pool can use ordinary v4 behavior without a game hook. Locks on the game's supply LP allocation are enforced by its controlled position owner, not by restricting the entire supply market.
 
-### Proposed contract boundaries
+### Standalone contract boundaries
 
-Actual source uses `BossHP`, `RoyToken`, `MockUSD`, and `BossCollectibles` under `contracts/src`; the generated ABI is authoritative. There is no LP, treasury, or fee recovery path, so those assets remain locked. Production NFT metadata remains unimplemented.
+Actual source uses `BossHP`, `RoyToken`, `MockUSD`, and `BossCollectibles` under `contracts/src`; the generated ABI is authoritative. Standalone LP, treasury, and fee assets remain locked. Current Factory owners can remove only their separate added position. Production NFT metadata remains unimplemented.
 
 | Contract | Responsibilities and custody | Main interface |
 | --- | --- | --- |
@@ -127,19 +155,24 @@ The screen data maps as follows:
 
 | Screen element | Live source | Meaning and limits |
 | --- | --- | --- |
-| Boss HP | `round.remainingSellableHP`, `round.stageCapacity[round.currentStage]` | Remaining purchasable HP against the current nominal capacity. Rounded display values do not determine stage completion. |
+| Standalone Boss HP | `round.remainingSellableHP`, `round.stageCapacity[round.currentStage]` | Remaining purchasable HP against the current nominal capacity. Rounded display values do not determine stage completion. |
+| Factory stage progress | `round.stageVolume`, `round.stageVolumeTarget`, `round.currentStage` | Current-stage eligible MockUSD against its additional goal. Purchased MEME and remaining AMM inventory are separate quantities. |
 | Stage line, Pool Unis level, boss form | `round.currentStage` and `round.status` | One shared round with three updated forms, in form-a, form-b, then form-c order. Stage, deadline, and network appear above the small player portrait. |
 | Round deadline | `round.deadline`, `round.blockTimestamp`, snapshot receipt time | Countdown derived from the chain deadline. Elapsed local time can animate the countdown between reads; it cannot reset the deadline or authorize an attack. |
-| Player HP during the fight | `player.bossHPBalance` | Current reward-bearing holdings, labeled YOUR HP until defeat. Disconnected wallets show a connect prompt or unavailable value. |
-| Reward share after defeat | `player.bossHPBalance / round.finalEligibleHP` | Share of the original prize represented by current unredeemed holdings. The denominator stays fixed after claims. No percentage is calculated with a zero denominator. |
-| Reward preview | `sdk.previewReward(hpAmount, account)` | Payout for the selected redemption amount, with SDK claimability checks. MockUSD uses six decimals; Attack Token and BossHP use eighteen. |
+| Factory cooldown | `round.continuousLiquidity.nextAttackAt`, `round.blockTimestamp` | Shared 60/120-second pause. An advanced stage with `Active` status can still reject attacks before this timestamp. |
+| Player tokens during the fight | `player.bossHPBalance` | Standalone holdings carry reward rights. Factory MEME balances do not determine earned prize credit. Disconnected wallets show a connect prompt or unavailable value. |
+| Reward share after defeat | Standalone `player.bossHPBalance / round.finalEligibleHP`; Factory `player.rewardCredit / round.finalEligibleHP` | The denominator stays fixed after claims. Factory transfers do not transfer credit. No percentage is calculated with a zero denominator. |
+| Reward preview | `sdk.previewReward(hpAmount, account)` | Payout for selected standalone redemption or Factory credit consumption, with SDK claimability checks. Use `round.hpToken.decimals` and `round.rewardToken.decimals`; a creator-selected token need not use eighteen decimals. |
+| Mock reference and fee | `round.mockOracle`, `quote.bossPoolFee` | Owner-controlled testnet reference, update time and validity; the executed Boss LP fee is quoted at the same block as route amounts. It is not live USD data. |
 | Hit message and hit animation | Confirmed `AttackResult.bossHPOut` or the matching decoded `AttackRecorded` event | Actual output of that attack. A quote supplies a preview only. |
 | Historical contribution | Confirmed `AttackRecorded` events for the wallet and deployment | `PlayerSnapshot` contains `hasAttacked`, not a historical damage total. A full history requires bounded event replay; session receipts alone cannot supply lifetime contribution. |
 | Network and read status | `arena.network`, `arena.deployment`, snapshot block | The selected network and actual availability replace mock labels. `Uniswap v4` alone does not identify the network or establish a live read. |
 
 The mock's `sum(stageSold) / MOCK_FINAL_ELIGIBLE_HP` bar measures shared progress and cannot become a wallet reward share. Its victory card also assumes one player owns every eligible token. Those assumptions disappear in the live mapping. A contribution field can remain unavailable until event history is available; a wallet balance cannot fill that gap.
 
-An external purchase or transfer of the same round's BossHP changes `player.bossHPBalance`, which the existing state poll refreshes. It does not change `stageSold`, `finalEligibleHP`, or attack history. Reward claims use the current holder's surrendered amount, with `payout = floor(originalPrize * hpAmount / finalEligibleHP)`. Only the denominator freezes at defeat; wallet balances remain transferable. The price paid in an external market does not enter this calculation.
+For Factory encounters, `rewardCredit` comes only from authenticated attack output in that boss. A claim consumes credit for the MEME prize while purchased tokens stay with the player. Existing balances and transfers do not create or transfer credit.
+
+For the standalone fixture, an external purchase or transfer of the same round's BossHP changes `player.bossHPBalance`, which the existing state poll refreshes. It does not change `stageSold`, `finalEligibleHP`, or attack history. Reward claims use the current holder's surrendered amount, with `payout = floor(originalPrize * hpAmount / finalEligibleHP)`. Only the denominator freezes at defeat; wallet balances remain transferable. The price paid in an external market does not enter this calculation.
 
 For an illustrative final supply of 1,800 eligible BossHP and a 1,000 MockUSD prize, a buyer who acquires and redeems 180 BossHP receives 100 MockUSD. The seller gives up those same reward rights. Redemption moves the 180 BossHP into permanent custody, preventing another sale and claim of those tokens. This works for a buyer with no attack history; the optional victory NFT still requires that wallet's own attack participation.
 
@@ -159,9 +192,9 @@ The action flow reuses these SDK operations:
 | Redeem reward | `previewReward`, any required claim approval, then `claimReward(hpAmount)` through `runPending` | Standalone claims surrender BossHP for MockUSD. Factory claims consume reward credit for MEME while purchased MEME remains with the player. |
 | Claim optional NFT | `sdk.claimVictoryNFT()` through `runPending` | Separate action subject to `hasAttacked` and `victoryClaimed`. Holding transferred BossHP alone does not establish NFT eligibility. |
 
-The live battle offers 1, 5, and 10 MockUSD caps through its three attack commands. SDK values are `1_000_000n`, `5_000_000n`, and `10_000_000n`, because MockUSD uses six decimals. Each option executes one attack transaction. Selecting a different cap invalidates the previous quote and refreshes allowance readiness. The player must click the selected command again after reviewing a fresh quote; quote loading and approval confirmation never trigger an attack. The quote's `maxMockUSD` must match the selected cap before submission. Changing encounter or account resets the selection to 1 MockUSD.
+The live battle offers 1, 5, and 10 MockUSD caps through its three attack commands. SDK values are `1_000_000n`, `5_000_000n`, and `10_000_000n`, because MockUSD uses six decimals. Each option executes one attack transaction. Selecting a different cap invalidates the previous quote and refreshes allowance readiness. The player must click the selected command again after reviewing a fresh quote; quote loading and approval confirmation never trigger an attack. `requestedMaxMockUSD` binds the selected button cap. `maxMockUSD` is the exact signed execution cap and can be smaller near a Factory stage goal. Balance and allowance checks use that signed cap. Changing encounter or account resets the selection to 1 MockUSD.
 
-Action logic uses 100 basis points of slippage, and the SDK defaults to a five-minute quote lifetime bounded by the round deadline. The player's MockUSD balance must cover the selected cap. Actual spend can be lower when a stage clears, and unused MockUSD and intermediate Attack Token are returned. The cap does not promise fixed damage.
+Action logic uses 100 basis points of slippage, and the SDK defaults to a five-minute quote lifetime bounded by a nonzero round deadline. The player's MockUSD balance must cover the quoted signed cap. Actual spend can be lower, and unused MockUSD and intermediate Attack Token are returned. The selected cap does not promise fixed damage.
 
 The player UI has no faucet. `sdk.faucetMockUSD(amount)` remains available to test scripts, and the shared transaction controller can recover previously submitted faucet requests.
 
@@ -188,7 +221,7 @@ Leaving the page changes navigation only. Once a hash is saved, the existing pen
 
 The mock reducer, timer-driven attack hook, and mock badge are removed. [`battle.ts`](../apps/web/src/lib/battle.ts) contains the shared receipt-effect filter and deadline calculation. Confirmed receipts keep their original stage and exact damage, even when the refreshed round has already advanced. Quote, signature, and receipt timing follows the actual SDK operations. Repeated reads of an unchanged block timestamp retain their clock anchor so the countdown continues between polls.
 
-The SDK exposes both configured pool fee rates in `RoundSnapshot` and `AttackQuote`, read from the Router's pool keys at the snapshot block. Quote review shows both rates. The paginated `readActivity` API can supply historical contribution; the HUD reads holdings and, for Factory encounters, reward credit directly from chain state. It does not sum an incomplete session history or count transfer events as attacks.
+The SDK exposes the supply fee and Boss fee state in `RoundSnapshot` and `AttackQuote`. Fixed fees come from the verified keys; a dynamic key is recognized as a mode sentinel, and the attack quote computes its actual override from the measured route at the same block. Quote review displays that percentage rather than the sentinel. Mock updates invalidate UI quotes even without a stage or pool-price change. The paginated `readActivity` API can supply historical contribution; the HUD reads holdings and, for Factory encounters, reward credit directly from chain state. It does not sum an incomplete session history or count transfer events as attacks.
 
 Factory encounter discovery starts at the configured Factory deployment block and verifies the matching `BossLaunched` event, registration, immutable wiring, and pool keys. Resolved manifests retain launch provenance for receipt recovery after navigation or refresh. A new Base Sepolia Factory override requires both `NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_ADDRESS` and `NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_DEPLOYED_AT_BLOCK` so creator launches and player discovery use the same Factory.
 
@@ -196,7 +229,7 @@ Base Sepolia is the default target, and the published deployment manifest is inc
 
 ## Deployment and proof gate
 
-The target is Base Sepolia chain ID `84532` at `https://sepolia.base.org`. The live encounter is recorded in `apps/web/public/deployments/base-sepolia.json` using its confirmed Factory launch at block `47332745`. Its origin Factory remains distinct from the current Factory used for new launches. It uses its own PoolManager built from pinned v4-core source; it is not an official Base PoolManager. The team-deployed Robinhood fixture remains historical evidence and does not represent an official Robinhood manager.
+The target is Base Sepolia chain ID `84532` at `https://sepolia.base.org`. The live Roy encounter is recorded in `apps/web/public/deployments/base-sepolia.json` using its confirmed Factory launch at block `47342620`. Its origin is the current continuous-liquidity Factory at `0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7`. The former timed Roy remains historical and is no longer the default encounter or a Roy presentation. Both use the existing team PoolManager built from pinned v4-core source; it is not an official Base PoolManager. The team-deployed Robinhood fixture remains historical evidence and does not represent an official Robinhood manager.
 
 BP01 adapts the existing compact real-v4 scenario: both swaps, ordinary BossHP delivery, cumulative purchase accounting, current-stage completion, and the reserve-funded refill/LP addition with all deltas settled. Reuse existing upstream fixtures and settlement helpers. Then verify the real target-chain route after deployment.
 
@@ -204,7 +237,7 @@ Choose the LP ranges, inventory buffers, paired Attack Token requirements, reser
 
 The manifest records both pool keys/IDs, addresses, provenance, deployment block, compiler/source pins, hook flags, initial price, each stage's HP quota and bounded LP plan, prefunded asset balances, unlock times, attack limits, and actual transaction evidence. Do not commit keys or imaginary addresses.
 
-## Contracts and permissions
+## Standalone contracts and permissions
 
 Use standard fixed-supply ERC-20 implementations for Attack Token and BossHP. Prefund BossHP and any paired Attack Token before activation. Stage release moves these existing assets into positions; it does not grant an unrestricted mint role. MockUSD is a test-only faucet asset.
 
@@ -223,13 +256,13 @@ Every BossHook callback verifies the configured PoolManager and complete canonic
 | Reverse trade | Ordinary trade | Only the controller's bounded reserve-funded refill during transition; player sell-backs rejected |
 | afterSwap | No damage or reward issuance | Actual authorized player BossHP output increments `stageSold` and enters eligible circulation; maintenance excluded |
 
-Start with fixed 0.30% fees for the candidate math fixture. Dynamic stage fees are deferred; changing fees requires recalculating reserve and clearing costs. The refill uses the configured fee and the frozen price limit.
+The standalone math fixture uses fixed 0.30% fees. Its refill uses that configured fee and the frozen price limit. The optional Factory dynamic fee is driven by a mock price comparison, not the stage number, and does not apply to this refill path.
 
 The hook callback sender is a router or liquidity manager, not automatically the player. BossRouter derives the player from msg.sender and maintains a bounded, non-reentrant request context. Never trust a free-form hookData player address or tx.origin. Authenticate callbacks by PoolManager, full canonical PoolId, initiating router, and the active operation mode. Apply public-entry reentrancy protection without blocking expected authenticated v4 callbacks.
 
 Whitelisting the shared PositionManager address alone does not authenticate a stage release: other users can call it too. Validate an active release context tied to the trusted reserve/controller, canonical key, stage, position action, asset maxima, and expected owner. Reject arbitrary external LP additions to the Boss pool that bypass this plan.
 
-## One atomic attack
+## Standalone atomic attack
 
 Primary inputs are MockUSD input cap, minimum Attack Token output, minimum BossHP output/damage, expected stage, and deadline. No burn cap or physical/magic selector remains. An approval transaction may precede Attack.
 
@@ -248,7 +281,7 @@ Attack Token input remains in LP assets until an authorized refill exchanges res
 
 This path uses ordinary v4 output settlement and a state-only `afterSwap`, without custom output accounting. See the pinned [hook dispatch](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/Hooks.sol) and [flash accounting](https://developers.uniswap.org/docs/protocols/v4/concepts/flash-accounting).
 
-## Actual stage liquidity release
+## Standalone stage liquidity release
 
 Stage 1 positions are funded at activation. Stage 2 and 3 assets remain in the gated reserve until their predecessors clear. Token transfers to PoolManager or a frontend stage animation do not constitute an LP release.
 
@@ -262,7 +295,7 @@ Keep additions separate from LP withdrawals. Old positions stay in place through
 
 The existing callback guard must not block its own intended authenticated LP addition. Conversely, v4 hook self-call suppression must not provide an unrestricted bypass. Preserve PoolManager authentication and the narrow release context rather than a blanket callback reentrancy guard that prevents the legitimate nested liquidity callback.
 
-## HP quotas and liveness
+## Standalone HP quotas and liveness
 
 Stage HP is [300, 600, 900] in BossHP base-unit equivalents. At a successful attack:
 
@@ -280,7 +313,7 @@ Do not require `stageSold == nominalStageHP`: rounding can leave an unsellable b
 
 Each request pins expectedStage. A transaction that arrives after another player advances the stage reverts and requires a new quote. Within a clearing attack, pending-next-stage state prevents damage spilling into the next allocation.
 
-## Funds and lifecycle
+## Standalone funds and lifecycle
 
 Keep these balances and authorities separate:
 
@@ -296,15 +329,15 @@ Ordinary LP principal withdrawals are blocked from activation through the fixed 
 
 Attacks stop at the deadline. If the boss survives, anyone can expire the round and the maker can reclaim the unawarded prize once. If stage 3 was defeated earlier, there is no prize refund to the maker. Attack purchases are not refundable through expiry.
 
-## Rewards and client interface
+## Standalone rewards and client interface
 
 Use integer base units, bigint in TypeScript, and decimal strings in JSON. Freeze `originalPrize` and `finalEligibleHP = sum(stageSold)` at final defeat. The worked default is `claimReward(hpAmount)`: atomically take that many eligible BossHP into permanent claim custody and pay `floor(originalPrize * hpAmount / finalEligibleHP)` with full-precision multiplication/division. Reuse SafeERC20, guard reentrancy, update redeemed/paid totals before external calls, and revert the entire operation on any failure. Require a positive payout and cumulative redeemed HP no greater than the frozen eligible supply. Do not return, lend, approve, or withdraw redeemed HP back into circulation.
 
 Transfers of unredeemed HP transfer reward rights. A wallet can claim again only with additional unredeemed tokens it holds; there is no once-per-wallet token claim flag. Never compute rewards from a live balance while leaving those same tokens transferable after payment. Do not shrink the denominator or use the remaining prize for later claims. Direct donations to claim custody do not count as redemptions. Integer reward dust remains locked. NFT eligibility and its once-per-wallet claim flag remain separate. The [reward calculation](refill-math.md#rewards-follow-eligible-bosshp) states the custody assumptions and the frozen-balance alternative.
 
-Actions are activate, attackWithMockUSD, activatePendingStage for the trusted Router, claimReward, optional claimVictoryNFT, expire, and the specific post-deadline recovery methods. Optional attackWithRoy skips the supply-pool swap. There is no direct held-BossHP damage action.
+Actions are `activate`, `attackWithMockUSD`, `claimReward`, optional `claimVictoryNFT`, `expire`, and `refundExpiredPrize`. The Router performs standalone maintenance internally through `_runTransition` and `completeStageTransition`; there is no public `activatePendingStage` entry point. `recoverAfterDeadline` is retained in the Router ABI but always reverts in the current source. Optional `attackWithRoy` skips the supply-pool swap only in standalone mode. There is no direct held-BossHP damage action.
 
-Publish views for stage HP/status, `stageSold`, frozen eligible supply, redeemed HP, NFT eligibility/claim flags, pending/released stage allocations, reserve balances, LP positions, and deployment configuration. Derive token reward previews from holder balance and the frozen rate after victory; use attack events for historical damage. Emit AttackApplied with both hop amounts and actual BossHP output, followed by StageCleared and then StageLiquidityActivated/StageStarted only when the actual addition succeeds.
+Views expose stage HP/status, `stageSold`, frozen eligible supply, redeemed HP, NFT eligibility/claim flags, reserve balances, LP positions, and deployment configuration. Derive standalone token reward previews from holder balance and the frozen rate after victory; use attack events for historical damage. `AttackRecorded` reports the output, and `AttackExecuted` reports both hop amounts and refunds. `StageCleared`, `StageActivated`, and standalone `StageRefilled` describe progression and maintenance. Current Factory stages use volume and cooldowns without `StageRefilled`.
 
 Use the shared chain package for all consumers. `BossRouter.quoteAttackWithMockUSD(uint256 maxMockUSD,uint8 attackStage)` runs the two-hop route and any required refill inside an always-reverting frame. Its `eth_call` result supplies a public quote without an account, allowance, player balance, or state mutation. `sdk.quoteAttack` exposes this quote before wallet connection or approval. After approval, the SDK simulates the authenticated `attackWithMockUSD` call with the player's accepted output floors. A changed stage, account, deployment, expiry, or insufficient output requires a fresh quote. Treat no-liquidity, out-of-range, and reserve errors as failures rather than fake damage.
 

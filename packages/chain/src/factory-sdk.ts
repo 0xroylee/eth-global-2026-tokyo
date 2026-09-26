@@ -18,8 +18,8 @@ import {
   type Transport,
   type WalletClient,
 } from "viem";
-import { bossFactoryAbi } from "./generated/abi";
-import { bossHookCreationCode, bossRouterCreationCode } from "./generated/bytecode";
+import { bossFactoryAbi, bossFeeControllerAbi } from "./generated/abi";
+import { bossFactoryRuntimeCode, bossFactoryImmutableRanges, bossHookCreationCode, bossRouterCreationCode } from "./generated/bytecode";
 import { matchesRequestedTransaction } from "./transaction-match";
 
 const HOOK_FLAGS = 0x2ac0n;
@@ -50,7 +50,7 @@ export type FactoryLaunchQuote = {
 
 export type FactoryBuildStatus =
   | { status: "not-deployed" }
-  | { status: "compatible" }
+  | { status: "compatible"; demoToken?: Address }
   | {
       status: "incompatible";
       routerCodeHash: Hex;
@@ -228,9 +228,10 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
     ]);
     const expectedRouterCodeHash = keccak256(routerCode);
     const expectedHookCodeHash = keccak256(hookCode);
-    return sameHex(routerCodeHash, expectedRouterCodeHash) && sameHex(hookCodeHash, expectedHookCodeHash)
-      ? { status: "compatible" }
-      : { status: "incompatible", routerCodeHash, hookCodeHash, expectedRouterCodeHash, expectedHookCodeHash };
+    if (!matchesCompiledRuntime(code, bossFactoryRuntimeCode, bossFactoryImmutableRanges) || !sameHex(routerCodeHash, expectedRouterCodeHash) || !sameHex(hookCodeHash, expectedHookCodeHash)) return { status: "incompatible", routerCodeHash, hookCodeHash, expectedRouterCodeHash, expectedHookCodeHash };
+    const controller = await publicClient.readContract({ address: factory, abi: bossFactoryAbi, functionName: "feeController" });
+    const demoToken = controller === "0x0000000000000000000000000000000000000000" ? undefined : await publicClient.readContract({ address: controller, abi: bossFeeControllerAbi, functionName: "bossToken" });
+    return { status: "compatible", demoToken };
   }
 
   async function ensureFactory(): Promise<void> {
@@ -669,4 +670,17 @@ async function mineHookSalt(
     if (!code || code === "0x") return salt;
   }
   throw new BossFactorySdkError("HOOK_SALT_NOT_FOUND", "Could not find a valid v4 hook address within the salt search bound.");
+}
+
+/** Compare compiled runtime after masking constructor immutable slots; a self-reported hash is insufficient. */
+export function matchesCompiledRuntime(code: Hex, runtime: Hex, ranges: readonly { start: number; length: number }[]): boolean {
+  if (code.length !== runtime.length) return false;
+  let actual = code.toLowerCase();
+  let expected = runtime.toLowerCase();
+  for (const { start, length } of ranges) {
+    const offset = 2 + start * 2;
+    actual = actual.slice(0, offset) + "0".repeat(length * 2) + actual.slice(offset + length * 2);
+    expected = expected.slice(0, offset) + "0".repeat(length * 2) + expected.slice(offset + length * 2);
+  }
+  return actual === expected;
 }

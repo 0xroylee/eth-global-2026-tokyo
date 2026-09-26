@@ -28,6 +28,11 @@ export const bossFactoryAbi = [
         "name": "hookCodeHash_",
         "type": "bytes32",
         "internalType": "bytes32"
+      },
+      {
+        "name": "feeController_",
+        "type": "address",
+        "internalType": "contract BossFeeController"
       }
     ],
     "stateMutability": "nonpayable"
@@ -99,6 +104,19 @@ export const bossFactoryAbi = [
         "name": "",
         "type": "address",
         "internalType": "contract BossHook"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "feeController",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract BossFeeController"
       }
     ],
     "stateMutability": "view"
@@ -592,6 +610,423 @@ export const bossFactoryAbi = [
   }
 ] as const;
 
+export const bossFeeControllerAbi = [
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "bossToken_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "mockUSD_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "attackToken_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "source_",
+        "type": "address",
+        "internalType": "contract IBossPriceSource"
+      },
+      {
+        "name": "maxAge_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxFee_",
+        "type": "uint24",
+        "internalType": "uint24"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "BASE_FEE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint24",
+        "internalType": "uint24"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "attackToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "bossToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "feeForSwap",
+    "inputs": [
+      {
+        "name": "bossSqrtPriceX96",
+        "type": "uint160",
+        "internalType": "uint160"
+      },
+      {
+        "name": "mockUSDSpent",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "attackBought",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint24",
+        "internalType": "uint24"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "maxAge",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "maxFee",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint24",
+        "internalType": "uint24"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "mockUSD",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "source",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IBossPriceSource"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "FeeAboveMaximum",
+    "inputs": [
+      {
+        "name": "required",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maximum",
+        "type": "uint24",
+        "internalType": "uint24"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidOracle",
+    "inputs": []
+  }
+] as const;
+
+export const mockBossPriceSourceAbi = [
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "bossToken_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "mockUSD_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "owner_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "bossToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "initialPriceX128",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "mockUSD",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "priceX128",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "readPrice",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setInitialPrice",
+    "inputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setPrice",
+    "inputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "updatedAt",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "MockPriceUpdated",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "priceX128",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "updatedAt",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "InvalidMockPrice",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  }
+] as const;
+
 export const bossPoolHookAbi = [
   {
     "type": "constructor",
@@ -682,6 +1117,11 @@ export const bossPoolHookAbi = [
             "internalType": "uint256"
           }
         ]
+      },
+      {
+        "name": "feeController_",
+        "type": "address",
+        "internalType": "contract BossFeeController"
       }
     ],
     "stateMutability": "nonpayable"
@@ -977,12 +1417,12 @@ export const bossPoolHookAbi = [
     "name": "beforeRemoveLiquidity",
     "inputs": [
       {
-        "name": "",
+        "name": "sender",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "",
+        "name": "key",
         "type": "tuple",
         "internalType": "struct PoolKey",
         "components": [
@@ -1014,7 +1454,7 @@ export const bossPoolHookAbi = [
         ]
       },
       {
-        "name": "",
+        "name": "params",
         "type": "tuple",
         "internalType": "struct ModifyLiquidityParams",
         "components": [
@@ -1053,7 +1493,7 @@ export const bossPoolHookAbi = [
         "internalType": "bytes4"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1367,6 +1807,19 @@ export const bossPoolHookAbi = [
   },
   {
     "type": "function",
+    "name": "feeController",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract BossFeeController"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "finalEligibleHP",
     "inputs": [],
     "outputs": [
@@ -1484,6 +1937,19 @@ export const bossPoolHookAbi = [
   },
   {
     "type": "function",
+    "name": "nextAttackAt",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "originalPrize",
     "inputs": [],
     "outputs": [
@@ -1517,6 +1983,19 @@ export const bossPoolHookAbi = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "poolLiquidity",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "liquidity",
+        "type": "uint128",
+        "internalType": "uint128"
       }
     ],
     "stateMutability": "view"
@@ -2300,6 +2779,33 @@ export const bossPoolHookAbi = [
   },
   {
     "type": "error",
+    "name": "StageCooldown",
+    "inputs": [
+      {
+        "name": "nextAttackAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "StageVolumeExceeded",
+    "inputs": [
+      {
+        "name": "requested",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "remaining",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "Unauthorized",
     "inputs": []
   }
@@ -2679,6 +3185,62 @@ export const bossRouterAbi = [
   },
   {
     "type": "function",
+    "name": "modifyOwnerLiquidity",
+    "inputs": [
+      {
+        "name": "request",
+        "type": "tuple",
+        "internalType": "struct BossRouter.LiquidityRequest",
+        "components": [
+          {
+            "name": "delta",
+            "type": "int128",
+            "internalType": "int128"
+          },
+          {
+            "name": "maxBossHPIn",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maxRoyIn",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minBossHPOut",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minRoyOut",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "bossHPDelta",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "royDelta",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "owner",
     "inputs": [],
     "outputs": [
@@ -2686,6 +3248,19 @@ export const bossRouterAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "ownerLiquidity",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "surplus",
+        "type": "uint128",
+        "internalType": "uint128"
       }
     ],
     "stateMutability": "view"
@@ -2981,6 +3556,37 @@ export const bossRouterAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnerLiquidityModified",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "liquidityDelta",
+        "type": "int128",
+        "indexed": false,
+        "internalType": "int128"
+      },
+      {
+        "name": "bossHPDelta",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
+      },
+      {
+        "name": "royDelta",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
       }
     ],
     "anonymous": false

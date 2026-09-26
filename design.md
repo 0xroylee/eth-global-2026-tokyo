@@ -6,7 +6,7 @@ This document defines the visual and interaction standard for the live game. It 
 
 The hub is a warm, textured 16-bit garden. Stone paths connect the boss gates and workshop. Trees, water, and lights frame routes without hiding the player or interactions.
 
-The battle keeps the lake background, status window at the upper left, boss name at the upper right, large boss on the right, command menu at the lower left, and dialogue at the lower right. The player portrait sits above the command menu. Reduce spacing and sprite size on shorter screens so windows remain separate and commands stay visible.
+The battle keeps the lake background, status window at the upper left, boss name at the upper right, large boss on the right, command menu at the lower left, and dialogue at the lower right. The player portrait sits above the command menu. The boss has a 360px visible character height across all three forms, with its feet on a shared baseline. Transparent image margins do not count toward that height. The boss may extend behind the battle log. Reduce its height only when a very short window cannot fit it.
 
 Use the existing character and environment artwork with nearest-neighbor rendering. Keep each boss's configured stage artwork and chain identity together. A verified perpetual Factory boss uses Pool Unis artwork when no explicit mapping exists. Other encounters without configured artwork show their real data with an appearance-unavailable message.
 
@@ -25,7 +25,7 @@ Reuse `window-chrome` and `window-title` from [globals.css](apps/web/src/app/glo
 | HP and share bars | Green `#57C858` and blue `#A9D6FF` on navy tracks |
 | Focus | Visible blue outline, with spacing from the control |
 | Headings and commands | Existing pixel font, short labels |
-| Explanations and amounts | Readable mono text, normal sentence case |
+| Small text, explanations, and amounts | Apple system font via `font-system`, normal sentence case, smooth text rendering |
 
 Use the existing dark tokens for the surrounding shell. Avoid rounded dashboard cards inside game dialogs. Group related information with spacing and simple rules. Keep exact decimal strings, hashes, and contract addresses out of the primary command area, with full values available in details or accessible labels.
 
@@ -54,13 +54,15 @@ The approval dialog is compact. It identifies MockUSD, the BossRouter spender, a
 
 Close the approval dialog when sufficient allowance is confirmed. Approval never submits an attack automatically. Each attack requires a new player click and retains its displayed input cap and accepted minimum outputs. Approved players do not pass through an extra attack-confirmation dialog.
 
-Balance and allowance checks use the selected cap. Insufficient balance for 10 MockUSD does not prevent selecting a smaller cap. A pending wallet action or unresolved transaction locks all attack commands. Changing the encounter or account resets the selection to 1 MockUSD.
+The selected button cap is `requestedMaxMockUSD`. A Factory quote may bind a smaller exact execution cap to the remaining stage volume. Balance and allowance checks use `quote.maxMockUSD`, the cap sent in the signed transaction. Insufficient funds for the 10 MockUSD button do not prevent selecting a smaller cap. A pending wallet action or unresolved transaction locks all attack commands. Changing the encounter or account resets the selection to 1 MockUSD.
 
 Battle details, receipt recovery, and reward claims remain available through explicit controls. They do not interrupt the normal attack path. When a quote changes during simulation, show the refreshed preview and require another click.
 
 ## Feedback and rewards
 
 Use the dialogue window for wallet preparation, pending receipts, rejection, and confirmed hits. Apply damage, stage changes, and rewards only from confirmed chain state. Closing the battle does not cancel a submitted transaction.
+
+On devices with a hover-capable pointer, the battle log rests at 25% opacity and becomes fully opaque on hover or keyboard focus. Its text, frame, and background fade together. Transaction and error messages stay fully readable. On touchscreens without hover, the log stays fully opaque.
 
 Show player holdings separately from historical contribution. Factory reward credit stays separate from purchased token balances. After victory, token rewards and the optional victory NFT remain distinct actions with their own eligibility.
 

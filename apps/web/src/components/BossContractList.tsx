@@ -93,7 +93,7 @@ export function BossContractList({
                 <button
                   type="button"
                   onClick={() => onSelect(boss.id)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-ink/30 px-3 py-3 text-left transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-ink/30 px-3 py-3 text-left transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   <span className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-white/10 bg-ink">
                     {boss.portrait ? (

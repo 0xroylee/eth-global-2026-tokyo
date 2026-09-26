@@ -1,6 +1,10 @@
 # Boss Pool delivery plan
 
-Updated 27 September 2026. The no-burn direct-attack contracts, shared SDK, Next.js player app, and Phaser hub are implemented. Five focused Foundry cases pass. The fresh direct-attack local SDK journey passed with 14 successful transactions at commit `3450be7`. The earlier 18-transaction journey used enrollment-era contracts and is historical. Base Sepolia now hosts a factory-deployed live boss (`base-sepolia.json`, block 47332745), verified in `docs/evidence/base-sepolia-boss-factory-current.json`. Public `sepolia.base.org` RPC is rate-limited (429); swap to a keyed RPC before the demo. Manual wallet-popup acceptance also remains open.
+Historical delivery plan for the standalone BossHP round, updated 27 September 2026. The current Base Sepolia product is the Factory encounter: the full post-prize token allocation is in LP from launch, three stages advance on MockUSD volume goals, and attackers claim MEME prize credit without surrendering purchased tokens. The Factory is `0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7` at block `47341945`. Default Roy uses Hook `0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0`, Router `0x824464AF219850Fde45d539FC9f754205Dbf2df7`, and token `0x3A4AF1018EB5B9D774119C818a4eaC7CcdfBC1A2`; its launch is at block `47342620`. See the [Factory deployment reference](boss-factory.md#base-sepolia-deployment).
+
+The standalone milestones, 300/600/900 BossHP budgets, refill economics, and transferable HP claims below are historical plan details. The current Roy target is 60 MockUSD, split into 10/20/30 MockUSD stages, with shared cooldowns of 60 seconds and 120 seconds between stages and no expiry. A full raid therefore includes 180 seconds of cooldown. A 60–90 second demo cannot show a full unprepared raid; use a disclosed prepared state or present only part of the raid.
+
+The standalone local SDK journey passed with 14 successful transactions at commit `3450be7`. The earlier 18-transaction journey used enrollment-era contracts and is historical. Manual browser-wallet popup acceptance remains open.
 
 ## Progress snapshot
 
@@ -11,17 +15,17 @@ Updated 27 September 2026. The no-burn direct-attack contracts, shared SDK, Next
 | Phaser hub | ✅ Done | Roster hub (12 gates) + sage NPC + ROO patrol FSM (merged to main) |
 | Battle | ✅ Done | Battle v2, by-hook routing, 5x/10x swap attacks, `BattleActivityLog` confirmed-attacks feed |
 | Boostpad | ✅ Done | Factory launch flow at `/boostpad` |
-| Testnet | 🟡 Live (at risk) | Base Sepolia factory boss is live; public RPC returns 429 — swap to a keyed RPC before the demo |
+| Testnet | 🟢 Deployed | Current Factory and Roy deployment are verified in the Base Sepolia manifest and evidence; the Roy gameplay and browser-wallet journeys remain unverified |
 | World Channel | 🟢 Implemented on `feat/world-channel` | Bottom-left global activity feed: real `readActivity` blended with a deterministic mock stream (pending review) |
 | Map landmarks | 🟢 Implemented on `feat/map-uniswap-landmarks` | BaseScan explorer links for chain rows + `BattleActivityLog` (one-line `defineChain` fix), boss-exploration guide arrow now targets the active gate (`status === "active"`), and a Uniswap v4 **Market** landmark whose Pool Ledger panel reads the boss pool live from the hook (price / volume / stage liquidity) with a clearly marked ambient sample board (pending review) |
 
 ## Outcome and scope
 
-Two fresh wallets approve MockUSD to the Router when needed, attack directly to buy Attack Token and BossHP, clear three stages, see two reserve-funded price resets, transfer eligible HP between wallets, and redeem HP for MockUSD. Attack and token-claim paths mint no NFT. Defeated-round attackers can separately claim an optional victory NFT. The Hook controls purchase counting and liquidity release.
+The original plan targeted two fresh wallets attacking through MockUSD to buy Attack Token and BossHP, clearing three stages with two reserve-funded price resets, transferring eligible HP, and redeeming HP for MockUSD. That describes the standalone implementation. The current Factory encounter instead sells the selected MEME token with all sale LP active at launch, tracks eligible MockUSD volume, and gives each attacker nontransferable reward credit. Claims consume credit and pay the MEME prize without taking purchased MEME from the player.
 
 The [requirements](requirements.md) own gameplay, [technical specification](technical-spec.md) owns contracts/interfaces/custody, [HP lifecycle](hp-lifecycle.md) owns clearing details, and [refill/reward math](refill-math.md) owns calculations. [CONTEXT.md](../CONTEXT.md) is the glossary.
 
-Confirmed: one Attack Token attack currency, one Attack Token/BossHP battle pool, one MockUSD/Attack Token supply pool, no attack burn, stages 300/600/900, staged HP liquidity, rewards represented by BossHP, Base Sepolia, Next.js/TypeScript/Tailwind CSS, direct viem, Bun, and a small monorepo. Physical/magic, MROY, damage multipliers, dynamic fees and public BossHP sell-backs are outside the core.
+Historical standalone assumptions: one Attack Token/BossHP battle pool, BossHP rewards, 300/600/900 sale stages, and staged HP liquidity. The current Factory sells creator-selected MEME, activates sale liquidity at launch, and advances on MockUSD volume. Both modes use the shared Next.js/TypeScript/Tailwind CSS app, direct viem, Bun, and monorepo.
 
 Working claim default: eligible HP is transferable; claim atomically surrenders it into permanent custody and pays a fixed proportional reward, without burning. This is the model used by the current plan. A frozen-balance alternative was discussed but not selected. Do not silently combine the two.
 
@@ -48,11 +52,11 @@ The [frontend architecture](technical-spec.md#frontend-architecture) owns the se
 2. **BP03:** implemented. The wallet UI handles injected-wallet connection, account and chain changes, direct attack approval, and receipts. Manual wallet-popup acceptance remains open.
 3. **BP04:** implemented. The Router quote works before approval. The SDK simulates authenticated attacks after approval and handles stale quotes, typed receipt results, and recovery.
 4. **BP05/BP06:** implemented. The Phaser hub and boss scenes use confirmed round state, keyboard input, and reduced-motion handling.
-5. **BP07/BP10/BP11:** SDK reward and NFT operations are implemented. The local journey passed. Base Sepolia deployment and gameplay remain open; historical Robinhood receipts do not close that gate.
+5. **BP07/BP10/BP11:** SDK reward and NFT operations are implemented. The standalone local journey passed. The Base Sepolia Factory and Roy deployments are verified; a player gameplay journey and manual wallet-popup acceptance remain open. Historical Robinhood receipts do not close that gate.
 
 BP01's Vite build evidence is historical. Current Next.js checks are listed in the [SDK verification record](sdk-verification.md).
 
-## Candidate demo configuration
+## Historical standalone demo configuration
 
 | Parameter | Planning value | Gate before deployment |
 | --- | --- | --- |
@@ -164,16 +168,16 @@ BP01 is the local feasibility gate. Chain readiness is reported there but remain
 | --- | --- | --- |
 | Verified historical | A pinned real-v4 burn-based same-pool refill scenario passed one local test; integer dust and settlement were recorded | Superseded for current local behavior by [BP01 evidence](bp01-foundation.md) |
 | Verified arithmetic | Finite-range clearing, refill costs and fixed-denominator redemption calculations reconcile | A verifies real no-burn delivery/redemption in BP01 and BP07 |
-| Verified RPC access | Base Sepolia chain `84532` responds through the configured viem client. No Boss Pool deployment is verified there. | A deploys and verifies the team fixture in BP11 |
+| Verified deployment | Base Sepolia Factory and Roy Hook deployments are verified in the linked manifest and evidence. No current Roy player gameplay journey is recorded here. | Use the [Factory deployment reference](boss-factory.md#base-sepolia-deployment) and keep gameplay verification separate |
 | Verified local | BP01 records no-burn contracts and the shared real-v4 scenario. The current SDK and player app have separate fresh checks. | See [BP01 evidence](bp01-foundation.md) and the [SDK verification record](sdk-verification.md) |
-| Unverified | Base Sepolia deployment and player journey, manual browser-wallet popup acceptance, and production contract audit | Keep the BP11 target-chain and user wallet checks open |
-| Working default | Transferable HP surrendered without burn; fixed fees; candidate funding amounts | Revisit only on a user decision or contrary execution evidence |
+| Unverified | Current Roy player journey, manual browser-wallet popup acceptance, and production contract audit | Keep the target-chain player and user wallet checks open |
+| Historical standalone model | Transferable BossHP surrendered without burn; fixed fees; candidate funding amounts | These assumptions do not describe current Factory rewards or fees |
 | Not supplied | Teammate handles, checkpoint timezone and a verified submission deadline | Leave issues unassigned; use relative checkpoints |
 
 ## Cut order and demo
 
 Cut held-Attack Token convenience, global activity, dynamic fees, World ID, emissions/vesting, elaborate sound and extra animation first. Keep no-burn HP delivery, protected reward rights, stage gates, two-hop execution, optional victory NFTs, and honest target-chain evidence.
 
-Use prepared wallets and approvals. A 60–90 second demo can show a direct partial attack, stages 1 → 2 → 3, defeat, current HP reward rights, redemption and the optional victory NFT. Accelerate presentation or use a disclosed prepared stage; do not fake contract effects or introduce an admin HP setter. Keep an uncut two-wallet recording as supporting evidence.
+Use prepared wallets and approvals. A 60–90 second live demo can show a partial attack and the current Factory reward-credit state, but it cannot show an unprepared full raid because the shared stage cooldowns total 180 seconds. To show the full raid, use a disclosed prepared stage or allow the cooldowns to finish. Do not fake contract effects or introduce an admin HP setter. Keep an uncut two-wallet recording as supporting evidence.
 
 The submission owner must verify the current sponsor page and complete both FEEDBACK.md and the required feedback form. The standard UF track totals $6,000; it is not a guaranteed award. Continuity eligibility is separate.

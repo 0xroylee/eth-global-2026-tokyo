@@ -220,7 +220,7 @@ export function GameShell() {
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col gap-3 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-4">
         <header className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-start">
           <div className="pointer-events-none">
-            <p className="font-mono text-[10px] tracking-[0.22em] text-dim">BOSS POOL</p>
+            <p className="font-mono text-[10px] tracking-[0.22em] text-dim">BOSS BOOSTPAD</p>
             <div className="mt-1 flex flex-wrap items-baseline gap-2">
               <h1 className="text-sm font-semibold tracking-[0.14em] text-fog">GARDEN HUB</h1>
               <p className="font-mono text-[10px] tracking-[0.16em] text-dim">REGION 01</p>
@@ -382,7 +382,7 @@ export function GameShell() {
                 setHelpOpen(true);
               }}
               disabled={overlayOpen || canvasPhase === "error"}
-              className="rounded-md border border-white/12 px-2 py-1 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 hover:text-fog disabled:opacity-40 motion-reduce:transition-none"
+              className="rounded-md border border-white/12 px-2 py-1 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 disabled:opacity-40 motion-reduce:transition-none"
             >
               HELP
             </button>

@@ -1,196 +1,194 @@
-# 出生場景改版實作計畫：老智者 NPC × 10 Boss 呈現（Boss Roster Hub Plan）
+# Spawn-hub implementation plan: sage NPC and ten Bosses
 
-> **附註（2026-09-27 新增）**：實作進度與調整記錄見 **§14**。
+> Added 2026-09-27: implementation progress and adjustment records are in §14.
 
-- 分支：`docs/boss-roster-hub`（實作：`feat/boss-roster-hub`）｜品質模式：standard（threshold 85）｜PLAN Round 2/3
-- 讀者：JK（frontend）、Roy（contracts 交界）、決策者｜交付物：實作計畫（交付物 2；研究報告＝交付物 1：`docs/superpowers/specs/2026-09-26-boss-roster-hub-research.md`）
-- 上游輸入：研究報告（Round 1，§x.x 引用即指該報告）、`.edison/research/{a1,a2,b}`；源碼 file:line 由 architect 於 2026-09-26 實讀驗證（§8）
-- 驗證紀律：「建議」＝設計建議非既有事實；「假設」＝未驗證前提；本文件只新增這一份計畫，不修改任何程式碼或其他文件
+- Documentation branch: `docs/boss-roster-hub`; implementation branch: `feat/boss-roster-hub`. Quality mode standard, threshold 85; PLAN Round 2/3.
+- Audience: JK for frontend, Roy for contract boundaries, and decision-makers. Deliverable two is this plan; deliverable one is `docs/superpowers/specs/2026-09-26-boss-roster-hub-research.md`.
+- Inputs: Round 1 research, referenced by its section numbers, and `.edison/research/{a1,a2,b}`. The architect inspected source references on 2026-09-26; see §8.
+- Recommendations are proposals, assumptions are unverified premises. The original planning task adds this document only, without changing code or other files.
 
-## 1. 目標與範圍
+## 1. Goals and scope
 
-### 1.1 目標
+### 1.1 Goal
 
-把出生 hub 從「空曠草園 + 3 門神社」改版成「一位老智者 NPC + 10 隻 Launch Boost Boss 呈現」的 roster hub：
+Replace the open grass garden with three shrine gates with a roster hub containing a sage and ten Launch Boost Bosses:
 
-1. **老智者**站在出生點附近（位置固定，marker 落點，§4.3），首遇警告「前方有 10 隻 Boss」、之後隨進度更新台詞（研究 §3.1：Elderbug 骨架 + BotW 量化目標）。
-2. 使用者原話「至少把頭 10 個都拿出來變成 Boss」→ 研究 §2.2 的 Top-10 snapshot 全數登場，加上現有 cat（可玩）與 macro-whale（fixture），共 **12 門**（D1）。
-3. 3-gate 假設的硬編碼全面 data-driven 化（研究 §4.6 第 1、3、6、7 條；檔案級指引 §8.1）。
+1. Place the sage near spawn at a fixed marker, §4.3. First dialogue warns that ten Bosses await; later dialogue responds to progress, combining Elderbug guidance and BotW measurable goals.
+2. The user's request to make at least the top ten entries into Bosses means all ten snapshot entries plus the existing playable cat and macro-whale fixture: twelve gates, D1.
+3. Remove hardcoded three-gate assumptions using data-driven configuration; research §4.6 items 1/3/6/7 and §8.1 list the affected files.
 
-### 1.2 規格變更聲明（需 owner 批准）
+### 1.2 Specification changes requiring owner approval
 
-| 現行文件 | 現行約束 | 本計畫取代方式 | 狀態 |
-|---|---|---|---|
-| `docs/superpowers/specs/2026-09-26-rpg-hub-art-direction-design.md:64` | Out of scope：「add new bosses」 | 新增 10 隻 Launch Boost roster Boss | **需批准** |
-| 同上 `:32` | 「The three gate markers retain their current boss IDs」 | markers 擴為 12 門；`locked` 佔位 Boss（id=`"locked"`）移除（`locked: boolean` 欄位 Phase 1 保留為 deprecated，§5.1） | **需批准** |
-| `docs/superpowers/plans/2026-09-26-hub-completion-pass.md:19` | 「No … new bosses」 | 同上 | **需批准** |
-| 同上 `:23` | 「No … NPC conversations」 | 新增老智者對話系統（§6） | **需批准** |
-| 同上 `:20` | 「Do not edit `BossEntryPanel.tsx` or battle implementation」 | **維持不變**——非 cat 門改開新元件 `BossRosterCard`（D6、§5.4），完全不碰 partner 的 battle-entry 界線 | 不需批准（遵守） |
+| Existing document | Existing constraint | Replacement | Status |
+| --- | --- | --- | --- |
+| Art-direction design, line 64 | New Bosses out of scope | Ten Launch Boost roster Bosses | Approval required |
+| Same document, line 32 | Three gate markers retain current IDs | Twelve markers; remove the locked placeholder ID, retaining the deprecated locked boolean in Phase 1 per §5.1 | Approval required |
+| Completion-pass plan, line 19 | No new Bosses | Same roster expansion | Approval required |
+| Same plan, line 23 | No NPC conversations | Sage dialogue, §6 | Approval required |
+| Same plan, line 20 | Do not edit BossEntryPanel or battle implementation | Preserve this boundary; non-cat gates use a new BossRosterCard, D6/§5.4 | Compliant, no additional approval |
 
-**假設**：§1.2 的批准動作由決策者完成；批准前不動 codebase。art-direction 其餘約束（40×30、16px、3× zoom、既有 bridge 名稱、crisp label）繼續遵守。
+These refer to `docs/superpowers/specs/2026-09-26-rpg-hub-art-direction-design.md` and `docs/superpowers/plans/2026-09-26-hub-completion-pass.md`. Assumption: decision-makers approve §1.2 before implementation. Other constraints remain: 40×30 tiles, 16 px tiles, 3× zoom, existing bridge names, and crisp labels.
 
-### 1.3 不做什麼（Out of scope）
+### 1.3 Out of scope
 
-- 不碰 battle 實作（`/mock-battle`、`BossActions`、攻擊路徑）、不碰合約邏輯與部署（`contracts/`、`packages/chain/`）
-- 不編輯 `BossEntryPanel.tsx`（partner 界線，§1.2 末列）
-- 不上線 live fetch（§9 Phase 3 只設計 dev-only refresh script）
-- 不實作 LLM（§6.5 只寫設計）
-- 不新增觸控（既定否決，研究 §4.6 第 12 條）
-- 不造假進度或假資料（`apps/web/AGENTS.md` fixture 標示規則；非 cat 門一律誠實標 `NO CONTRACT`）
+- Battle implementation, `/mock-battle`, BossActions, attacks, contract logic, and deployment under contracts/packages/chain.
+- Edits to partner-owned BossEntryPanel.
+- Live fetching; Phase 3 designs only a development refresh script.
+- LLM implementation; §6.5 is design only.
+- Touch controls, previously rejected in research §4.6 item twelve.
+- Fabricated progress or data. Non-cat gates disclose NO CONTRACT under web-agent fixture rules.
 
-## 2. 決策記錄（Decision Log）
+## 2. Decision log
 
-| # | 決策 | 考慮過的選項 | 理由 | 狀態 |
-|---|---|---|---|---|
-| D1 | Roster 組成 = cat + macro-whale + 10 Launch Boost = **12 門**；`locked` 佔位 Boss（id=`"locked"`）移除（`locked: boolean` 欄位 Phase 1 保留為 deprecated，§5.1） | (a) 12 門；(b) 10 新 + cat = 11 門；(c) 10 門取代現有 fixture | 使用者「至少頭 10 個都拿出來」是加總語義；macro-whale 為已投資資產、與新名單同屬 no-contract fixture、零合約成本；12 = 1 playable + 1 fixture + 10 roster 的乾淨敘事 | 建議 |
-| D2 | 呈現方式 = 混合：**11 定點 + 1 巡邏（ROO）** | 全定點／全漫遊／混合 | 研究 §3.2 FromSoftware 證據：純漫遊傷害可發現性；但 1 隻巡邏的活絡感 CP 值最高（研究 §3.4 55-entity 先例，效能零顧慮）。選 ROO：榜單敘事「沒人知道他是什麼」＝遊蕩者人設，老智者台詞「只有那隻不守規矩」直接化用 | 建議 |
-| D3 | 老智者 = 純腳本對話（Phase 1）；LLM 雙軌為 Phase 3 可選 | 純腳本／LLM-only／雙軌 | demo 只有一次機會，腳本零網路風險；研究 §3.5 結論：LLM 必須腳本兜底。Phase 1 不實作 LLM | 建議 |
-| D4 | 解鎖語義 = 10 隻全開（demo 友善）；`status` 三態 `active / no-contract / locked`；擊敗狀態僅 cat 可發生（唯一部署合約），roster 門顯示 `NO CONTRACT` chip | 全開／逐步解鎖（Demon's Souls 式） | hackathon demo 需 30 秒內逛完 12 門；逐步解鎖價值低於完整名單展示。真實進度只來自 cat 的 `round:state`（`bridge.ts:31-36`） | 建議 |
-| D5 | 名單落點 = curated JSON（`src/game/boss-roster.json`）+ `bosses.ts` 組合成 `BossDefinition[]`；位置續留 hub.json markers（既定決策） | 全 TS／全 JSON／組合 | 研究 §2.3 建議 snapshot 為主；JSON import 有型別安全又整批可換（換檔即換榜） | 建議 |
-| D6 | 非 cat 門的 E 互動 = 開新元件 `BossRosterCard`（展示 ticker/敘事/snapshot 資訊）；cat 續走 `BossEntryPanel` | 擴充 BossEntryPanel／新卡片 | 擴充會踩 partner 界線（`BossEntryPanel.tsx:35` `supported = boss.id === "cat"` 特判遍布全檔）；新卡片零侵入 | 建議（Roy 知會） |
-| D7 | 地圖維持 40×30（640×480）；備案 44×32 | 維持／擴建 | 整數 zoom 3× 與 camera 行為不動（`HubScene.ts:9,12-16`）、`check-hub-map.ts` 尺寸常數不動、回歸面最小；12 門扇形提案見 §4.2 | 建議 |
-| D8 | 名牌 = `TICKER`（大寫）第一行 + name 第二行；roster 門 caption 改 `LB #N · ROBINHOOD`，cat/macro-whale 維持 `BOSS POOL` | 只 ticker／只 name | demo 觀眾認 ticker 才有梗（研究 §2.3）；排名 chip 承載「Launch Boost 榜」來源感；複用既有 plate 結構（`HubScene.ts:301-336`） | 建議 |
-| D9 | Portrait = Phase 1 code-drawn 盾牌 + ticker 字首（零資產）；Phase 2 換生成式 emblem 美術 | 真實 logo／生成 emblem／字首盾牌 | 真實 logo 授權風險高（§7.2）；字首盾牌是 locked 門鎖頭圖案的既有語彙延伸（`HubScene.ts:292-296`） | 建議 |
-| D10 | 對話 UI = React modal（`SageDialog`），非 canvas 內對話框 | canvas 內／React modal | 既有 WelcomeDialog 全套 a11y dialog 模式 + `ui:modal` 輸入鎖已存在（`GameShell.tsx:49`、`HubScene.ts:190-198`）；canvas 內要另建文字排版與輸入鎖 | 建議 |
+| # | Decision | Alternatives | Reason | Status |
+| --- | --- | --- | --- | --- |
+| D1 | Cat + macro-whale + ten roster entries = twelve gates; remove locked placeholder, retain deprecated locked boolean in Phase 1 | Twelve; ten plus cat = eleven; replace fixtures with ten | The user requested at least ten additional Bosses. Reuse invested whale art without contract cost: one playable, one fixture, ten roster entries. | Recommended |
+| D2 | Eleven fixed gates and one ROO patrol | Fixed, roaming, mixed | FromSoftware precedent favors discoverability. One patrol adds motion at low cost; research's 55-entity example removes performance concerns. ROO's unknown identity fits a wanderer, with sage copy about the one rule-breaker. | Recommended |
+| D3 | Scripted sage in Phase 1; optional LLM plus fallback in Phase 3 | Script, LLM-only, hybrid | One demo opportunity; scripts avoid network failure. Research requires fallback for any LLM. | Recommended |
+| D4 | All ten roster gates open; active/no-contract/locked statuses; only deployed cat can be defeated | All open, progressive unlocking | Let viewers inspect twelve gates within thirty seconds. Roster chips disclose NO CONTRACT; only cat round:state supplies real progress. | Recommended |
+| D5 | Curated `src/game/boss-roster.json` combined by bosses.ts into definitions; positions remain markers | TypeScript, JSON, combined | Typed imports and easy snapshot replacement; research favors snapshots. | Recommended |
+| D6 | Non-cat E opens new BossRosterCard with ticker, narrative, snapshot; cat keeps BossEntryPanel | Extend entry panel, separate card | Avoid widespread partner-owned supported=cat logic at line 35. | Recommended; notify Roy |
+| D7 | Keep 40×30, with 44×32 contingency | Keep size, expand | Preserve integer zoom, camera, checker dimensions, and reduce regression scope. Coordinates in §4.2. | Recommended |
+| D8 | Uppercase ticker first, name second; roster caption LB #N · ROBINHOOD, core caption BOSS POOL | Ticker only, name only | Recognizable tickers and rank signal roster provenance; reuse plate structure at HubScene 301–336. | Recommended |
+| D9 | Phase 1 code-drawn shield and ticker initials; optional generated emblems later | Real logos, generated emblems, initials | Logo rights and quality risks; initials extend the existing lock graphic at HubScene 292–296. | Recommended |
+| D10 | React SageDialog modal | Canvas dialogue, React modal | Reuse WelcomeDialog accessibility and ui:modal input locking instead of rebuilding layout/input controls. | Recommended |
 
-**Design Pattern 紀律（防過度設計聲明）**：本計畫不引入任何新設計模式或抽象。zone 感應、bridge event pair、crisp label、modal 模式皆為既有模式的**複製**（研究 §4.3）；不建 generic modal framework（呼應 completion-pass 既有決策）；巡邏只是單一 FSM 函式，不抽象化。
+No new design-pattern abstraction is needed. Copy existing zone, bridge, crisp-label, and modal patterns; add no generic modal framework. Patrol is one FSM function.
 
-## 3. 畫面規格
+## 3. Screen specification
 
-### 3.1 出生點所見構圖（spawn 第一眼）
+### 3.1 First view from spawn
 
-**Before（現況）**：spawn (20,25)（`generate-hub-map.ts:9`）石徑向南 jog 進中央 clearing；第一眼＝草地 + 花叢 + 遠方天際線 3 點（cat 西北、locked 正北、macro-whale 東北），近景空無一人。
+Before: spawn (20, 25) follows a southward jog into the clearing. Grass, flowers, and three distant gates are visible: cat northwest, locked north, whale northeast; nobody stands nearby.
 
-**After（本計畫）**：spawn 不動；第一眼由近至遠三層——
+After: retain spawn and create three depth layers:
 
-1. 近景：**老智者**立於 spawn 西北、石徑西側一格 (18,21)（marker 落點 §4.3；互動 zone 向東覆蓋石徑中段，行經即出 E 提示），idle bob、名牌 `THE SAGE`。
-2. 中景：中央 clearing 北緣，**頂列 9 門神社一字排開的天際線**（9 色 portal glow 各自 accent 色）——扇形分布的第一印象（研究 §3.3：Nexus 式輻射 + 單一圓心導航）。
-3. 遠景：西側樹籬間隙露出西列 2 門、東側露出東南 1 門。
+1. Sage at (18, 21), northwest of spawn and one tile west of the path, with eastward interaction coverage, idle bob, and THE SAGE label.
+2. Nine shrine gates along the clearing's northern edge, each with its accent glow, creating a radial-roster skyline.
+3. Two western gates visible through hedges and one southeastern gate.
 
+```text
+BEFORE, facing north             AFTER, facing north
+  [cat] [LOCKED] [whale]         [HC][TAL][ROO][AGR][CAT][RBP][AEVA][MW][PONS]
+       Open grass garden            Northern clearing edge
+                                  THE SAGE (18,21, bob)
+      Spawn (20,25)                 Existing jogged stone path
+                                  Spawn (20,25); west AD/MUSEBOOK; southeast ROBIN
 ```
-BEFORE（向北看）                    AFTER（向北看）
-  [cat]   [LOCKED]   [whale]      [HC][TAL][ROO][AGR][CAT][RBP][AEVA][MW][PONS]
-       （空曠草園）                    ▓▓▓ central clearing 北緣 ▓▓▓
-   ········                       ♂ THE SAGE（18,21, bob）
-      ● spawn (20,25)                │ 石徑（既有 jog 保留）
-                                   ● spawn (20,25)    西 [AD][MUSEBOOK] · 東南 [ROBIN]
-```
 
-### 3.2 12 門站點共用規格
+### 3.2 Shared gate specification
 
-- **神社造型沿用** `buildGates()`（`HubScene.ts:264-358`）：石座 + 雙柱 + 楣 + 拱頂矩形堆疊（:281-286）、portal glow 半徑 16（:289-290）。不升級、不新增造型（D9 零資產）。
-- **accent 色 per-boss**：`BossDefinition.accent` 取代 `GATE_COLORS`（`HubScene.ts:24-28`），glow 顏色與名牌 plate 描邊沿用該色（現行 plate stroke 用 gate color，`HubScene.ts:336`）。
-- **portrait 三種**：cat/macro-whale 維持既有 `makeCroppedTexture` 產物；roster 門 Phase 1 畫 code-drawn 盾牌 + ticker 首兩字母（參考 locked 門鎖頭語彙 `HubScene.ts:292-296`）；Phase 2 換 emblem 美術（§7.2）。
-- **名牌**：第一行 `TICKER`（大寫，複用現行 `boss.name.toUpperCase()` 渲染，`HubScene.ts:302-308`）；第二行 caption：roster 門 `LB #N · ROBINHOOD`、cat/macro-whale `BOSS POOL`（D8）。
-- **status chip**：roster 門名牌下方加 4px 小字 chip——`NO CONTRACT`（灰）；`LOCKED` chip 為 **Phase 2 預留**（Phase 1 全 12 門皆 unlocked，D4 三態模型中無門落入 locked 態，故 Phase 1 不會渲染）；cat 保留既有 live stage label（`renderCatStageLabel` `HubScene.ts:534-556` 不動）。任何門不得顯示 Live/Ready 等非真實字樣（`apps/web/AGENTS.md` fixture 規則）。
+- Keep buildGates' stone base, columns, lintel, rectangular arch, and radius-16 portal glow, HubScene 264–358/281–290. No new facade assets in Phase 1.
+- BossDefinition.accent replaces GATE_COLORS at 24–28 and drives glow and plate outline, including line 336.
+- Cat/whale keep cropped portraits. Roster gates draw shields with the ticker's first two letters, extending the lock graphic. Phase 2 may use §7.2 emblems.
+- Nameplate uses uppercase TICKER through existing line 302–308 rendering. Roster caption is LB #N · ROBINHOOD; core caption remains BOSS POOL.
+- Roster gates add a gray 4 px NO CONTRACT chip. LOCKED is reserved for Phase 2; all twelve gates are unlocked in Phase 1. Preserve cat's real stage label at 534–556. Never label fixtures Live or Ready.
 
-### 3.3 老智者 NPC 視覺
+### 3.3 Sage visual
 
-- 位置：marker `sage`（§4.3）；sprite＝`npc-thesis-wizard.png` crop（§7.1）。
-- 尺寸：targetHeight ≈ 30px（對齊 cat portrait 28px 語彙，`HubScene.ts:121-122`）。
-- **idle bob**：y ±2px、900ms、`Sine.easeInOut`、yoyo；`prefers-reduced-motion` 時不 bob（`watchReducedMotion` `HubScene.ts:422-435` 既有機制）。
-- 名牌：`THE SAGE`（crisp label，`resolution: ZOOM`、`LABEL_DEPTH`，同 `HubScene.ts:302-308` 語彙）。
-- E 互動提示：GameShell 內新增 `SagePrompt`，復用 `GatePrompt` 樣式與顯示條件（`GameShell.tsx:126-127` 的 `showBossPrompt` 同款優先序）。
+- Position from sage marker; crop npc-thesis-wizard per §7.1.
+- Target height about 30 px, matching 28 px gate portraits.
+- Bob ±2 px over 900 ms with Sine.easeInOut and yoyo; disable under reduced motion through existing watchReducedMotion at 422–435.
+- THE SAGE uses resolution ZOOM and LABEL_DEPTH.
+- Add SagePrompt to GameShell using GatePrompt styling and visibility priority from 126–127.
 
-### 3.4 對話框 UI 規格（D10）
+### 3.4 Dialogue UI
 
-- **樣式**：React modal，結構複製 `WelcomeDialog`（`HubGuide.tsx:48-111`）：`role="dialog"`、`aria-modal`、backdrop `bg-ink/70`、focus 管理、ESC 關閉、關閉後 focus 回 canvas（`focusHubCanvas` 既有工具）。
-- **內容**：eyebrow `SAGE · GARDEN`；title＝老智者名；打字機主文區（`aria-live="polite"` 只在**整句完成**時更新一次，避免逐字播報——現有 `StatusPanel` 已因 per-second aria-live 修過，本規格明定）；footer `E · NEXT` 與 `ESC · CLOSE`。
-- **打字機**：新 hook `useTypewriter`（§6.3）：~28ms/字；句讀停頓（`,` `、` 200ms；`.` `！` `？` 400ms）；**兩段式跳過**——第一次 E/Enter/Space 補完整句、第二次進下一句（研究 §3.1 工具層約定）；`prefers-reduced-motion` 時直接全文顯示。
-- **控制鎖定**：開啟期間 GameShell `overlayOpen` 含 sageOpen → `ui:modal {open:true}` 鎖場景輸入（`GameShell.tsx:49`、`HubScene.ts:190-198` 既有機制）；dialog 自行攔截 E/ESC，與 HubScene 的 `modalOpen` 互斥條件一致（`HubScene.ts:405`）。
-- **可重複對話**：sage 常駐、無 once-per-browser；`boss-pool:sage-talked:v1` 只切換「首訪/回訪」台詞集（§5.4）。
-- **進度感知台詞**：§6.4 示例 3 段。
+- Copy WelcomeDialog at HubGuide 48–111: dialog role, aria-modal, bg-ink/70 backdrop, focus handling, Escape close, and focusHubCanvas on close.
+- Eyebrow SAGE · GARDEN, sage title, typewriter body, E · NEXT and ESC · CLOSE footer. Update polite live-region text once per completed sentence, never per character; this follows the earlier per-second StatusPanel announcement fix.
+- useTypewriter reveals a character about every 28 ms, pauses 200 ms at commas and 400 ms at sentence-ending punctuation. First E/Enter/Space completes the line; second advances. Reduced motion shows full text immediately.
+- Include sageOpen in overlayOpen, sending ui:modal{open:true}. Dialogue handles E/Escape while HubScene's modalOpen guard blocks scene input.
+- Dialogue is repeatable. boss-pool:sage-talked:v1 selects first/returning visits only.
+- §6.4 gives progress-sensitive examples.
 
-### 3.5 HUD 調整建議
+### 3.5 HUD
 
-- 建議：header 徽章列新增 `12 CHALLENGERS` chip（data-driven `BOSSES.length`；放現有 `HUB · FIXTURE MAP` badge 旁，`GameShell.tsx:146-148`）。
-- **不做**「剩餘 Boss 計數」：只有 cat 能真實擊敗，計數會淪為假進度；進度感由 sage 台詞承載（D4）。
+Add a data-driven 12 CHALLENGERS chip from BOSSES.length beside HUB · FIXTURE MAP at GameShell 146–148. Do not add a remaining-Boss HUD counter: only cat has real defeat state, so a total counter would imply false progress. Dialogue carries the progress context.
 
-## 4. 場景佈局設計
+## 4. Scene layout
 
-### 4.1 維持 40×30 的建議與理由（D7）
+### 4.1 Keep 40×30
 
-建議**維持** 40×30（640×480）。理由：① 整數 zoom 3× 與 camera 行為不動（`HubScene.ts:9,12-16`）；② `check-hub-map.ts:5-6` 的 `WIDTH/HEIGHT` 常數與 map 尺寸斷言不動，回歸面最小；③ 12 門扇形在 40×30 可行（§4.2 座標提案）；④ art-direction 尺寸約束繼續成立。
+Preserve the 640×480 world to retain zoom/camera behavior, checker WIDTH/HEIGHT and map assertions, and approved art-direction dimensions. §4.2 fits twelve gates.
 
-**備案（contingency，不預設）**：若實作時 BFS/動線驗證顯示太擠，擴 44×32（704×512）——只改兩個 script 的 `WIDTH/HEIGHT` 常數 + 重新 reserve。記錄備查。
+Contingency only: if BFS or movement validation shows crowding, use 44×32, 704×512, update WIDTH/HEIGHT in both scripts, and rebuild reserved areas. Record that decision.
 
-### 4.2 扇形分佈：座標級提案
+### 4.2 Radial gate coordinates
 
-gate 矩形維持 3×2 tile（GATE 48×32，`HubScene.ts:18`）。頂列 9 門每 4 格一門（3 寬 + 1 空隙），兩門之間的空隙 tile 同時是左右兩門 torch 的目標格；generator 既有 torch 邏輯（`generate-hub-map.ts:201-207`）寫入前先檢查 `collision`（:204 `if (layers.collision[index(c, r)] !== 0) continue`）——先寫的 torch 已 `block` 該 tile（:206），第二次寫入被跳過、不覆蓋：
+Each gate remains 3×2 tiles, 48×32 px. Nine top gates are spaced every four tiles, leaving one shared gap for neighboring torches. Existing generator 201–207 checks collision before writing; the first torch blocks the gap and the second skips it instead of overwriting.
 
-| gate id | col,row | 區位 | 備註 |
-|---|---|---|---|
-| hoodcats | (3,2) | 頂列西端 | |
-| talis | (7,2) | 頂列 | 原 cat 位 (7,4) 上移 |
-| roo | (11,2) | 頂列 | 巡邏者；門保留為「家」 |
-| agrippa | (15,2) | 頂列 | |
-| cat | (19,2) | 頂列正北 | spawn 正北視野、唯一可玩門 |
-| robinpepe | (23,2) | 頂列 | |
-| aeva | (27,2) | 頂列 | |
-| macro-whale | (31,2) | 頂列東段 | |
-| pons | (35,2) | 頂列東端 | |
-| ad | (4,10) | 西列上 | |
-| musebook | (4,18) | 西列下 | |
-| robin | (35,18) | 東南 | 東路 exit (38,12-14) 保留 |
+| Gate ID | Column,row | Region | Note |
+| --- | --- | --- | --- |
+| hoodcats | 3, 2 | Top west | |
+| talis | 7, 2 | Top | Moves above original cat 7, 4 |
+| roo | 11, 2 | Top | Patrol's gate remains home |
+| agrippa | 15, 2 | Top | |
+| cat | 19, 2 | Top north | Directly north of spawn; only playable gate |
+| robinpepe | 23, 2 | Top | |
+| aeva | 27, 2 | Top | |
+| macro-whale | 31, 2 | Top east | |
+| pons | 35, 2 | Top east end | |
+| ad | 4, 10 | Upper west | |
+| musebook | 4, 18 | Lower west | |
+| robin | 35, 18 | Southeast | Preserve east exit 38, 12–14 |
 
-其他座標決策：
+- Spawn stays 20, 25. Sage 18, 21 stands west of the cols 19–21/rows 20–23 path without blocking it; its eastward interaction zone covers the middle path. Preserve clearing cols 15–25/rows 10–20.
+- Move pond from 4, 20, 6, 6 to 2, 24, 6, 6, occupying cols 2–7/rows 24–29. Row29 remains blocked, preserving outer closure. Restore former pond grass for the western route.
+- Remove old pond fenceH(2, 18, 10,[11, 11]) at generator 188. Pond banks and outer reserves preserve the garden boundary.
+- Keep east route cols 33–38/rows 12–14. Robin's approach at rows 20–23 does not overlap.
+- Phase 2 ROO waypoints use cols 11–13/rows 8–14, below its approach cols 10–14/rows 4–7 and outside every gate approach.
+- Reserve a three-tile-wide stone route from each northern gate to the clearing; retain spawn's jogged path and connect western gates to the clearing's west edge.
+- Keep torches, four clear approach rows, and lantern/tree clusters, repositioning clusters around new reserves.
 
-- **SPAWN 不動** (20,25)；**SAGE** marker (18,21)（spawn 西北、石徑西側一格——spawn→clearing 石徑為 cols 19-21、rows 20-23，NPC 靜態 body 不擋路；其互動 zone（§6.1）向東覆蓋石徑中段，玩家行經即觸發 E 提示）；中央 clearing（cols 15-25, rows 10-20，`generate-hub-map.ts:53-58`）保留。
-- **POND 移位**：原 (4,20,6,6)（`generate-hub-map.ts:102-103`；即 cols 4-9、rows 20-25）移到左下 (2,24,6,6)——cols 2-7、rows 24-29（含外緣 row 29 阻斷，外圈全封斷言仍成立）；原 pond 區還原草皮，供 spawn→西側動線。
-- **舊 pond fence 移除**：既有 `fenceH(2, 18, 10, [11,11])`（pond 北側花園邊界，`generate-hub-map.ts:188`）在 pond 移位後失去對位 → 移除該 fence 呼叫；pond 自有 banked 邊緣 + 外圈 reserve，外圈全封斷言與 garden 語彙不受影響。
-- **東路 future route 保留**：cols 33-38、rows 12-14（`generate-hub-map.ts:71-73`）；robin(35,18) approach（rows 20-23）不衝突。
-- **ROO 巡邏路徑（Phase 2）**：手挑 waypoint＝roo 門前石徑段 cols 11-13、rows 8-14（roo 自身 gate approach 為 cols 10-14、rows 4-7，waypoint 起點 row 8 恰在其正下方、全段不與任何 gate approach rect 重疊；§8.2）。
-- **動線重畫**：中央 clearing 北緣 → 頂列每門各留 3 寬石徑直下（`reserveRoute` 每門一筆）；spawn→clearing 既有 jog 石徑保留（`generate-hub-map.ts:61-62`）；西列兩門接 clearing 西緣。
-- **裝飾規則沿用**：每門兩側 torch（既有 for-GATES 邏輯）、approach 4 行 clear（`generate-hub-map.ts:96-99`）、lantern/tree cluster 座標重挑避開新 reserve（:160-165）。
+### 4.3 Generator and checker
 
-### 4.3 產生與驗證流程（hub.json markers 擴充規格）
+- Generator replaces three GATES with twelve, adds sage point at tile18, 21 center px296, 344 plus reserve(18, 21), relocates pond, removes old fence, and redraws routes/reserves/clusters.
+- Checker changes count 3→12 and imports BOSSES for set equality, following the generator's existing TS import. Assert exactly one sage point. Existing water-interior checks at 132–156 cover the moved pond.
+- Sage marker is `{name:"sage", point:true, x, y}`. Gates retain `{name:"gate", properties:[{name:"bossId", value}]}`.
+- Run map:build then map:check, apps/web/package.json 10–11.
 
-- `generate-hub-map.ts` 修改：`GATES` 改 12 筆（:10-14）；新增 `SAGE` point marker（(18,21) tile 中心，px 296,344）＋ `reserve(18, 21)`（站位 cell，避免灌木/石頭落點壓住 NPC）；pond 移位＋舊 pond fence 移除；route/reserve/cluster 重畫。
-- `check-hub-map.ts` 修改：`gates.length` 3→12（:68）；bossIds 清單（:72）改為 `import { BOSSES } from "../src/game/bosses"` 後做**集合相等**斷言（generator 已有 import TS 先例：`generate-hub-map.ts:4` import `hubTiles`）；新增「恰一個 sage point marker」斷言；pond 位置斷言由既有 water-interior 邏輯自然覆蓋（:132-156）。
-- **markers 規格**：`sage` point object `{name:"sage", point:true, x, y}`；gate object 維持 `{name:"gate", properties:[{name:"bossId", value}]}` 對位（現行格式，`hub.json` 實讀確認）。
-- 執行：`bun run map:build` → `bun run map:check`（`apps/web/package.json:10-11`）。
+## 5. Data model
 
-## 5. 資料模型設計
-
-### 5.1 `BossDefinition` 擴充（`apps/web/src/game/bosses.ts`）
+### 5.1 BossDefinition extension
 
 ```ts
-export type BossId = string;                    // 放寬自 "cat" | "macro-whale" | "locked"（bosses.ts:2）
+export type BossId = string; // Previously "cat" | "macro-whale" | "locked", bosses.ts:2
 export type BossStatus = "active" | "no-contract" | "locked";
 
 export type BossDefinition = {
   id: string;
   name: string;
-  ticker: string;                              // 新增：名牌第一行（D8）
+  ticker: string; // New: first nameplate line, D8
   tagline: string;
   /** Portrait image under /public/images. Empty when there is no portrait. */
   portrait: string;
-  /** 新增：crop 規格移出 HubScene 硬編碼；null 表示無 portrait 可裁（畫字首盾牌）。 */
+  /** New: crop metadata moved from HubScene; null draws an initials shield. */
   crop: { x: number; y: number; w: number; h: number; targetHeight: number } | null;
-  /** 三態來源（研究 §4.6 第 4 條）。 */
+  /** Three-state source, research §4.6 item four. */
   status: BossStatus;
-  /** @deprecated Phase 1 保留以維持 `BossEntryPanel` eyebrow（:71）相容；由 `status` 同步（`= status === "locked"`），partner 對齊後 Phase 2 移除。 */
+  /** @deprecated Phase 1 compatibility for BossEntryPanel eyebrow at line 71.
+   * Sync with status === "locked"; remove in Phase 2 after partner alignment. */
   locked: boolean;
-  /** 新增：gate glow / plate 描邊色，取代 GATE_COLORS 窮舉。 */
-  accent: string;                              // hex，如 "#f5b04a"
-  /** 新增：資料源區分。source:"chain"=有合約語義（僅 cat）；"venue"=展示型。 */
+  /** New: glow/plate outline color, replacing GATE_COLORS enumeration. */
+  accent: string; // Hex, for example "#f5b04a"
+  /** New: "chain" has contract semantics, cat only; "venue" is presentation. */
   source: "chain" | "venue";
-  /** 新增：僅 roster 門有。 */
+  /** New: roster gates only. */
   rosterMeta?: {
-    rank: number;        // Launch Boost 榜名次（研究 §2.2）
-    chain: string;       // "Robinhood"
-    category: string;    // 敘事一句話（如 "Meme / Pepe × Robin Hood"）
-    snapshot: string;    // "GeckoTerminal trending · 2026-09-26"
+    rank: number; // Snapshot rank, research §2.2
+    chain: string; // "Robinhood"
+    category: string; // One-line narrative, such as "Meme / Pepe × Robin Hood"
+    snapshot: string; // "GeckoTerminal trending · 2026-09-26"
   };
 };
 ```
 
-- `locked` → `status` 遷移策略（Phase 1 保留相容欄位，型別見上方）：`BossDefinition.locked: boolean` 保留為 **deprecated 欄位**，由 `status` 同步（`locked = status === "locked"`；Phase 1 全 12 門皆非 locked → 恆 `false`）。遷移觸點：`hubGuide.ts:22` `isUnlocked` 改判 `status !== "locked"`；`HubScene.ts` gate 渲染 `boss.locked` 三處（:289、:292、:301）與 `chooseHintGate`（:633）；`BossEntryPanel.tsx:71` eyebrow 的 `boss.locked` 分支——**該檔仍零編輯**：Phase 1 cat=`active`、macro-whale=`no-contract`（對應 `locked:false`），eyebrow 讀到的值與現況完全一致（`GATE LOCKED` 分支不會出現，`BOSS GATE`／`FIXTURE ONLY` 行為不變，DoD §12-4 的零 diff 可驗證）；partner 對齊後 Phase 2 移除 `locked` 欄位。
-- `BossId` 放寬為 `string` 的影響：`isBossId`（`bosses.ts:43-45`）改為 string 驗證；bridge payloads（`bridge.ts:10-12`）、`GameShell` state、`hubGuide` 型別隨之；`GATE_COLORS: Record<BossId, number>`（`HubScene.ts:24-28`）**刪除**，改讀 `boss.accent`。
+- Retain locked as deprecated compatibility, synchronized from status. All twelve Phase 1 gates produce false. Migrate hubGuide isUnlocked at 22, HubScene rendering at 289/292/301 and chooseHintGate at 633. BossEntryPanel at 71 remains untouched: cat active and whale no-contract both produce false, preserving BOSS GATE/FIXTURE ONLY and never selecting GATE LOCKED. §12 item four verifies zero diff. Remove locked after partner alignment in Phase 2.
+- Widen BossId to string; adapt isBossId at bosses43–45, bridge payloads10–12, GameShell state, and guide types. Delete GATE_COLORS: Record<BossId,number> and read accent instead.
 
-### 5.2 Roster 資料檔規格（`apps/web/src/game/boss-roster.json`，新檔）
+### 5.2 Roster snapshot file
 
-curated snapshot（D5）：10 筆、頂層附 `snapshotDate` 與 `source` 註記；欄位是 `BossDefinition.rosterMeta` 的子集 + 顯示欄位：
+Add `apps/web/src/game/boss-roster.json` with ten curated entries, top-level snapshotDate/source, presentation fields, and a subset of rosterMeta:
 
 ```json
 {
@@ -207,41 +205,40 @@ curated snapshot（D5）：10 筆、頂層附 `snapshotDate` 與 `source` 註記
 }
 ```
 
-- `bosses.ts` 組合成 `BOSSES = [...CORE_BOSSES(cat, macro-whale), ...ROSTER.map(toDefinition)]`；`toDefinition` 補 `crop: null`、`portrait: ""`、`status: "no-contract"`、`locked: false`（deprecated 同步）、`source: "venue"`、`rosterMeta`。
-- 換榜＝換 JSON（整批替換成本，研究 §2.3 第 4 點）；TS import JSON 由 Next.js/tsconfig 原生支援。
+- Combine core cat/whale and ROSTER.map(toDefinition). Fill crop:null, portrait:"", status:no-contract, synchronized locked:false, source:venue, and rosterMeta.
+- Replacing JSON replaces the roster batch. Next.js/tsconfig natively support typed JSON imports.
 
-### 5.3 hub.json markers 的 gate 物件規格
+### 5.3 Gate markers
 
-- gate object 維持 `{name:"gate", properties:[{name:"bossId", type:"string", value}]}`（現行格式實讀確認）；**bossId 必須與 `BOSSES` 一一對位**，由 `check-hub-map.ts` 集合相等斷言把關（§4.3）。
-- 新增 `sage` point object（§4.3）。
-- 位置不寫 TS 是既定決策（art-direction spec:34；研究 §4.4）。
+Keep `{name:"gate", properties:[{name:"bossId", type:"string", value}]}`. Boss IDs match BOSSES one-to-one, enforced by checker set equality. Add the sage point from §4.3. Keep positions in markers rather than TypeScript, as approved by art-direction line 34 and research §4.4.
 
-### 5.4 解鎖狀態儲存與 demo fixture 策略
+### 5.4 Stored state and fixtures
 
-| key | 用途 | 寫入時機 | 預設 |
-|---|---|---|---|
-| `boss-pool:sage-talked:v1` | sage 首訪/回訪台詞切換 | 第一次關閉 SageDialog | 空＝首訪 |
-| `boss-pool:defeated:v1` | cat 真實擊敗標記（Phase 2 台詞） | 收 `round:state` 且 `status===3`（DEFEATED，`HubScene.ts:553` 既有語義） | 空 |
+| Key | Purpose | Write time | Default |
+| --- | --- | --- | --- |
+| boss-pool:sage-talked:v1 | First/returning dialogue | First SageDialog close | Empty means first visit |
+| boss-pool:defeated:v1 | Real cat defeat for Phase 2 dialogue | round:state status===3, DEFEATED, matching HubScene 553 | Empty |
 
-- demo fixture 策略：**不預設任何假進度**；台詞的「擊敗」分支只由 cat 真實狀態驅動。
-- 既有 `boss-pool:hub-guide:v1`（`hubGuide.ts:4`）不動；guide 在 12 門全 unlocked 下行為需回歸（§11）。
+No fabricated progress defaults. Defeat dialogue uses cat's real state only. Preserve hub-guide:v1 at hubGuide4; regression-check its behavior with twelve unlocked gates.
 
-## 6. 老智者 NPC 與對話系統技術設計
+## 6. Sage entity and dialogue
 
-### 6.1 HubScene 新增 NPC entity（對照 gate zone 模式）
+### 6.1 NPC entity in HubScene
 
-- 讀 marker：`create()` 內 `map.findObject(HUB_LAYERS.markers, o => o.name === "sage")`（同 `spawn` 讀法，`HubScene.ts:144-147`）。
-- sprite：`makeCroppedTexture(this, "npc-sage", "portrait-master-sage", crop, 30)`（§7.1）+ `this.add.image(x, y, "npc-sage")`；`setDepth(y)` y-sort（同 player/atmosphere 慣例）。
-- **靜態 body**：`this.physics.add.existing(sage, true)` 的 body 讓玩家不能穿過（NPC 擋路＝引導，Pokemon 關都老人先例）；body 尺寸 12×8 對齊玩家 collider 語彙（`HubScene.ts:390`）。
-- **idle bob**：`this.tweens.add({targets: sage, y: y ± 2, duration: 900, yoyo: true, repeat: -1, ease: "Sine.easeInOut"})`；`reduceMotion` 時不啟動（§3.3）。
-- **zone**：`new Phaser.Geom.Rectangle(x - 10, y - 8, 28, 28)` 包住 NPC 下半；`updateSageProximity()` 併入 `update()`（`HubScene.ts:255`），進出變化時 emit `npc:near`——完整複製 `updateGateProximity` 的 Contains 模式（`HubScene.ts:707-720`）。
-- **E 攔截第三分支**：`setupInput()`（`HubScene.ts:394-419`）優先序 `nearGate → nearSage → nearRegion`，sage 在 spawn 西北側、zone 不與任何 gate zone 重疊（座標 §4.2 保證）。
+- Find the sage marker in create with `map.findObject(HUB_LAYERS.markers, o => o.name === "sage")`, following spawn handling at 144–147.
+- Crop with `makeCroppedTexture(this, "npc-sage", "portrait-master-sage", crop, 30)`, create an image, and setDepth(y) for y-sorting.
+- Add a static arcade body through physics.add.existing(sage,true), size12×8 matching player collider at 390. Players cannot walk through it, following the Kanto Old Man guide precedent.
+- Bob ±2 px, duration900, yoyo, repeat-1, Sine.easeInOut; do not start under reduceMotion.
+- Use `Rectangle(x - 10, y - 8, 28, 28)` around its lower half. updateSageProximity joins update at 255; emit npc:near on changes using the gate Contains pattern at 707–720.
+- Add a third setupInput interaction branch with nearGate→nearSage→nearRegion priority. §4.2 ensures zones do not overlap.
 
-### 6.2 新 bridge event pair（`apps/web/src/game/bridge.ts`）
+### 6.2 Bridge events
+
+Add to `apps/web/src/game/bridge.ts`, retaining existing events:
 
 ```ts
 export type GameEvents = {
-  // ...既有事件不變
+  // Existing events remain unchanged.
   /** Player walked into / out of the sage's talk zone. */
   "npc:near": { npcId: "sage" | null };
   /** Player pressed interact while inside the sage's zone. */
@@ -249,171 +246,166 @@ export type GameEvents = {
 };
 ```
 
-- 命名對齊 `gate:near` / `gate:enter` 慣例（`bridge.ts:10-12`）；不新增 command（`ui:modal` 既有，`bridge.ts:29`）。
+Match gate:near/gate:enter naming at 10–12. Add no command; ui:modal already exists at 29.
 
-### 6.3 對話 UI 元件
+### 6.3 Dialogue components
 
-- 新檔 `apps/web/src/components/SageDialog.tsx`：結構複製 `WelcomeDialog`（§3.4）；props `{ lines: string[]; onClose: () => void }`；關閉回呼負責 `setSageOpen(false)`。
-- 新檔 `apps/web/src/lib/useTypewriter.ts`：`useTypewriter(text: string)` 回 `{ shown, done }`；§3.4 的速度/句讀/兩段式跳過規格；`matchMedia("(prefers-reduced-motion: reduce)")` 直接 `done=true`。
-- GameShell 接線：state `nearSage` / `sageOpen`；`bridge.on("npc:near")` → `setNearSage`；`bridge.on("npc:talk")` → `setSageOpen(true)`（同 `gate:enter` 接法 `GameShell.tsx:36`）；`overlayOpen` 加入 `sageOpen`（`GameShell.tsx:32`）；`SagePrompt` 顯示條件接在 `showBossPrompt` 之後（`GameShell.tsx:126-127` 同款優先序）。
+- New `apps/web/src/components/SageDialog.tsx` copies WelcomeDialog, receives lines:string[] and onClose, which sets sageOpen false.
+- New `apps/web/src/lib/useTypewriter.ts` returns shown/done for text:string, implementing §3.4 timing, punctuation, and two-step skipping. Reduced motion sets done=true immediately.
+- GameShell adds nearSage/sageOpen state, subscriptions to npc:near/npc:talk, sageOpen to overlayOpen at 32, and SagePrompt after showBossPrompt at 126–127.
 
-### 6.4 台詞資料結構與示例
+### 6.4 Script structure and examples
 
-- 新檔 `apps/web/src/lib/sageLines.ts`：`type SageState = { firstVisit: boolean; defeated: boolean }`；`function sageLines(state: SageState): string[]`（純函式，同 `transitionGuide` 純 reducer 慣例）。台詞長度 ≤ 3 句/輪，每句 ≤ 60 字。
-- 3 段示例（首訪 / 回訪未擊敗 / cat 已擊敗）：
+Add `apps/web/src/lib/sageLines.ts` with SageState firstVisit/defeated and a pure sageLines function returning string[]. Each exchange has at most three sentences, each at most sixty characters in the original script limit.
 
-> 首訪：「年輕人，歡迎來到 Boss Pool 花園。前方有 **10 位**從 Robinhood 來的挑戰者，他們會奪走每個人的好夢。」
-> 「沿著石路向上，一座神社就是一位 Boss。只有 Roy 已經甦醒——先去找祂練手吧。」
+Translated examples:
 
-> 回訪（未擊敗）：「還是那 10 位。名單會變，就像城裡的流言。記住那隻叫 ROO 的——只有牠不守規矩，會在路上遊蕩。」
+> First visit: "Welcome to the Boss Pool garden, young traveler. Ten challengers from Robinhood await ahead, ready to steal everyone's pleasant dreams."
+> "Follow the stone path north. Each shrine holds a Boss. Only Roy has awakened; seek him first for practice."
 
-> cat 已擊敗（DEFEATED）：「你擊敗了 Roy。剩下的 11 位還在等他們的合約降臨。名單之後還會換，改天再來看看吧。」
+> Returning before defeat: "The same ten await. Rosters change like rumors in town. Remember ROO: the one who breaks the rules and wanders the road."
 
-> （剩餘計數＝12 門 − 已擊敗數：12 = cat + macro-whale + 10 roster，cat 已擊敗後剩 11。此為腳本常數，與 §3.5「不做 HUD 剩餘計數」的假進度約束不衝突。）
+> Cat defeated: "You defeated Roy. Eleven others still await their contracts. The roster may change again; return another day."
 
-- 首訪/回訪由 `boss-pool:sage-talked:v1`（§5.4）判定；「已擊敗」由 `useBossPool` 的 `round.status` 真實值判定——**不寫死**。
+Twelve gates minus one real defeat gives eleven, including whale and ten roster entries. This script constant does not introduce the fabricated HUD remaining counter prohibited by §3.5. First/return visits use sage-talked:v1; defeated uses actual useBossPool round.status, not a hardcoded result.
 
-### 6.5 LLM 雙軌（Phase 3 可選，只寫設計不實作）
+### 6.5 Optional LLM with scripted fallback
 
-- calling pattern：Next.js route handler 代理（`apps/web/src/app/api/sage/route.ts`），API key 只在 server 端；前端 `fetch("/api/sage", {method:"POST", body:{history, defeated}})`。
-- system prompt 注入 hard-code 事實：10 位 Boss 的 ticker/名次/來源鏈/snapshot 日期（研究 §3.5 可信度陷阱）；temperature 低；max tokens ≤ 120。
-- **fallback**：`AbortSignal.timeout(4s)` 或非 200 → 回傳 `sageLines(state)` 腳本（D3 的雙軌核心）；UI 不顯示「AI 中」字樣，只顯示台詞。
-- 明確不做：其餘 10 隻 Boss 不接 LLM（研究 §3.5 結論）。
+Phase 3 design only:
 
-## 7. 資產清單與取得策略
+- Server route `apps/web/src/app/api/sage/route.ts` proxies requests and retains the API key server-side. Frontend posts history/defeated to /api/sage.
+- Inject fixed ten-Boss tickers, ranks, source chain, and snapshot date. Use low temperature and at most120 tokens.
+- AbortSignal.timeout(4s) or non-200 returns sageLines(state). Show dialogue only, without an AI-loading label.
+- Do not connect the ten Bosses to LLMs.
 
-### 7.1 老智者 sprite：`npc-thesis-wizard.png`
+## 7. Assets
 
-- 實測尺寸 1186×1327（`file` 實證）；紫袍法師、符合老智者人設（研究 §4.4）。
-- **授權未確認**：該檔**無伴隨 `.txt` 記錄**（對照 `player-compact-walk-master.txt` 生成 prompt 慣例）。驗證 actions：
-  1. 向資產作者確認來源與授權，補一份 `npc-thesis-wizard.txt`（同 `player-compact-walk-master.txt` 格式）。
-  2. 若授權不明 → 備案：以 `player-you-master.png`（1254×1254，實測）或 code-drawn 圖形替代；**demo 前完成**。
-- crop 規格：`makeCroppedTexture`（`textures.ts:7-41`）沿用，targetHeight ≈ 30；crop 框以「上半身 + 袍角」為準，實作時於瀏覽器調 1–2 次定稿。
+### 7.1 Sage sprite
 
-### 7.2 10 隻 Boss portrait：來源策略選項（D9）
+npc-thesis-wizard.png is1186×1327, verified with file, and shows a purple-robed wizard. Licensing was unverified and no accompanying txt existed.
 
-| 選項 | 優點 | 風險 | demo 建議 |
-|---|---|---|---|
-| (a) 真實項目 logo | 認得出來、最「真」 | 商標/版權風險、各專案圖檔品質參差、榜單漂移後失效 | **不建議**（除非逐家取得書面同意，hackathon 不可行） |
-| (b) 生成式 AI 統一風格頭像（emblem） | 風格統一、可控、無商標風險 | 生成 pipeline 時間、與既有 pixel 語彙不合的風險 | Phase 2 可選（需附生成 prompt `.txt`，同 §7.1 慣例） |
-| (c) code-drawn 盾牌 + ticker 字首 | 零資產、零風險、立即可用 | 視覺樸素 | **Phase 1 採用** |
+1. Confirm source/license with the author and add npc-thesis-wizard.txt following player-compact-walk-master.txt.
+2. If unresolved before demo, use verified1254×1254 player-you-master.png or code-drawn art.
 
-- 採用 (c) 的盾牌＝延伸 locked 門的鎖頭圖案語彙（`HubScene.ts:292-296`）：圓角盾形 + accent 描邊 + ticker 首兩字母（crisp、`resolution: ZOOM`）。
-- (b) 的驗收規則：emblem **不是 logo 重繪**（避免商標暗示），以「敘事象徵」定位（如 ROO＝問號袋鼠剪影）；檔名 `boss-roster-{id}-emblem.png` 進 `public/images/`，game-ready crop 產物照舊由 runtime 管線裁出。
+Reuse makeCroppedTexture at textures7–41, target height about 30, cropping upper body and robe hem. Adjust in the browser once or twice.
 
-### 7.3 Tileset 是否新增元素
+### 7.2 Roster portraits
 
-- **建議：不新增**。gate 神社、名牌、chip 全是程式碼畫的（`HubScene.ts:264-358`），sage 是 sprite；無 tile 需求。
-- 若要新增（Phase 2 擊敗雕像等）：atlas 256×128 需改尺寸、`hubTiles.ts` 常數與 `check-hub-map.ts:40-44` 的 tileset 斷言全要同步——**GID 合約「未用格位保持透明」**（現有 128 tile 未滿額）可以不加 tile 改以 code-drawn 呈現。本計畫一律不新增 tile。
+| Option | Benefit | Risk | Demo choice |
+| --- | --- | --- | --- |
+| Real project logos | Recognizable, authentic | Trademark/copyright, inconsistent quality, ranking drift | Avoid without individual written permission, impractical for hackathon |
+| Generated consistent emblems | Controlled style without copying trademarks | Generation time and pixel-style mismatch | Optional Phase 2, with prompt txt |
+| Code-drawn shield and ticker initials | Immediate, no new assets | Plain appearance | Phase 1 choice |
 
-## 8. 技術設計（檔案級修改指引）
+Shields extend the existing lock graphic: rounded shield, accent outline, first two ticker letters, resolutionZOOM. Generated emblems symbolize narratives rather than redraw logos, such as ROO's question-mark kangaroo silhouette. Store boss-roster-{id}-emblem.png under public/images; runtime still crops game-ready versions.
 
-> 本節 file:line 由 architect 於 2026-09-26 實讀源碼驗證。修改清單假設 §1.2 已批准。
+### 7.3 Tileset
 
-### 8.1 data-driven 化清單（3-gate 假設的所有硬編碼點）
+Add no tiles. Gates, labels, and chips are code-drawn, and sage is a sprite. Additional Phase 2 statues would require synchronized atlas dimensions, hubTiles constants, and checker 40–44 assertions. Preserve transparent unused GID slots in the128-tile atlas; use code-drawn presentation instead.
 
-| # | 現況（file:line） | 改成 |
-|---|---|---|
-| 1 | `bosses.ts:2` `BossId` union 3 值 | `type BossId = string`；`BOSSES` 12 筆；`BossDefinition` 新欄位（§5.1） |
-| 2 | `bosses.ts:13-35` 3 筆（含 `locked` 佔位 Boss） | `CORE_BOSSES`（cat=`active`、macro-whale=`no-contract`；`locked:false` 欄位由 status 同步保留）+ `boss-roster.json` 映射（§5.2） |
-| 3 | `HubScene.ts:24-28` `GATE_COLORS` Record 窮舉 | 刪除；`buildGates` 讀 `boss.accent`（Phaser `Display.Color.HexStringToColor`） |
-| 4 | `HubScene.ts:121-122` crop 硬編碼 2 組 | `for (const boss of BOSSES) if (boss.crop && boss.portrait) makeCroppedTexture(this, \`portrait-${boss.id}\`, \`portrait-master-${boss.id}\`, boss.crop, boss.crop.targetHeight)` |
-| 5 | `HubScene.ts:264-358` `buildGates` 的 `locked` 分支與名牌 | status 三態渲染 + ticker 名牌 + `LB #N` caption + status chip；`portrait === ""` 時畫字首盾牌（§7.2c） |
-| 6 | `HubScene.ts:337-344` cat-only stage label | cat 分支保留（唯一 live）；roster/macro-whale 加靜態 status chip；`renderCatStageLabel`（:534-556）不動 |
-| 7 | `hubGuide.ts:22` `isUnlocked` 用 `findBoss(id).locked` | `status !== "locked"` |
-| 8 | `HubScene.ts:632-648` `chooseHintGate` 對 unlocked 取最近 | 邏輯不變（12 門皆 unlocked 時取最近，仍正確）；僅型別隨 `BossId=string` 調整 |
-| 9 | `check-hub-map.ts:68` 3 gate、`:72` bossIds 清單 | 12 gate + `import { BOSSES }` 集合相等（§4.3） |
-| 10 | `generate-hub-map.ts:10-14` `GATES` 3 筆 | 12 筆 + sage marker（+ 站位 reserve）+ pond 移位/舊 fence 移除/route/cluster 重畫（§4.2） |
-| 11 | `GameShell.tsx:36-38` gate 事件接線 | 新增 `npc:near`/`npc:talk` 接線與 `SageDialog`/`SagePrompt` 渲染（§6.3）；`overlayOpen` 加 `sageOpen` |
+## 8. File-level technical changes
 
-### 8.2 巡邏狀態機規格（Phase 2；ROO 一隻）
+Source references were inspected2026-09-26. This list assumes §1.2 approval.
 
-- **不做 pathfinding**（研究 §3.4：瓶頸是 AI/尋路不是繪製）。FSM：`idle(1–4s 隨機) → pick(waypoint 依序或隨機) → bezier(tween, 20px/s, 控制點=中點垂直偏移 ±12) → idle`。
-- waypoint 清單＝§4.2 的 roo 石徑段 tile 中心（cols 11-13、rows 8-14），起點 row 8 在自身 gate approach（cols 10-14、rows 4-7）正下方，全段手挑排除任何 gate approach rect（含自己門前的 5×4）。
-- **碰撞**：巡邏者加 static arcade body？——**不需要**：waypoint 全在 `reserveRoute` 石徑上（generator 保證 walkable）；與玩家無交互（走過即分離，無 push）。唯一約束：不進 gate approach 區與不與 sage zone 重疊。
-- **與 gate 的互斥**：巡邏路徑不觸碰 12 門的 approach rect 集合（`Gate.zone`）；FSM 選點時用 `Phaser.Geom.Rectangle.Contains` 過濾（既有工具）。
-- `reduceMotion`：不移動（停在門前，僅保留 glow）。
-- 呈現：gate 門面保留（「家」的語義，D2）；巡邏 sprite 用 roo 的 emblem/盾牌小圖或直接 ghost 圓形（Phase 2 定稿）。
+### 8.1 Remove three-gate assumptions
 
-### 8.3 效能備註
+| # | Existing location | Change |
+| --- | --- | --- |
+| 1 | bosses.ts:2, three-value BossId | String ID, twelve BOSSES, new fields from§5.1 |
+| 2 | bosses.ts:13-35, including locked placeholder | Core cat active/whale no-contract with locked compatibility, plus JSON roster |
+| 3 | HubScene:24-28 GATE_COLORS | Delete enumeration; parse boss.accent with Display.Color.HexStringToColor |
+| 4 | HubScene:121-122 hardcoded crops | Iterate BOSSES; crop only entries with crop and portrait, using portrait-${boss.id}/portrait-master-${boss.id} and targetHeight |
+| 5 | HubScene:264-358 buildGates | Three statuses, ticker, LB #N caption, status chip, and initials shield when portrait is empty |
+| 6 | HubScene:337-344 cat stage label | Retain live cat branch and renderCatStageLabel534–556; add static roster/whale chips |
+| 7 | hubGuide:22 isUnlocked | status !== locked |
+| 8 | HubScene:632-648 chooseHintGate | Keep nearest-unlocked logic; adjust types for string IDs |
+| 9 | checker:68/72 count and IDs | Twelve gates and BOSSES set equality |
+| 10 | generator:10-14 GATES | Twelve gates, reserved sage marker, moved pond, removed fence, redrawn routes/clusters |
+| 11 | GameShell:36-38 subscriptions | npc events, SageDialog/SagePrompt rendering, sageOpen in overlayOpen |
 
-- 沿用既有架構即可（研究 §3.4）：12 門一次性建構在 `create()`、1 隻巡邏 tween 由 Phaser 管理、無 per-frame allocation、無 object pool 需求（門為常駐物件不 create/destroy）。
-- 動畫幀注意：crop 圖共 3 張 master（cat/whale/sage）已載入，roster 門無圖載入（字首盾牌 code-drawn）——啟動載入量不增反減。
+### 8.2 Phase 2 ROO patrol FSM
 
-## 9. 分期計畫
+- No pathfinding. States: idle for random1–4s → pick a sequential/random waypoint → Bezier tween20 px/s with midpoint perpendicular offset±12 → idle.
+- Waypoint tile centers occupy cols 11–13/rows 8–14, below ROO's cols 10–14/rows 4–7 approach. Exclude every gate approach, including its own5×4 rectangle.
+- No static arcade body is needed: routes are reserved walkable paths, with no player pushing. Avoid gate approaches and sage zone.
+- Filter waypoint choices with Rectangle.Contains against all Gate.zone rectangles.
+- Reduced motion stays at the gate with glow only.
+- Keep its gate as home. Choose small emblem/shield sprite or ghost circle in Phase 2.
 
-### Phase 1 — MVP：老智者 + 12 門 + data-driven（本次交付核心）
+### 8.3 Performance
 
-內容：§5 資料模型、§4 地圖重畫、§8.1 data-driven、sage entity + 對話、`BossRosterCard`、HUD chip。
-**可 demo 成果**：spawn 第一眼見老智者；E 對話（打字機、兩段式跳過、重複可開）；頂列 9 門天際線 + 西 2 東 1；逐門 E 開 roster card（ticker/名次/敘事）；cat 門 battle entry 不回歸。
+Twelve gates are created once, one patrol tween is managed by Phaser, and no per-frame allocation or object pool is needed for persistent gates. Crop masters are cat, whale, sage; code-drawn roster shields need no images, so startup image load does not increase and may decrease.
 
-### Phase 2 — 進度感
+## 9. Phases
 
-內容：ROO 巡邏（§8.2）、cat DEFEATED 後 sage 台詞切換（§6.4）、status chip 微調、（可選）emblem 美術。
-**可 demo 成果**：ROO 在石徑上遊蕩；老智者指路台詞「只有那隻不守規矩」；擊敗 cat 後台詞更新。
+### Phase 1: sage, twelve gates, and data-driven MVP
 
-### Phase 3 — 可選加分
+Implement §5 data, §4 map, §8.1 rendering, sage entity/dialogue, BossRosterCard, and HUD chip. Demo shows the sage immediately, repeatable E/typewriter/two-step dialogue, nine northern/two western/one eastern gates, roster cards with tickers/ranks/narratives, and unchanged cat battle entry.
 
-內容：LLM 雙軌（§6.5，含 `/api/sage` route + 腳本兜底）；`scripts/fetch-trending.ts`（GeckoTerminal 刷新 `boss-roster.json` 供開發期使用，demo 一律跑快照，研究 §2.3）。
-**可 demo 成果**：老智者自由回答（世界觀事實不亂編）；榜單換批只需一鍵。
+### Phase 2: progress cues
 
-## 10. 任務拆解表
+ROO patrol, cat-defeat dialogue, refined status chips, and optional emblems. Demo shows a road wanderer, the sage's rule-breaker hint, and changed dialogue after real cat defeat.
 
-估時以「天」為單位（hackathon 節奏，半日＝0.5）；粒度＝工程師可直接開工。
+### Phase 3: optional additions
 
-| task-id | 描述 | 涉及檔案 | 依賴 | 估時 | 負責 |
-|---|---|---|---|---|---|
-| T1 | `BossDefinition` 擴充 + `boss-roster.json` + `BOSSES` 組合 | `bosses.ts`、新 `boss-roster.json` | — | 0.25d | JK |
-| T2 | 地圖重畫：GATES 12 筆、sage marker、pond 移位＋舊 pond fence 移除、route/cluster 重挑 | `scripts/generate-hub-map.ts` | T1（bossId 命名） | 0.5d | JK |
-| T3 | checker：12 gate + bossIds 集合相等 + sage 斷言 | `scripts/check-hub-map.ts` | T2 | 0.25d | JK |
-| T4 | gate 渲染 data-driven：accent/status/ticker/rank chip/字首盾牌；crop 迴圈 | `src/game/HubScene.ts` | T1、T2 | 0.5d | JK |
-| T5 | sage entity：marker 讀取、crop、static body、bob、zone、E 第三分支 + bridge events | `HubScene.ts`、`bridge.ts` | T2、T4 | 0.5d | JK |
-| T6 | `SageDialog` + `useTypewriter` + `sageLines` + GameShell 接線（overlay、prompt 優先序） | 新 `SageDialog.tsx`、`useTypewriter.ts`、`sageLines.ts`、`GameShell.tsx` | T5 | 0.5d | JK |
-| T7 | `BossRosterCard`：非 cat 門 E 分流（gate:enter 依 boss.source/status 分流） | 新 `BossRosterCard.tsx`、`GameShell.tsx` | T1、T4 | 0.25d | JK |
-| T8 | battle-entry 界線審查：確認 T7 分流不影響 cat 流程、`BossEntryPanel` 零編輯 | 無檔（review） | T7 | 0.25d | Roy |
-| T9 | HUD chip `12 CHALLENGERS` + guide 回歸檢查（`chooseHintGate` 12 門行為） | `GameShell.tsx`、`hubGuide.ts`（僅若必要） | T4、T5 | 0.25d | JK |
-| T10 | Phase 2：ROO 巡邏 FSM（waypoint + bezier + 互斥過濾） | `HubScene.ts`（或新 `rosterPatrol.ts`） | T4 | 0.5d | JK |
-| T11 | Phase 2：cat DEFEATED → sage 台詞切換 + defeated 標記 | `sageLines.ts`、`GameShell.tsx` | T6 | 0.25d | JK |
-| T12 | Phase 3（可選）：LLM 雙軌 `/api/sage` + 腳本兜底 | 新 `app/api/sage/route.ts`、`SageDialog.tsx` | T6 | 0.5–1d | JK |
-| T13 | Phase 3（可選）：`scripts/fetch-trending.ts` 刷新 snapshot | 新 script | T1 | 0.25d | 任何人 |
+LLM plus /api/sage/script fallback and scripts/fetch-trending.ts for development snapshot refresh. Demos still use snapshots. The sage can answer freely without inventing world facts, and developers replace the roster with one refresh action.
 
-- **Phase 1 小計 ≈ 3.25d**（含 Roy 0.25d）；Phase 2 ≈ 0.75d；Phase 3 ≈ 0.75–1.25d。
-- 依賴鏈：T1→{T2→T3, T4}→T5→{T6, T9}→T7→T8；T10/T11 在 Phase 1 後並行；T12/T13 皆可獨立啟動。
+## 10. Tasks
 
-## 11. 風險與未決問題
+Estimates are hackathon days; half a day is0.5. Tasks are ready for engineering execution.
 
-| # | 風險/未決 | 嚴重度 | 緩解 |
-|---|---|---|---|
-| R1 | **規格變更需批准**（art-direction :64、completion-pass :20/:23） | High | §1.2 表單化呈報；批准前不動 codebase；本計畫含備案範圍縮減（只做 10 門不碰 guide） |
-| R2 | **BossEntryPanel partner 界線**（`BossEntryPanel.tsx:35,113,151` 特判） | High | D6：新 `BossRosterCard` 繞開；T8 由 Roy 驗證 cat 流程不回歸；`BossEntryPanel` 零編輯寫入 DoD |
-| R3 | **資產授權**：`npc-thesis-wizard.png` 無 txt、roster portrait 版權 | High | §7.1 actions 列表；Phase 1 字首盾牌零資產；demo 前完成授權確認，未過用備案圖 |
-| R4 | 名單漂移：榜單日拋、demo 前名單過時 | Med | snapshot 換檔即換（D5）；老智者台詞自帶 snapshot 日期（研究 §2.3 第 3 點）；T13 一鍵刷新 |
-| R5 | 地圖回歸：`check-hub-map` BFS 可達性、外圈全封、pond 移位 | Med | T3 集合相等斷言 + BFS 自動驗證 12 門可達；`map:check` 納入 DoD；備案 44×32（§4.1） |
-| R6 | 無觸控決策：對話/門互動在行動端不可用 | Med（既定） | 既定否決不推翻；本版僅桌面 demo；記錄為已知限制 |
-| R7 | battle 進場金鏈接線：cat 門移動後 gate:enter→BossEntryPanel 鏈路 | Med | T8 Roy 驗證；cat 門在頂列正北、zone 半徑不變（`HubScene.ts:351`）；`mock-battle` 鏈路不動 |
-| R8 | guide 回歸：`chooseHintGate` 在 12 unlocked 門下箭頭跳動、find 步文案「a boss pool」 | Low–Med | T9 檢查；行為（取最近）不變，僅驗文案仍通順 |
-| R9 | crop 像素品質：sprite 降採樣模糊（`textures.ts` 兩段式已緩解） | Low | 沿用既有管線；瀏覽器實測調 crop 1–2 次 |
-| R10 | 未決：10 隻最終選角（研究 §5 待答 ⑤：敘事型 vs 熱度型） | Low | 用 snapshot Top-10 原班（§2.2）；換批成本＝改 JSON |
+| ID | Description | Files | Dependencies | Estimate | Owner |
+| --- | --- | --- | --- | --- | --- |
+| T1 | Extend BossDefinition, add roster JSON, combine BOSSES | bosses.ts, new boss-roster.json | None | 0.25 d | JK |
+| T2 | Twelve-gate map, sage marker, pond relocation/fence removal, routes/clusters | scripts/generate-hub-map.ts | T1 IDs | 0.5 d | JK |
+| T3 | Twelve-gate set equality and sage assertions | scripts/check-hub-map.ts | T2 | 0.25 d | JK |
+| T4 | Data-driven accent/status/ticker/rank/initial shields and crop loop | src/game/HubScene.ts | T1,T2 | 0.5 d | JK |
+| T5 | Sage marker/crop/body/bob/zone, third E branch, bridge events | HubScene.ts, bridge.ts | T2,T4 | 0.5 d | JK |
+| T6 | SageDialog, useTypewriter, sageLines, GameShell overlay/prompt wiring | New component/hooks/scripts and GameShell.tsx | T5 | 0.5 d | JK |
+| T7 | BossRosterCard and source/status-based non-cat dispatch | New card, GameShell.tsx | T1,T4 | 0.25 d | JK |
+| T8 | Partner-boundary review; preserve cat flow and zero entry-panel edits | Review only | T7 | 0.25 d | Roy |
+| T9 | 12 CHALLENGERS HUD and twelve-gate guide regression | GameShell.tsx, hubGuide.ts only if needed | T4,T5 | 0.25 d | JK |
+| T10 | Phase 2 ROO FSM, waypoints, Bezier, exclusion filtering | HubScene.ts or new rosterPatrol.ts | T4 | 0.5 d | JK |
+| T11 | Phase 2 cat defeat marker and sage dialogue | sageLines.ts, GameShell.tsx | T6 | 0.25 d | JK |
+| T12 | Optional Phase 3 LLM route and script fallback | New app/api/sage/route.ts, SageDialog.tsx | T6 | 0.5–1 d | JK |
+| T13 | Optional Phase 3 snapshot refresh | New scripts/fetch-trending.ts | T1 | 0.25 d | Anyone |
 
-## 12. 驗收標準（DoD）
+Phase 1 totals about 3.25 d, including Roy's0.25 d; Phase 2 about 0.75 d; Phase 3 about 0.75–1.25 d. Dependencies: T1→{T2→T3,T4}→T5→{T6,T9}→T7→T8. T10/T11 can run in parallel after Phase 1; T12/T13 can start independently.
 
-JK 實作完成後，依序驗證：
+## 11. Risks and open questions
 
-1. `bun run typecheck`、`bun run web:build` 全綠（`apps/web/AGENTS.md` Verification）。
-2. `bun run map:build` → `bun run map:check`（12 gate 集合相等 + BFS 可達 + 外圈全封）。
-3. 瀏覽器實測清單（desktop）：
-   - spawn 第一眼構圖：sage 在畫面內、頂列天際線可見 ≥5 門（§3.1）；
-   - sage：接近出 E 提示、對話打字機（補句/下一句兩段式）、ESC 關閉、重複可開、首訪/回訪台詞正確、`reduce-motion` 全文直出且無 bob；
-   - 12 門：名牌 TICKER + caption（roster＝`LB #N · ROBINHOOD`）、字首盾牌、status chip 正確、無 Live/Ready 字樣；
-   - 每門 E：roster 門開 `BossRosterCard`；cat 門開 `BossEntryPanel` 且 BOSS ACTIONS 按鈕（`GameShell.tsx:152-160`）不回歸；`/mock-battle` 不回歸；
-   - guide：welcome→move→find→inspect→done 流程在 12 門下走完；REPLAY GUIDE 正常；
-   - region-exit：東路 `NEXT REGION` 提示仍正常；HUD `12 CHALLENGERS` chip 顯示；
-   - console 無新增錯誤（既有 Anvil `ERR_CONNECTION_REFUSED` 與 Next preload warnings 為已知既有，repo memory 記錄）。
-4. `git diff` 確認 `BossEntryPanel.tsx` 零變更（R2 的硬性驗證）。
+| ID | Risk | Severity | Mitigation |
+| --- | --- | --- | --- |
+| R1 | Approved specifications exclude the new scope | High | Present §1.2 before code changes; fallback reduces scope to ten gates without guide changes |
+| R2 | Partner-owned BossEntryPanel special cases 35/113/151 | High | Separate card, Roy T8 review, and zero-diff DoD |
+| R3 | Wizard lacks license txt; portrait rights | High | §7.1 verification, initials shields in Phase 1, fallback art before demo |
+| R4 | Fast-changing roster may age before demo | Medium | Replace snapshots, disclose date in dialogue, optional T13 refresh |
+| R5 | BFS reachability, outer closure, pond regression | Medium | Set equality and BFS for twelve gates; map:check in DoD;44×32 contingency |
+| R6 | No-touch decision prevents mobile interactions | Medium, accepted | Preserve decision; desktop demo and documented limit |
+| R7 | Moving cat may break gate:enter→entry-panel integration | Medium | Roy T8; keep zone size at HubScene 351 and mock-battle route |
+| R8 | Twelve unlocked gates may alter arrow/copy clarity | Low–medium | T9; retain nearest-gate behavior and check "a boss pool" copy |
+| R9 | Sprite downsampling/crop quality | Low | Reuse two-pass pipeline and adjust crop once or twice in browser |
+| R10 | Narrative versus trending final roster | Low | Start with research top-ten snapshot; swapping JSON replaces the batch |
 
-## 13. Mermaid 圖
+## 12. Definition of done
 
-### 13.1 系統互動 sequence（player → sage → dialog → gate → battle entry）
+After JK's implementation:
+
+1. Typecheck and production build pass under apps/web/AGENTS.md.
+2. map:build then map:check verify twelve IDs, BFS reachability, and closed boundaries.
+3. Desktop browser checks:
+   - Sage visible at spawn, at least five northern gates in view.
+   - Sage proximity prompt, typewriter, two-step skipping, Escape close, repeat visits, correct first/return scripts; reduced motion shows full text without bob.
+   - Twelve ticker/caption plates, initials shields, correct status chips, and no false Live/Ready labels.
+   - E opens roster cards for roster gates and BossEntryPanel for cat; preserve BOSS ACTIONS at GameShell 152–160 and /mock-battle.
+   - Full welcome→move→find→inspect→done guide and REPLAY GUIDE with twelve gates.
+   - NEXT REGION east prompt and 12 CHALLENGERS chip remain.
+   - No new console errors; existing Anvil ERR_CONNECTION_REFUSED and Next preload warnings were recorded environment limitations.
+4. Confirm zero BossEntryPanel diff, the required R2 boundary check.
+
+## 13. Mermaid diagrams
+
+### 13.1 Interaction sequence
 
 ```mermaid
 sequenceDiagram
@@ -423,121 +415,117 @@ sequenceDiagram
     participant GS as GameShell
     participant SD as SageDialog
     participant RC as BossRosterCard
-    participant BE as BossEntryPanel (既有)
+    participant BE as BossEntryPanel (existing)
 
-    P->>HS: 走進 sage zone
+    P->>HS: Enter sage zone
     HS->>B: emit "npc:near" {npcId:"sage"}
-    B->>GS: setNearSage(true) → 顯示 E 提示
-    P->>HS: 按 E（setupInput 第三分支）
+    B->>GS: setNearSage(true), show E prompt
+    P->>HS: Press E, third setupInput branch
     HS->>B: emit "npc:talk" {npcId:"sage"}
-    B->>GS: setSageOpen(true) → overlayOpen → ui:modal{open:true}
-    GS->>SD: 開啟（sageLines 依 firstVisit/defeated 選集）
-    P->>SD: E 補句 / 再 E 下一句 / ESC 關閉
-    SD->>GS: onClose → overlayOpen=false → ui:modal{open:false}
-    P->>HS: 走進 gate zone
+    B->>GS: setSageOpen(true), overlayOpen, ui:modal{open:true}
+    GS->>SD: Open script selected by firstVisit/defeated
+    P->>SD: E completes line; next E advances; Escape closes
+    SD->>GS: onClose, overlayOpen=false, ui:modal{open:false}
+    P->>HS: Enter gate zone
     HS->>B: emit "gate:near" {bossId}
-    P->>HS: 按 E
+    P->>HS: Press E
     HS->>B: emit "gate:enter" {bossId}
     GS->>GS: boss.source==="chain" ? cat : roster
-    alt cat（唯一 playable）
-        GS->>BE: BossEntryPanel（既有流程，零編輯）
+    alt cat, the only playable Boss
+        GS->>BE: Existing flow, no edits
     else roster / fixture
-        GS->>RC: BossRosterCard（ticker/名次/敘事，NO CONTRACT）
+        GS->>RC: Ticker, rank, narrative, NO CONTRACT
     end
 ```
 
-### 13.2 實作分期 / 依賴 flowchart
+### 13.2 Phases and dependencies
 
 ```mermaid
 flowchart LR
-    A[T1 bosses.ts + roster JSON] --> B[T2 generate-hub-map 重畫]
-    B --> C[T3 check-hub-map 斷言]
-    A --> D[T4 gate 渲染 data-driven]
+    A[T1 bosses.ts + roster JSON] --> B[T2 generate-hub-map redraw]
+    B --> C[T3 check-hub-map assertions]
+    A --> D[T4 data-driven gate rendering]
     B --> E[T5 sage entity + bridge events]
     D --> E
     E --> F[T6 SageDialog + useTypewriter]
-    D --> G[T7 BossRosterCard 分流]
-    G --> H[T8 Roy 界線審查]
-    F --> I[T9 HUD chip + guide 回歸]
+    D --> G[T7 BossRosterCard dispatch]
+    G --> H[T8 Roy boundary review]
+    F --> I[T9 HUD chip + guide regression]
     subgraph Phase 1
         A; B; C; D; E; F; G; H; I
     end
-    D --> J[T10 ROO 巡邏 FSM]
-    F --> K[T11 defeated 台詞切換]
+    D --> J[T10 ROO patrol FSM]
+    F --> K[T11 defeated script switching]
     subgraph Phase 2
         J; K
     end
-    F --> L[T12 LLM 雙軌]
-    A --> M[T13 fetch-trending 刷新]
-    subgraph Phase 3 可選
+    F --> L[T12 LLM + fallback]
+    A --> M[T13 fetch-trending refresh]
+    subgraph Phase 3 optional
         L; M
     end
 ```
 
-## 14. 實作進度與調整記錄（2026-09-27）
+## 14. Progress and adjustment record, 2026-09-27
 
-- 記錄範圍：`feat/boss-roster-hub`（HEAD `d8458bc`）｜merge-base（`main`）＝`0b6739d`｜分支共 **55** commits（docs 13 + 實作/修復 42）
-- 本節為**附錄式新增**，不改動 §1–§13 內容；任務定義見 §10、分期見 §9。表中每個短 hash 均已逐筆以 `git log --oneline` 核對存在且訊息相符。
-- 一句話結論：**Phase 1 與 Phase 2 全數完成（T1–T11 ＋ 計畫外必要的 T14）**；T15–T17 為 2026-09-27 的 vNext 調整（Base 名單轉向 ＋ 全英文 ＋ 互動修復），亦已完成；**PR 衝突已解決並已併入 `main` 全量（§14.4）**，可無衝突合併。**未完成者僅 T12／T13 兩項 Phase 3 可選項。**
+- Recorded branch feat/boss-roster-hub, HEAD d8458bc, main merge-base 0b6739 d;55 commits, 13 documentation and 42 implementation/fixes.
+- This appended historical record does not change §1–§13 decisions. §10 defines tasks and §9 phases. Every short hash was checked against git log for existence and message.
+- Phases1/2 and T1–T11 plus necessary unplanned T14 were complete. T15–T17's Base roster, English copy, and interaction fixes were also complete. Main was integrated and PR conflicts resolved in §14.4. Only optional T12/T13 remained unopened.
 
-### 14.1 原任務進度（T1–T13 ＋ 追加 T14）
+### 14.1 Original tasks and added T14
 
-狀態：✅ 完成｜⬜ 未開。
+Status: complete or not started.
 
-| task | 狀態 | commit（短 hash） | 備註 |
-|---|---|---|---|
-| T1 | ✅ | `4d9b0ab`, `efa01ac`, `64ab330` | roster JSON／`BossDefinition` 擴充／accent 調色 |
-| T2 | ✅ | `b5a95ee`, `d0ff1fb` | 12 門地圖重畫／cluster 重挑 |
-| T3 | ✅ | `eb7fdc5` | checker 集合相等 ＋ sage 斷言 |
-| T4 | ✅ | `e11a448`, `fceed6b`, `c9cc047`, `beeefe1` | accent/portrait data-driven／ticker 名牌 ＋ chip／字首盾牌；追加 `beeefe1`＝canvas 字型 token 修正（`var(--font-dm-mono)` 無法被 `ctx.font` 解析 → 全標籤放大 1.94×、12 門名牌重疊；修正後 NEXT REGION／cat stage label 回宣告字級） |
-| T5 | ✅ | `979d234`, `421ce0a` | sage entity ＋ bridge events／`npc:talk` 分支 |
-| T6 | ✅ | `77f12b6`, `3b62aa4`, `108e740`, `d5273aa`, `cc5d8b1` | typewriter／sageLines／SageDialog／GameShell 接線／caret 修正 |
-| T7 | ✅ | `bcb7a8b`, `3546c34`, `7ca7d4e` | BossRosterCard／分流接線；`7ca7d4e` 為修復：分流改走 `boss.source === "chain"`，移除死欄位 |
-| T8 | ✅ | —（純 review） | 審查完成：smith ＋ QA 實測 `BossEntryPanel` 零 diff、cat eyebrow 不變 |
-| T9 | ✅ | `083f3c6` | HUD `12 CHALLENGERS` ＋ guide 回歸 |
-| T10 | ✅ | `961e447` | ROO 巡邏 FSM：4 waypoint、modal 暫停、reduce-motion 靜止 |
-| T11 | ✅ | `d259776`, `fb2e235` | defeated 標記寫入 ＋ status 常數釘住 |
-| T12 | ⬜ | — | Phase 3 未開（LLM 雙軌，可選） |
-| T13 | ⬜ | — | Phase 3 未開（fetch-trending 刷新，可選） |
-| T14 | ✅ | `28d9698`, `fc5895b` | **追加（計畫外必要項）**：`hubGuide` 舊測試重寫為 Phase 1 契約 ＋ sageLines 測試 |
+| Task | Status | Short commits | Notes |
+| --- | --- | --- | --- |
+| T1 | Complete | `4d9b0ab`, `efa01ac`, `64ab330` | Roster JSON, definitions, accent palette |
+| T2 | Complete | `b5a95ee`, `d0ff1fb` | Twelve-gate map and clusters |
+| T3 | Complete | `eb7fdc5` | Set equality and sage assertions |
+| T4 | Complete | `e11a448`, `fceed6b`, `c9cc047`, `beeefe1` | Data-driven accents/portraits, ticker/chips, shields. beeefe1 fixes canvas font token parsing: ctx.font could not parse var(--font-dm-mono), scaling labels1.94× and overlapping plates. NEXT REGION/cat stage text returned to declared size. |
+| T5 | Complete | `979d234`, `421ce0a` | Sage and bridge, npc:talk |
+| T6 | Complete | `77f12b6`, `3b62aa4`, `108e740`, `d5273aa`, `cc5d8b1` | Typewriter, scripts, dialog, wiring, caret |
+| T7 | Complete | `bcb7a8b`, `3546c34`, `7ca7d4e` | Card and dispatch; last commit switches to source===chain and removes dead fields |
+| T8 | Complete | Review only | Smith/QA verified zero entry-panel diff and unchanged cat eyebrow |
+| T9 | Complete | `083f3c6` | HUD and guide regression |
+| T10 | Complete | `961e447` | Four-waypoint ROO FSM, modal pause, reduced-motion stop |
+| T11 | Complete | `d259776`, `fb2e235` | Defeat storage and pinned status constants |
+| T12 | Not started | None | Optional Phase 3 LLM/fallback |
+| T13 | Not started | None | Optional Phase 3 refresh |
+| T14 | Complete | `28d9698`, `fc5895b` | Required unplanned rewrite of old guide tests for Phase 1 contract and sageLines tests |
 
-**品質閘門（2026-09-26）**：smith 全 diff 審查 **92/100（REPAIRABLE）** → 修復 F1 焦點逃逸／F2 source 分流／F3 locked 護欄／F5 payload（`2cc4404`, `7ca7d4e`, `0cce847`, `266adee`, `d898d74`；末筆＝F12 走道幾何：13 條走道全寬、含 (18,8) 卡點）→ delta 複審 **95/100 PASS**；QA 12/12 TC **GO**。
+Recorded 2026-09-26 gates: smith92/100 REPAIRABLE, then F1 focus escape/F2 dispatch/F3 locked guard/F5 payload fixes in `2cc4404`, `7ca7d4e`, `0cce847`, `266adee`, `d898d74`. The final commit covers F12 geometry across13 full-width routes, including the18, 8 stuck point. Re-review95/100 PASS; QA12/12 GO.
 
-**分支家務**：`f8d450b`（`.gitignore` 納入 `.playwright-mcp`）不對應任何 task，列此備查。
+Housekeeping `f8d450b` adds .playwright-mcp to .gitignore and belongs to no task.
 
-### 14.2 本次調整（2026-09-27 vNext：T15–T17，全數完成）
+### 14.2 Completed vNext adjustments, T15–T17
 
-- **T15 全英文**（`3e6b1e7`＋`3770f92`）：sage 三段台詞改英文（ASCII 標點）；全庫可見 CJK 清零，遊戲可見文字只剩英文。
-- **T16 Base 轉向**（`0b49ec6`, `3282404`, `2a67628`, `535d032`）：roster 換成 Base trending 實時精選 10 名（AERO／BRETT／SOL／VVV／TIBBIR／MORPHO／AVNT／BNKR／DRB／B3；source＝GeckoTerminal `networks/base/trending_pools` @2026-09-26）；gate caption `LB #N · BASE`、卡片 eyebrow `LAUNCH BOOST · BASE`、CHAIN＝Base；**遊蕩者重綁 `sol`（Solana (Bridged)）**；網路選單標籤去品牌（`46630 · HISTORICAL`／`Historical Testnet (46630)`）；技術性歷史字串（BossActions／RoundStatePanel／manifest）保留事實（邊界決策）。
-- **T17 互動修復**（`91669bc`, `b0f5e14`, `32fb5ad`, `d8458bc`）：四根因——① `domControlFocused` 過度抑制（含 WelcomeDialog 掃尾 focus 到 SOUND 按鈕 → 關閉指引後凍結）② prompts 是 span 不可點 ③ roamer 零互動（新增 22px 互動 radius）④ `ESC · CLOSE` 死 span。修後驗收：點 HUD 按鈕不再凍結、E／Enter／點擊三路皆通、roamer 可挑戰、鍵盤 a11y 保留。
-- **驗證狀態（終態）**：smith 全 diff 審查 **96/100 PASS** → F3／F4 修復（`e0ceb30`…`a7d1bb3`）→ delta 複審 **96/100 PASS**；四檢查全綠（當時 `bun test` 34 pass）；瀏覽器驗收 6/6。後續 Loop 4（§14.4）另完成 smith **90/100 PASS** 與 QA **10/10 GO**。
+- T15 English: `3e6b1e7` and `3770f92` translate three sage scripts with ASCII punctuation; visible game text contains no CJK.
+- T16 Base: `0b49ec6`, `3282404`, `2a67628`, `535d032` select AERO/BRETT/SOL/VVV/TIBBIR/MORPHO/AVNT/BNKR/DRB/B3 from GeckoTerminal Base trending dated2026-09-26. Captions become LB #N · BASE, eyebrow LAUNCH BOOST · BASE, chain Base. Roamer becomes sol, Solana (Bridged). Network menus use46630 · HISTORICAL/Historical Testnet (46630); factual technical history in BossActions/RoundStatePanel/manifest remains.
+- T17 interactions: `91669bc`, `b0f5e14`, `32fb5ad`, `d8458bc` fix four causes: overly broad domControlFocused blocking, including WelcomeDialog's final focus on SOUND; unclickable span prompts; no roamer interaction, adding22 px radius; and inert ESC · CLOSE span. HUD no longer freezes movement, E/Enter/click work, roamers are challengeable, and keyboard accessibility remains.
+- Final recorded review:96/100 PASS, F3/F4 fixes `e0ceb30`…`a7d1bb3`, then96/100 PASS again. Four checks passed, with34 tests at that time; browser6/6. Later Loop4 records90/100 PASS and QA10/10 GO.
 
-### 14.3 待決事項（owner 跟進）
+### 14.3 Owner follow-up
 
-1. `LAUNCH BOOST` 品牌字樣在 Base 語境是否保留（現僅換鏈名）。
-2. HUD `12 CHALLENGERS` 與 sage 的「10 challengers」同詞不同義（12 門 vs 10 roster）。
-3. Phase 3 可選（T12／T13）是否啟動。
-4. `npc-thesis-wizard.png` 授權記錄（延續未決）。
-5. **cat 命名三分歧**：同一門在三個地方三個名字——`bosses.ts` `name: "Pool Unis"`（`battle.test.ts` 已凍結該值）× 名牌 ticker `ROY`（HubScene 畫 `boss.ticker.toUpperCase()`）× sage 台詞 "Roy"（`sageLines.ts` 兩句）。如需統一（建議）改 3 處即可：ticker／sageLines 兩句／sage 測試斷言。
-6. **demo 前換 keyed Base RPC**：公共 `sepolia.base.org` 有 429 節流（hub 已顯示 `CHAIN · LIVE`，讀取仍貼著節流邊界）。
-7. **row 27 東西走廊淨空僅 ~8px**（body 貼腳卡點；交地圖擁有者處理）。
-8. **`BossEntryPanel` HP 浮點顯示** `299.999999999999999999 / 300`（W-01，partner 檔，cosmetic）。
-9. **錢包連上後的 entry panel 互動路徑**：源頭修已覆蓋該路徑、本機無法 e2e（無錢包可連），demo 前建議手動一驗。
+1. Keep LAUNCH BOOST branding for Base or rename it; only chain name changed so far.
+2. Resolve different meanings of HUD12 CHALLENGERS and dialogue10 challengers: twelve gates versus ten roster entries.
+3. Decide whether optional T12/T13 starts.
+4. Resolve wizard asset licensing.
+5. Cat has three names: Pool Unis in bosses.ts, pinned by battle.test.ts; ticker ROY; Roy in two sage lines. To align, change ticker, two script lines, and corresponding assertions.
+6. Use a keyed Base RPC before demo; public sepolia.base.org429 limits persisted despite CHAIN · LIVE.
+7. Row27 east-west corridor has only about 8 px clearance and foot/body sticking; map owner to address.
+8. Cosmetic partner-file HP display shows299.999999999999999999 /300, W-01.
+9. Entry-panel interactions after wallet connection were covered by the source fix but not local E2E without a wallet; manually verify before demo.
 
-### 14.4 PR 衝突解決與 main 合併（2026-09-27）
+### 14.4 PR conflict resolution and main integration
 
-- **背景**：owner 開 PR → GitHub 報 **5 檔衝突**；`main` 在 `0b6739d` 之後已大幅前進（PR #34–#56：battle-by-hook、BoostPad、Factory、黑鐵匠、Robinhood 網路移除、Pool Unis 品牌、hub keyboard 修復），`git diff --shortstat 0b6739d ca9f606` ＝ **138 檔、+25,742/−1,510**。commit 量以 merge 當時 evidence 記為 +55；本次覆核 `git rev-list --count 0b6739d..ca9f606` ＝ 62。
-- **合併**：`cf2189f`（parents `a7d1bb3` ＋ `ca9f606`）——`git merge origin/main` 入本分支，**15 衝突 hunk／5 檔**（GameShell 9、HubScene 2、bosses 2、useBossPool 1、HubGuide 1），逐 hunk 依「保留雙方意圖」解法，MERGE_MSG 未改：
-  - HubScene `ui:modal`：main 的 guarded keyboard toggle × 我方 roamer hold／release × `resetKeyboardState`。
-  - HubScene label：main 的錨點 × 我方字型 token 解法（`labelFontFamily()`）。
-  - GameShell：main 的 battle-by-hook 接線（`confirmedBattleAttack`／`selectDefaultEncounter`／`wallet.busy`／`isHubEncounter`／`AttackOrigin.hookAddress`）× 我方 sage 接線、prompts、`12 CHALLENGERS` chip。
-  - bosses：main 的 `Pool Unis` 改名 × 我方 roster import 與 `ticker: "ROY"`；useBossPool 取 main（Robinhood 移除取代我方標籤）；HubGuide 取我方（canvas-refocus）。
-  - 合併後四檢查全綠（**57 pass / 11 files**）。
-- **修復（interact 鍵閃關缺陷族）**：`278e08c`（BossRosterCard 焦點改 dialog root，對齊 SageDialog）＋ `4cad0ff`（`HubScene` interact handler 在所有 guard 之後，對 handled 的 `Enter`／`Space` `preventDefault`）——三處病灶（roster 卡、route notice、entry panel）全關；陽性對照證明修正 load-bearing。
-- **驗證**：smith **90/100 PASS**（雙向不丟失檢查 0 損失；`useBossPool.ts` 最終 blob 與 main 相同）；QA **10/10 TC GO**（含 cat／route／sage 三條走位實測、四種觸發鍵皆不閃關、main 三頁存活、network 清單無 Robinhood）。
-- **證據**：`docs/evidence/2026-09-27-main-merge-and-focus-fix.json`（舊檔 `2026-09-27-hub-interaction-fix.json` 已標 `supersededBy`）。
-- **結果**：本分支已含 main 全量 → PR 應可**無衝突合併**（待 push）。
-
-
-
-
+- Owner's PR reported five conflicting files. Main advanced after 0b6739 d through PRs 34–56: hook battles, BoostPad, Factory, Blacksmith, Robinhood removal, Pool Unis, and keyboard fixes. Diff 0b6739 d→ca9f606 records138 files,+25, 742/−1, 510. Merge evidence counted55 commits; later rev-list counted62.
+- Merge `cf2189f`, parents `a7d1bb3` and `ca9f606`, brought origin/main into this branch. Fifteen hunks across five files: GameShell 9, HubScene 2, bosses2, useBossPool1, HubGuide1. Preserve both intents; MERGE_MSG unchanged.
+  - HubScene ui:modal combines main's guarded keyboard toggle, roamer hold/release, and resetKeyboardState.
+  - Labels combine main anchors with labelFontFamily token parsing.
+  - GameShell combines confirmedBattleAttack/selectDefaultEncounter/wallet.busy/isHubEncounter/AttackOrigin.hookAddress with sage events, prompts, and HUD.
+  - Bosses retain Pool Unis plus roster and ROY. useBossPool uses main's Robinhood removal; HubGuide retains canvas refocus.
+  - All four checks passed, 57 tests across11 files.
+- `278e08c` moves card focus to dialog root, matching SageDialog; `4cad0ff` moves interact handling after all guards and prevents default for handled Enter/Space. This resolves immediate-close defects in roster cards, route notices, and entry panels; positive controls confirmed the fixes mattered.
+- Smith90/100 PASS with no loss in bidirectional comparison; useBossPool's final blob equals main. QA10/10 GO covers cat/route/sage movement, all four trigger keys, three surviving main pages, and no Robinhood network option.
+- Evidence: docs/evidence/2026-09-27-main-merge-and-focus-fix.json; the older hub-interaction-fix record is marked supersededBy.
+- Result at record time: branch included all main changes and was expected to merge without conflict after push.
