@@ -81,7 +81,7 @@ export function MarketBoard({ deployment, onClose }: { deployment: DeploymentSta
         aria-labelledby="market-board-title"
         aria-describedby="market-board-summary"
         tabIndex={-1}
-        className="panel-enter max-h-[min(34rem,calc(100dvh-2rem))] w-full max-w-[520px] overflow-y-auto rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)] outline-none sm:p-6"
+        className="panel-enter max-h-[min(34rem,calc(100dvh-2rem))] w-full max-w-130 overflow-y-auto rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)] outline-none sm:p-6"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -97,7 +97,7 @@ export function MarketBoard({ deployment, onClose }: { deployment: DeploymentSta
             type="button"
             onClick={onClose}
             aria-label="Close pool ledger"
-            className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-widest text-fog focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             CLOSE
           </button>
