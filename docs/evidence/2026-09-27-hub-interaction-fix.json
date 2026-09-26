@@ -1,4 +1,5 @@
 {
+  "supersededBy": "2026-09-27-main-merge-and-focus-fix.json",
   "evidenceType": "HubInteractionFixVerification",
   "schemaVersion": 1,
   "date": "2026-09-27",

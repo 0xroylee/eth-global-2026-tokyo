@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "evidenceType": "merge-and-interaction-fix-verification",
+  "date": "2026-09-27",
+  "branch": "feat/boss-roster-hub",
+  "sourceCommit": "4cad0ff860d6f0535e4ac06c4eeac289ab1c317f",
+  "sourceDirty": false,
+  "capturedBy": "trinity (REPAIR R4, docs-only evidence consolidation)",
+  "status": "passed",
+  "scope": "Resolve the PR conflicts by merging origin/main (ca9f606, +55 commits, PR #34-#56) into feat/boss-roster-hub (a7d1bb3); 15 conflict hunks across 5 files; then fix the interact-key flash-close defect family (R2/R3).",
+  "merge": {
+    "mergeCommit": "cf2189f09c316bb48c6a42a219d4a9ab3b8682cd",
+    "mergeParents": ["a7d1bb335a7ec748afb8ac95efd06703db792097", "ca9f60612bc8c044540b9ee3fa4f76e68ce9e75a"],
+    "conflictedFiles": ["apps/web/src/components/GameShell.tsx", "apps/web/src/components/HubGuide.tsx", "apps/web/src/game/HubScene.ts", "apps/web/src/game/bosses.ts", "apps/web/src/lib/useBossPool.ts"],
+    "hunks": 15,
+    "noLossCheck": "0 unexplained losses (both-direction line check by smith V1); useBossPool.ts final blob identical to origin/main",
+    "resolutionHighlights": [
+      "HubScene ui:modal keeps main's guarded keyboard toggle + our roamer hold/release + resetKeyboardState",
+      "HubScene CHECKING ROUND label: main anchor + our resolved font token (labelFontFamily)",
+      "GameShell: main battle-by-hook wiring (confirmedBattleAttack, selectDefaultEncounter, wallet.busy, isHubEncounter, AttackOrigin.hookAddress) + our sage wiring, prompts, BOSSES.length CHALLENGERS chip",
+      "bosses.ts: main Pool Unis rename + our roster import and ticker ROY",
+      "useBossPool.ts: take main (Robinhood network removal supersedes our label change)",
+      "HubGuide.tsx: take our canvas-refocus block (main's deletion intent preserved, stronger)"
+    ]
+  },
+  "defectsFixed": [
+    {
+      "id": "interact-key-flash-close-family",
+      "instances": [
+        "BossRosterCard (278e08c: focus dialog root)",
+        "HubRouteNotice + BossEntryPanel (4cad0ff: preventDefault on handled Enter/Space at the shared interact handler)"
+      ],
+      "mechanism": "panel opened by the same keydown mounts focus on an activatable control; the browser then runs that keydown's default action and closes the panel within ~4ms",
+      "positiveControl": "forced focus on an enabled CLOSE while modal open reproduces click@2ms; after the fix, Enter/Space at roster gates produce ADD with 0 REMOVE"
+    }
+  ],
+  "checksRun": {
+    "typecheck": 0,
+    "webBuild": 0,
+    "mapCheck": 0,
+    "bunTest": { "pass": 57, "fail": 0, "files": 11 }
+  },
+  "reviews": {
+    "smithV1": {
+      "commit": "4cad0ff",
+      "mode": "standard",
+      "score": 90,
+      "threshold": 85,
+      "critical": 0,
+      "high": 0,
+      "verdict": "PASS",
+      "notable": "both-direction no-loss audit; R2/R3 verified end-to-end for roster gates and HUD native activation"
+    },
+    "qaV2": {
+      "commit": "4cad0ff",
+      "tcs": "10/10 PASS",
+      "verdict": "GO",
+      "walks": [
+        "cat gate Enter stays open",
+        "east route notice Enter/Space stays open",
+        "sage full flow incl. click-then-E"
+      ],
+      "annotationStatus": "PARTIAL",
+      "annotationNote": "TC-06..TC-10 used unannotated screenshots after a helper reset; DOM/probe measurements are the primary evidence"
+    }
+  },
+  "residuals": [
+    { "id": "W-01", "severity": "low", "note": "BossEntryPanel HP renders 299.999999999999999999 / 300 (partner file, pre-existing, cosmetic)" },
+    { "id": "wallet-connected-entry-panel", "severity": "low", "note": "not e2e-tested locally (cannot connect a wallet); the shared preventDefault should cover it" },
+    { "id": "corridor-row-27", "severity": "low", "note": "east-west corridor row 27 has ~8px effective clearance at body edges; map owner follow-up" },
+    { "id": "public-rpc-429", "severity": "info", "note": "sepolia.base.org throttles; use a keyed RPC before the demo" }
+  ],
+  "supersedes": "2026-09-27-hub-interaction-fix.json (round-3 state)",
+  "measuredIn": "trinity E1 report (merge), smith V1 report, QA V2 report — 2026-09-27"
+}
