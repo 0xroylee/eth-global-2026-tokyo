@@ -1,8 +1,31 @@
 # Boss Pool 合約與遊戲流程
 
-現行設計：買入 BossHP 代表傷害，BossHP 交俾玩家而唔 burn。合資格 BossHP 代表分獎權；工作預設係可以轉讓，claim 時交回永久鎖住。以下係設計圖，唔代表新流程已部署或通過 E2E。
+## Current Factory flow
 
-## 玩家流程
+This flow follows [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`. All sale liquidity is active at launch. Volume stages and cooldowns do not release tokens or reset AMM price. The public Base Sepolia demo retains its older contract rules. See the [callback sequence and design rationale](uniswap-v4-hooks.md) for authorization, optional mock-driven fees, LP isolation, and limitations.
+
+```mermaid
+flowchart TD
+    Launch["Launch: prize escrow and full initial sale LP"] --> Attack["MockUSD to Attack Token to creator token"]
+    Attack --> Before["beforeSwap: authenticate, check stage/cooldown, compute optional fee"]
+    Before --> Swap["Standard v4 AMM swap"]
+    Swap --> After["afterSwap: actual output, per-player credit, current-stage volume"]
+    After --> Goal{"Current volume goal reached?"}
+    Goal -->|No| Attack
+    Goal -->|Stage 1 or 2| Pause["Advance stage; wait 60 or 120 chain seconds"]
+    Pause --> Attack
+    Goal -->|Stage 3| Victory["Defeated: freeze actual eligible output"]
+    Victory --> Claim["Consume earned credit; receive MEME prize; keep bought tokens"]
+    Victory --> NFT["Prior attackers can claim optional victory NFT"]
+```
+
+Each purchase credits only its starting stage, including the defined base-unit tail exceptions. Failed rules or settlement revert both swaps and all credit. Mock fees affect cost without resetting price; owner-added LP changes depth without withdrawing the initial position or prize.
+
+## Standalone BossHP diagrams
+
+以下保留嘅圖描述 standalone BossHP，唔係新版 Factory：買入 BossHP 代表傷害，BossHP 交俾玩家而唔 burn。合資格 BossHP 代表可轉讓分獎權，claim 時交回永久鎖住。Standalone 嘅 reserve refill 同增量 LP 唔適用於新版 Factory。設計圖本身唔代表已部署或通過 E2E。
+
+### Standalone 玩家流程
 
 ```mermaid
 flowchart TD
@@ -22,7 +45,7 @@ flowchart TD
 
 代幣轉帳唔造成新傷害，但可以轉移分獎權。Reserve、LP fee 同已兌獎 HP 唔可以混入可兌獎流通量。單一玩家交易最多影響一個 stage。
 
-## 合約分工
+### Standalone 合約分工
 
 ```mermaid
 flowchart LR
@@ -38,7 +61,7 @@ flowchart LR
 
 兩個 pool 係 PoolManager 內嘅狀態。BossHook 只掛喺 Boss pool；supply pool 可用普通 v4 行為。BossRouter 同時負責轉階段，唔另建 StageManager。Token/NFT 重用標準實作。
 
-## 一次清關交易
+### Standalone 一次清關交易
 
 ```mermaid
 sequenceDiagram
@@ -71,7 +94,7 @@ sequenceDiagram
 
 最後一關清完直接 Defeated，唔再 refill。任何步驟失敗，整筆攻擊、付款、HP 交付同 stage 變更一齊回滾。Refill 用 reserve，唔借玩家 refund 或獎池。
 
-## 分獎與 custody
+### Standalone 分獎與 custody
 
 ```mermaid
 flowchart TD
