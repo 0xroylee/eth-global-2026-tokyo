@@ -7,10 +7,22 @@ const WIDTH = 40;
 const HEIGHT = 30;
 const TILE = HUB_TILESET.tileSize;
 const SPAWN = { col: 20, row: 25 };
+/** The sage stands one tile west of the spawn path so players walk past them. */
+const SAGE = { col: 18, row: 21 };
+/** Nine gates across the north, two down the west edge, one on the south-east approach. */
 const GATES = [
-  { bossId: "cat", col: 7, row: 4, width: 3, height: 2 },
-  { bossId: "locked", col: 19, row: 2, width: 3, height: 2 },
-  { bossId: "macro-whale", col: 32, row: 4, width: 3, height: 2 },
+  { bossId: "hoodcats", col: 3, row: 2, width: 3, height: 2 },
+  { bossId: "talis", col: 7, row: 2, width: 3, height: 2 },
+  { bossId: "roo", col: 11, row: 2, width: 3, height: 2 },
+  { bossId: "agrippa", col: 15, row: 2, width: 3, height: 2 },
+  { bossId: "cat", col: 19, row: 2, width: 3, height: 2 },
+  { bossId: "robinpepe", col: 23, row: 2, width: 3, height: 2 },
+  { bossId: "aeva", col: 27, row: 2, width: 3, height: 2 },
+  { bossId: "macro-whale", col: 31, row: 2, width: 3, height: 2 },
+  { bossId: "pons", col: 35, row: 2, width: 3, height: 2 },
+  { bossId: "ad", col: 4, row: 10, width: 3, height: 2 },
+  { bossId: "musebook", col: 4, row: 18, width: 3, height: 2 },
+  { bossId: "robin", col: 35, row: 18, width: 3, height: 2 },
 ] as const;
 const OUT_PATH = new URL("../public/game/hub.json", import.meta.url);
 
@@ -60,17 +72,29 @@ const reserveRoute = (col: number, row: number, w: number, h: number) => fillRec
 // Spawn to clearing, with a jog.
 reserveRoute(19, 20, 3, 4); // rows 20..23
 reserveRoute(20, 23, 3, 4); // rows 23..26, shifted one column east
-// Clearing to cat gate: west, then north.
-reserveRoute(7, 12, 9, 3); // cols 7..15, rows 12..14
-reserveRoute(7, 6, 3, 7); // cols 7..9, rows 6..12
-// Clearing to locked gate: north.
-reserveRoute(19, 4, 3, 7); // cols 19..21, rows 4..10
-// Clearing to macro-whale gate: east, then north.
-reserveRoute(25, 12, 9, 3); // cols 25..33
-reserveRoute(31, 6, 3, 7); // cols 31..33, rows 6..12
+// Two trunks run west and east out of the clearing along rows 12..14. Every north
+// gate drops a three-wide spur onto one of them, and the west column gates open off them.
+reserveRoute(7, 12, 9, 3); // west trunk, cols 7..15
+reserveRoute(25, 12, 9, 3); // east trunk, cols 25..33
 // Future region route. Reserved before stone edges and decoration so the
 // Macro Whale approach stays put and the exit is not planted over.
 reserveRoute(33, 12, 6, 3); // cols 33..38, rows 12..14
+// One spur per north gate: three wide, centred on the gate, down to the trunk.
+reserveRoute(7, 4, 3, 11); // talis, cols 7..9
+reserveRoute(11, 4, 3, 11); // roo, cols 11..13
+reserveRoute(15, 4, 3, 11); // agrippa, cols 15..17
+reserveRoute(19, 4, 3, 11); // cat, cols 19..21
+reserveRoute(23, 4, 3, 11); // robinpepe, cols 23..25
+reserveRoute(27, 4, 3, 11); // aeva, cols 27..29
+reserveRoute(31, 4, 3, 11); // macro-whale, cols 31..33
+reserveRoute(35, 4, 3, 11); // pons, cols 35..37
+// hoodcats sits west of the west trunk, so its spur steps south then east into talis's.
+reserveRoute(3, 4, 3, 5); // cols 3..5, rows 4..8
+reserveRoute(5, 8, 5, 3); // cols 5..9, rows 8..10
+// ad opens straight onto the trunk. musebook drops south of it to its own approach.
+reserveRoute(7, 14, 3, 7); // cols 7..9, rows 14..20
+// robin's approach sits below its own base, so its spur passes west of the gate footprint.
+reserveRoute(33, 15, 3, 6); // cols 33..35, rows 15..20
 
 const isStone = (c: number, r: number) => inBounds(c, r) && stone[index(c, r)] === 1;
 fillRect(0, 0, WIDTH, HEIGHT, (c, r) => {
@@ -98,9 +122,11 @@ for (const gate of GATES) {
   reserve(gate.col - 1, gate.row + gate.height, 5, 4); // 5x4 approach
 }
 reserve(SPAWN.col - 2, SPAWN.row - 2, 5, 5);
+reserve(SAGE.col, SAGE.row); // the sage's own tile, so nothing is planted on top of them
 
-// 4. Pond: columns 4..9, rows 20..25. Fully blocked, banked edges.
-const POND = { col: 4, row: 20, w: 6, h: 6 };
+// 4. Pond: south-west corner, columns 2..7, rows 24..29. Fully blocked, banked edges.
+//    Row 29 is the map edge, so the pond seals it in place of the border hedge.
+const POND = { col: 2, row: 24, w: 6, h: 6 };
 fillRect(POND.col, POND.row, POND.w, POND.h, (c, r) => {
   const n = r === POND.row;
   const s = r === POND.row + POND.h - 1;
@@ -175,7 +201,7 @@ fillRect(0, 0, WIDTH, HEIGHT, (c, r) => {
   block(c, r, G.hedge);
 });
 
-// 7. Fences: pond enclosure and a garden boundary, each with a two-tile opening.
+// 7. Fence: the east garden boundary, with a two-tile opening.
 const fenceH = (col: number, row: number, w: number, gap: [number, number] | null) => {
   for (let c = col; c < col + w; c++) {
     if (gap && c >= gap[0] && c <= gap[1]) continue;
@@ -185,7 +211,6 @@ const fenceH = (col: number, row: number, w: number, gap: [number, number] | nul
     block(c, row, gid);
   }
 };
-fenceH(2, 18, 10, [11, 11]); // north of the pond, open at the east end
 fenceH(28, 21, 9, [31, 32]); // east garden, opening in the middle
 
 // Closed wooden barrier at the east route. Column 39 stays an outer wall.
@@ -251,7 +276,7 @@ const map = {
   renderorder: "right-down",
   type: "map",
   version: "1.10",
-  nextobjectid: 6,
+  nextobjectid: 4 + GATES.length,
   tilesets: [
     {
       firstgid: 1,
@@ -296,7 +321,19 @@ const map = {
           properties: [{ name: "bossId", type: "string", value: g.bossId }],
         })),
         {
-          id: 5,
+          id: 2 + GATES.length,
+          name: "sage",
+          type: "",
+          x: SAGE.col * TILE + TILE / 2,
+          y: SAGE.row * TILE + TILE / 2,
+          width: 0,
+          height: 0,
+          rotation: 0,
+          visible: true,
+          point: true,
+        },
+        {
+          id: 3 + GATES.length,
           name: "region-exit",
           type: "",
           x: 38 * TILE,
