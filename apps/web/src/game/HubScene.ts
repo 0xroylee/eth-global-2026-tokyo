@@ -30,6 +30,7 @@ export class HubScene extends Phaser.Scene {
   private gates: Gate[] = [];
   private nearGate: Gate | null = null;
   private modalOpen = false;
+  private reduceMotion = false;
   private unsubscribe: (() => void)[] = [];
 
   constructor() {
@@ -67,11 +68,14 @@ export class HubScene extends Phaser.Scene {
     this.cameras.main.setRoundPixels(true);
 
     this.setupInput();
+    this.watchReducedMotion();
 
     this.unsubscribe.push(
       this.bridge.onCommand("ui:modal", ({ open }) => {
         this.modalOpen = open;
         if (open) this.player.setVelocity(0, 0);
+        // Hand the keyboard to React while a panel or control owns focus.
+        if (this.input.keyboard) this.input.keyboard.enabled = !open;
       }),
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -79,7 +83,24 @@ export class HubScene extends Phaser.Scene {
       this.unsubscribe = [];
     });
 
+    this.exposeDevProbe();
     this.bridge.emit("scene:ready", {});
+  }
+
+  /** Read-only state for browser verification; absent in production builds. */
+  private exposeDevProbe() {
+    if (process.env.NODE_ENV === "production" || typeof window === "undefined") return;
+    const probe = () => ({
+      playerScaleY: this.player.scaleY,
+      nearGate: this.nearGate?.boss.id ?? null,
+      glowScale: this.nearGate?.glow.scaleX ?? null,
+      glowAlpha: this.nearGate?.glow.alpha ?? null,
+      reduceMotion: this.reduceMotion,
+    });
+    (window as unknown as { __bpHub?: () => ReturnType<typeof probe> }).__bpHub = probe;
+    this.unsubscribe.push(() => {
+      delete (window as unknown as { __bpHub?: unknown }).__bpHub;
+    });
   }
 
   update(time: number) {
@@ -208,6 +229,9 @@ export class HubScene extends Phaser.Scene {
     if (!keyboard) return;
     this.cursors = keyboard.createCursorKeys();
     this.wasd = keyboard.addKeys("W,A,S,D") as HubScene["wasd"];
+    // Phaser calls preventDefault on every captured key page-wide, which
+    // swallows Space on focused React buttons. Read keys without capturing.
+    keyboard.clearCaptures();
     // Event-driven so a quick tap registers regardless of frame timing.
     const interact = () => {
       if (this.modalOpen || !this.nearGate) return;
@@ -216,6 +240,37 @@ export class HubScene extends Phaser.Scene {
     keyboard.on("keydown-E", interact);
     keyboard.on("keydown-ENTER", interact);
     keyboard.on("keydown-SPACE", interact);
+  }
+
+  /** Mirror prefers-reduced-motion inside the canvas; CSS cannot reach Phaser tweens. */
+  private watchReducedMotion() {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => {
+      this.reduceMotion = query.matches;
+      this.player.setScale(1, 1);
+      if (this.nearGate) this.startGatePulse(this.nearGate);
+    };
+    apply();
+    query.addEventListener("change", apply);
+    this.unsubscribe.push(() => query.removeEventListener("change", apply));
+  }
+
+  private startGatePulse(gate: Gate) {
+    gate.pulse?.stop();
+    gate.glow.setScale(1);
+    const lo = gate.boss.locked ? 0.25 : 0.45;
+    const hi = gate.boss.locked ? 0.35 : 0.7;
+    gate.pulse = this.tweens.add({
+      targets: gate.glow,
+      // Reduced motion keeps the alpha cue and drops the scale movement.
+      ...(this.reduceMotion ? {} : { scale: { from: 1, to: 1.18 } }),
+      alpha: { from: lo, to: hi },
+      duration: this.reduceMotion ? 1100 : 650,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
   }
 
   private updateMovement(time: number) {
@@ -237,9 +292,9 @@ export class HubScene extends Phaser.Scene {
 
     if (vx !== 0) this.player.setFlipX(vx < 0);
 
-    // Walk bob until a real walking sheet exists.
+    // Walk bob until a real walking sheet exists. Decorative, so it obeys reduced motion.
     const moving = vx !== 0 || vy !== 0;
-    this.player.setScale(1, moving ? 1 + Math.sin(time / 70) * 0.03 : 1);
+    this.player.setScale(1, moving && !this.reduceMotion ? 1 + Math.sin(time / 70) * 0.03 : 1);
     this.player.setDepth(this.player.y);
 
     const shadow = this.children.getByName("player-shadow") as Phaser.GameObjects.Ellipse | null;
@@ -258,17 +313,7 @@ export class HubScene extends Phaser.Scene {
       this.nearGate.glow.setScale(1).setAlpha(this.nearGate.boss.locked ? 0.18 : 0.32);
     }
     this.nearGate = hit;
-    if (hit) {
-      hit.pulse = this.tweens.add({
-        targets: hit.glow,
-        scale: { from: 1, to: 1.18 },
-        alpha: { from: hit.boss.locked ? 0.25 : 0.45, to: hit.boss.locked ? 0.35 : 0.7 },
-        duration: 650,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.easeInOut",
-      });
-    }
+    if (hit) this.startGatePulse(hit);
     this.bridge.emit("gate:near", { bossId: hit?.boss.id ?? null });
   }
 }
