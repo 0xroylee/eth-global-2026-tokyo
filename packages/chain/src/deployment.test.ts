@@ -3,6 +3,10 @@ import { getDefaultBossHook, parseBaseSepoliaDeployment, parseDeployment } from 
 
 const standaloneHook = "0xe217b4840049f928d4392030ac86aCe6b3766AC0" as const;
 const factoryHook = "0xc11D07448948AC4757592E91D8f5155907Ef6AC0" as const;
+const currentFactory = "0x353749ffa9640c4152dd28068c416adfc2eb168e" as const;
+const previousFactory = "0x9039F58150F1fFDFB301A3D7218D47A44406a269" as const;
+const launchHash = `0x${"7".repeat(64)}` as const;
+const bossId = `0x${"a".repeat(64)}` as const;
 const addresses = {
   hook: standaloneHook,
   router: "0xc404DA7b3ceB94414e8Bf304E4538E9365936994",
@@ -19,6 +23,31 @@ const baseManifest = {
   deployedAtBlock: 1,
   deploymentTxHash: `0x${"1".repeat(64)}`,
   addresses,
+};
+const previousFactoryBossManifest = {
+  ...baseManifest,
+  deployedAtBlock: 47_332_745,
+  deploymentTxHash: launchHash,
+  bossFactory: currentFactory,
+  bossFactoryDeployedAtBlock: 47_334_087,
+  previousBossFactories: [{ address: previousFactory, deployedAtBlock: 47_332_647 }],
+  defaultBossHook: factoryHook,
+  bossOrigin: {
+    kind: "factory",
+    factoryAddress: previousFactory,
+    factoryDeployedAtBlock: 47_332_647,
+    bossId,
+    launchTxHash: launchHash,
+    launchLogIndex: 29,
+    launchBlockNumber: 47_332_745,
+  },
+  addresses: {
+    ...addresses,
+    hook: factoryHook,
+    router: "0x087D22c53082ED7841cB5716cB699111a02b0dEf",
+    bossHP: "0x5a5517f63714f44F19337d34ab29d5ACC652e4CF",
+    collectibles: "0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925",
+  },
 };
 
 describe("default Boss Hook selection", () => {
@@ -46,5 +75,35 @@ describe("default Boss Hook selection", () => {
     expect(() => parseDeployment({ ...baseManifest, defaultBossHook: "not-an-address" })).toThrow(
       "Deployment manifest has an invalid default Boss Hook address.",
     );
+  });
+});
+
+describe("Factory encounter origin", () => {
+  test("accepts a matching explicitly trusted previous Factory without replacing the current discovery Factory", () => {
+    const manifest = parseBaseSepoliaDeployment(previousFactoryBossManifest);
+
+    expect(manifest.bossFactory).toBe(currentFactory);
+    expect(manifest.bossFactoryDeployedAtBlock).toBe(47_334_087);
+    expect(manifest.bossOrigin?.factoryAddress).toBe(previousFactory);
+    expect(manifest.bossOrigin?.factoryDeployedAtBlock).toBe(47_332_647);
+    expect(getDefaultBossHook(manifest)).toBe(factoryHook);
+  });
+
+  test("rejects an untrusted Factory or a mismatched previous Factory deployment block", () => {
+    expect(() => parseBaseSepoliaDeployment({
+      ...previousFactoryBossManifest,
+      bossOrigin: {
+        ...previousFactoryBossManifest.bossOrigin,
+        factoryAddress: "0x1111111111111111111111111111111111111111",
+      },
+    })).toThrow("Deployment manifest has an invalid Factory launch origin.");
+
+    expect(() => parseBaseSepoliaDeployment({
+      ...previousFactoryBossManifest,
+      bossOrigin: {
+        ...previousFactoryBossManifest.bossOrigin,
+        factoryDeployedAtBlock: 47_332_648,
+      },
+    })).toThrow("Deployment manifest has an invalid Factory launch origin.");
   });
 });

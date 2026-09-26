@@ -1,229 +1,15 @@
 {
   "chainId": 84532,
   "defaultBossHook": "0xc11D07448948AC4757592E91D8f5155907Ef6AC0",
-  "deployer": "0x1ab476210D3Ad23fCEdA23B10Bf8Fee0F9f802F5",
   "bossFactory": "0x353749ffa9640c4152dd28068c416adfc2eb168e",
   "addresses": {
-    "hook": "0xe217b4840049f928d4392030ac86aCe6b3766AC0",
-    "router": "0xc404DA7b3ceB94414e8Bf304E4538E9365936994",
-    "bossHP": "0xc75C1075e998e0d42d3BEE3F11027261C1343B78",
+    "hook": "0xc11D07448948AC4757592E91D8f5155907Ef6AC0",
+    "router": "0x087D22c53082ED7841cB5716cB699111a02b0dEf",
+    "bossHP": "0x5a5517f63714f44F19337d34ab29d5ACC652e4CF",
     "roy": "0x6e5390D3231beb061c1E49916806F2f26B3Feb22",
     "mockUSD": "0x184B037F95A8E7a6E956AACad2244E5ded40d487",
-    "collectibles": "0x01B17Efa24ec4C6e3aFCEa553ed18a2B4FB61f86",
+    "collectibles": "0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925",
     "poolManager": "0x1EF1e7e79B14AFB530d9671A79B7B173FE41a1c3"
-  },
-  "pools": {
-    "supply": {
-      "id": "0xf2510bc1adedbf86ad04f3223e0b1962951a9ea3a7dec7a3d5296ba0ba9ff94d",
-      "key": {
-        "currency0": "0x184B037F95A8E7a6E956AACad2244E5ded40d487",
-        "currency1": "0x6e5390D3231beb061c1E49916806F2f26B3Feb22",
-        "fee": 3000,
-        "tickSpacing": 60,
-        "hooks": "0x0000000000000000000000000000000000000000"
-      }
-    },
-    "boss": {
-      "id": "0x03346074240468eacb781c61fc96e07a2dfd7504a396926105b6bcb2adc5351d",
-      "key": {
-        "currency0": "0x6e5390D3231beb061c1E49916806F2f26B3Feb22",
-        "currency1": "0xc75C1075e998e0d42d3BEE3F11027261C1343B78",
-        "fee": 3000,
-        "tickSpacing": 60,
-        "hooks": "0xe217b4840049f928d4392030ac86aCe6b3766AC0"
-      }
-    }
-  },
-  "config": {
-    "hookFlags": "0x0000000000000000000000000000000000002Ac0",
-    "fee": 3000,
-    "tickSpacing": 60,
-    "bossTicks": [
-      -1920,
-      0
-    ],
-    "bossIsCurrency0": false,
-    "bossInitialSqrtPriceX96": "79228162514264337593543950336",
-    "bossSqrtLowerX96": "71976280165737757769120291055",
-    "bossSqrtUpperX96": "79228162514264337593543950336",
-    "expectedStageTerminalSqrtPriceX96": "71976280165737757769120291055",
-    "supplyStartTick": 299520,
-    "supplyTicks": [
-      293520,
-      305520
-    ],
-    "initialSupplySqrtPriceX96": "252667024921278396854838551797218243",
-    "supplyLiquidity": "60494400020748065",
-    "supplyLPAccounting": {
-      "mockUSDFunded": "5001000000",
-      "royFunded": "100000000000000000000000",
-      "mockUSDDebited": "4916228255",
-      "royDebited": "49999999999999999402381"
-    },
-    "stageCapacity": [
-      "300000000000000000000",
-      "600000000000000000000",
-      "900000000000000000000"
-    ],
-    "stageLiquidity": [
-      "3277555758900103786129",
-      "6555111517800207572259",
-      "9832667276700311358389"
-    ],
-    "observedStageEndSqrtPriceX96": [
-      "0",
-      "0",
-      "0"
-    ],
-    "stageRoyInputRequirement": [
-      "331219793595396366740",
-      "662439587190792733479",
-      "993659380786189100217"
-    ],
-    "originalPrize": "1000000000",
-    "deadline": "1790427022"
-  },
-  "prefunded": {
-    "routerBossHP": "1700000000000000000000",
-    "routerROY": "50000000000000000597619",
-    "routerMockUSD": "84771745",
-    "ownerROY": "0",
-    "lockedRouterROY": "50000000000000000597619",
-    "poolManagerBossHP": "300000000000000000000",
-    "mockUSDInHook": "1000000000"
-  },
-  "schemaVersion": 1,
-  "network": "base-sepolia",
-  "deployedAtBlock": 47325807,
-  "verifiedAtBlock": 47325823,
-  "deploymentTxHash": "0x276c66f030f5ba647abcbb40a1ce6350d06d01606dc38116793f607746122298",
-  "deploymentReceipts": [
-    {
-      "transactionHash": "0xa8816d5d0b4283a9a5088d92245219f18a621be465162ad8bf676a87276aa2a8",
-      "blockNumber": 47325801,
-      "status": "success",
-      "gasUsed": "4353134",
-      "contractAddress": "0x1ef1e7e79b14afb530d9671a79b7b173fe41a1c3"
-    },
-    {
-      "transactionHash": "0xae00fa7e1f64f7529839e2347f0cb974632cc5a832b580faf92c887dec3ba27d",
-      "blockNumber": 47325803,
-      "status": "success",
-      "gasUsed": "523033",
-      "contractAddress": "0x184b037f95a8e7a6e956aacad2244e5ded40d487"
-    },
-    {
-      "transactionHash": "0x8ef0dee01379790cb14442d47f1b219dee04fbea5eb657f217a519a04ffee98f",
-      "blockNumber": 47325804,
-      "status": "success",
-      "gasUsed": "542388",
-      "contractAddress": "0x6e5390d3231beb061c1e49916806f2f26b3feb22"
-    },
-    {
-      "transactionHash": "0x78390320e03077291a720db603e60ee15d155b084c4e491b9b5e767431d4ccab",
-      "blockNumber": 47325805,
-      "status": "success",
-      "gasUsed": "542699",
-      "contractAddress": "0xc75c1075e998e0d42d3bee3f11027261c1343b78"
-    },
-    {
-      "transactionHash": "0xa8ee9e6c755e7c01de84d50d7af03566fa8368c496e9a23c366b62171d0f84a2",
-      "blockNumber": 47325806,
-      "status": "success",
-      "gasUsed": "1100467",
-      "contractAddress": "0x01b17efa24ec4c6e3afcea553ed18a2b4fb61f86"
-    },
-    {
-      "transactionHash": "0x276c66f030f5ba647abcbb40a1ce6350d06d01606dc38116793f607746122298",
-      "blockNumber": 47325807,
-      "status": "success",
-      "gasUsed": "4780480",
-      "contractAddress": "0xc404da7b3ceb94414e8bf304e4538e9365936994"
-    },
-    {
-      "transactionHash": "0x0c4f22b285c6ab3dea0fd45b2b1602b6f1dfcbf66e0ef7c0f195086fe51dc388",
-      "blockNumber": 47325809,
-      "status": "success",
-      "gasUsed": "177678",
-      "contractAddress": "0xbf5048ec35b9acef8b3ef73bdb9fa91beac47739"
-    },
-    {
-      "transactionHash": "0x8919e13156078cad569639a9ba30413b59b76fb76ef57b8af656d55e298ae5c5",
-      "blockNumber": 47325810,
-      "status": "success",
-      "gasUsed": "4641757"
-    },
-    {
-      "transactionHash": "0xe9ba8aa2755d877dc6f34d05ae59110424852dbf22c00745c39b23952096314f",
-      "blockNumber": 47325811,
-      "status": "success",
-      "gasUsed": "44212"
-    },
-    {
-      "transactionHash": "0x76d44def4642a8cba4b0762917f71ae3d9bbcbf8111a7cd9933af6b910ae0a81",
-      "blockNumber": 47325812,
-      "status": "success",
-      "gasUsed": "117805"
-    },
-    {
-      "transactionHash": "0x001cf75afaac7fc848616df192506012516f5f886c0f817113304f02c678761f",
-      "blockNumber": 47325813,
-      "status": "success",
-      "gasUsed": "46838"
-    },
-    {
-      "transactionHash": "0xe702df6a73042498ae9d34f788d75954b972e5eb83cb084f9d8d53799b31c8ef",
-      "blockNumber": 47325815,
-      "status": "success",
-      "gasUsed": "46826"
-    },
-    {
-      "transactionHash": "0xf06c641c910dfa62b86f5fe41ddff3ca2a4c5d0429bbd9238919b34a3926f076",
-      "blockNumber": 47325816,
-      "status": "success",
-      "gasUsed": "68461"
-    },
-    {
-      "transactionHash": "0x6a90700aeed9df9585541d3c44f0385e2b162183b6a8bda8201f32ce41f5b37c",
-      "blockNumber": 47325817,
-      "status": "success",
-      "gasUsed": "51337"
-    },
-    {
-      "transactionHash": "0x28f4bebb42d859ae100607e6e2332458285455403b08b6368c3f19da442ca9b7",
-      "blockNumber": 47325818,
-      "status": "success",
-      "gasUsed": "46319"
-    },
-    {
-      "transactionHash": "0xde4e21fb5de798c5c5a3c232816171f5fdd2342e8bfb9532e6ce3f8a53f8c120",
-      "blockNumber": 47325819,
-      "status": "success",
-      "gasUsed": "79536"
-    },
-    {
-      "transactionHash": "0x8a37aa91ef3d2a0013398762a1d30f8b712fc461f2dd92a89f04bc4cd62be89c",
-      "blockNumber": 47325821,
-      "status": "success",
-      "gasUsed": "348404"
-    },
-    {
-      "transactionHash": "0xa5a6aa27e2e896cf86a2709f3c53762c52ff97cb05139b73175b7674e7b2dced",
-      "blockNumber": 47325823,
-      "status": "success",
-      "gasUsed": "364658"
-    }
-  ],
-  "provenance": {
-    "classification": "TEAM_DEPLOYED_NON_PRODUCTION",
-    "contractSourceCommit": "1f343f3cd1cdd0a052c6be35f6aa8342c2813892",
-    "deploymentSourceCommit": "1f343f3cd1cdd0a052c6be35f6aa8342c2813892",
-    "v4CoreCommit": "46c6834698c48bc4a463a86d8420f4eb1d7f3b75",
-    "openZeppelinCommit": "dbb6104ce834628e473d2173bbc9d47f81a9eec3",
-    "solidityVersion": "0.8.26",
-    "evmVersion": "cancun",
-    "deploymentScript": "DeployBossPool.s.sol:DeployBossPool",
-    "poolManager": "Team deployed from the pinned v4-core source; no official Base PoolManager is claimed."
   },
   "bossFactoryDeployedAtBlock": 47334087,
   "previousBossFactories": [
@@ -231,5 +17,18 @@
       "address": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
       "deployedAtBlock": 47332647
     }
-  ]
+  ],
+  "bossOrigin": {
+    "kind": "factory",
+    "factoryAddress": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
+    "factoryDeployedAtBlock": 47332647,
+    "bossId": "0x1adc03208b3c9dd978e16e71e8a354d7e173605cde85365baee117995ccbb9e2",
+    "launchTxHash": "0x757a887b2de2275dcd617b8daa8eeef6fa19d8dc469185b2aaa8f0aa1517a120",
+    "launchLogIndex": 29,
+    "launchBlockNumber": 47332745
+  },
+  "schemaVersion": 1,
+  "network": "base-sepolia",
+  "deployedAtBlock": 47332745,
+  "deploymentTxHash": "0x757a887b2de2275dcd617b8daa8eeef6fa19d8dc469185b2aaa8f0aa1517a120"
 }

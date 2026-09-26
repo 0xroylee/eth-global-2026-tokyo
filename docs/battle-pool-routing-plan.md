@@ -1,6 +1,8 @@
 # Battle routing by boss address
 
-Status: implemented and locally verified, 26 September 2026. The user confirmed Hook-address routing, Factory and standalone support, and hardcoded Boss presentation mappings. [Verification evidence](evidence/battle-hook-routing-verification.json) records the SDK journeys, desktop browser checks, and review result.
+Status: implemented and locally verified, with the retired Base Sepolia standalone boss removed from the live app on 27 September 2026. Factory battles, local standalone regression support, and hardcoded Boss presentation mappings remain. [Verification evidence](evidence/battle-hook-routing-verification.json) records the SDK journeys, desktop browser checks, and review result.
+
+[Retirement verification](evidence/retired-boss-removal-verification.json) records the old Hook rejection and the absence of reads to retired Boss contracts.
 
 ## Confirmed outcome
 
@@ -8,10 +10,10 @@ Use `/battle/<hook-address>?network=base-sepolia` to open one specific boss. The
 
 The route parameter can remain named `pool_id`, but its value is an EVM Hook address. It is neither the Uniswap v4 `bytes32` pool ID nor the Factory's `bossId`. The selected encounter is identified by chain ID and normalized Hook address.
 
-Example for the existing demo:
+Example for the current Factory demo:
 
 ```text
-/battle/0xe217b4840049f928d4392030ac86aCe6b3766AC0?network=base-sepolia
+/battle/0xc11D07448948AC4757592E91D8f5155907Ef6AC0?network=base-sepolia
 ```
 
 An unknown address must never display or transact with the default demo. The existing quote review, explicit wallet approval, attack confirmation, and receipt recovery remain. The player UI continues to have no faucet.
@@ -32,7 +34,6 @@ Initial known mapping:
 
 | Network | Hook address | Presentation |
 | --- | --- | --- |
-| Base Sepolia, 84532 | `0xe217b4840049f928d4392030ac86aCe6b3766AC0` | Pool Unis, cat forms A/B/C |
 | Base Sepolia, 84532 | `0xc11D07448948AC4757592E91D8f5155907Ef6AC0` | Pool Unis, cat forms A/B/C |
 
 Add other mappings when their actual Hook addresses and intended Boss presentations are known. The local demo's verified manifest supplies its current Hook address and explicitly maps it to the same Pool Unis presentation. Do not invent deployed addresses or assign art from the token symbol.
@@ -116,4 +117,4 @@ Follow the current `docs/agents/models.md` routing: GPT-6 Luna at xhigh for impl
 
 No contract accounting changes were required. Main now includes the corrected Base Sepolia Factory at block `47332647` and an active demo boss at block `47332745`. The user selected Pool Unis for the new Hook `0xc11D07448948AC4757592E91D8f5155907Ef6AC0`. The original Factory remains historical and incompatible. Public-chain player transactions remain a separate verification step.
 
-The existing standalone Base Sepolia round has expired and its deadline is immutable. Address routing does not reopen it. Any new public deployment, deadline choice, or prize funding remains a separate rollout action.
+The expired Base Sepolia standalone round is retired from live configuration and presentation. Its old address does not resolve through the live battle selector. Historical evidence, generic local regression support, and recovery of already submitted operations remain. No contract was modified or redeployed for this removal.

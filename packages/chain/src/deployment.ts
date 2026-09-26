@@ -174,8 +174,11 @@ export function parseDeployment(value: unknown): DeploymentManifest {
       !isHashValue(origin.launchTxHash) || !isNonnegativeSafeInteger(origin.factoryDeployedAtBlock) ||
       !isNonnegativeSafeInteger(origin.launchBlockNumber) || !isNonnegativeSafeInteger(origin.launchLogIndex) ||
       manifest.bossFactory === undefined ||
-      origin.factoryAddress.toLowerCase() !== String(manifest.bossFactory).toLowerCase() ||
-      manifest.bossFactoryDeployedAtBlock !== origin.factoryDeployedAtBlock ||
+      !isTrustedFactoryDeployment(
+        manifest as unknown as Pick<ManifestBase, "bossFactory" | "bossFactoryDeployedAtBlock" | "previousBossFactories">,
+        origin.factoryAddress as Address,
+        origin.factoryDeployedAtBlock as number,
+      ) ||
       manifest.deploymentTxHash !== origin.launchTxHash || manifest.deployedAtBlock !== origin.launchBlockNumber
     ) throw new Error("Deployment manifest has an invalid Factory launch origin.");
   }
@@ -500,7 +503,6 @@ async function resolveFactoryBoss(
       launch = await findFactoryLaunch(client, previousManifest, hook, BigInt(head));
       if (!launch) continue;
       await assertFactoryBuild(client, previousManifest);
-      baseManifest = previousManifest;
       break;
     }
   }
@@ -529,9 +531,10 @@ async function verifyFactoryOrigin(
   origin: FactoryBossOrigin,
   factoryBuildAlreadyChecked = false,
 ): Promise<VerifiedDeployment> {
-  const factory = manifest.bossFactory;
-  const factoryBaseline = manifest.bossFactoryDeployedAtBlock;
-  if (!factory || factoryBaseline === undefined || !manifest.bossOrigin || !sameOrigin(origin, manifest.bossOrigin)) {
+  const factory = origin.factoryAddress;
+  const discoveryFactory = manifest.bossFactory;
+  if (!discoveryFactory || !manifest.bossOrigin || !sameOrigin(origin, manifest.bossOrigin) ||
+      !isTrustedFactoryDeployment(manifest, factory, origin.factoryDeployedAtBlock)) {
     throw new DeploymentResolutionError("FACTORY_ORIGIN_MISMATCH", "Factory launch provenance is incomplete or does not match the encounter manifest.");
   }
   if (origin.factoryDeployedAtBlock > origin.launchBlockNumber) {
@@ -548,11 +551,17 @@ async function verifyFactoryOrigin(
   if (receipt.status !== "success" || receipt.blockNumber !== BigInt(origin.launchBlockNumber)) {
     throw new DeploymentResolutionError("FACTORY_RECEIPT_MISMATCH", "Recorded Factory launch receipt is missing or does not match its block.");
   }
-  if (!factoryBuildAlreadyChecked) await assertFactoryBuild(client, manifest);
+  if (!factoryBuildAlreadyChecked) {
+    await assertFactoryBuild(client, manifest, factory);
+    if (!sameAddress(factory, discoveryFactory)) await assertFactoryBuild(client, manifest);
+  }
 
   const event = decodeFactoryLaunchReceipt(receipt, origin, factory);
   assertLaunchMatchesManifest(event.args, manifest, origin);
   const { hook, router, bossHP, roy, mockUSD, collectibles, poolManager } = manifest.addresses;
+  const codeAddresses = sameAddress(factory, discoveryFactory)
+    ? [factory, hook, router, roy, mockUSD, collectibles, poolManager]
+    : [factory, discoveryFactory, hook, router, roy, mockUSD, collectibles, poolManager];
   const [
     factoryManager,
     factoryMockUSD,
@@ -614,13 +623,25 @@ async function verifyFactoryOrigin(
     client.readContract({ address: router, abi: bossRouterAbi, functionName: "supplyPoolId", blockNumber: latestBlock }),
     client.readContract({ address: router, abi: bossRouterAbi, functionName: "supplyPoolKey", blockNumber: latestBlock }),
     client.readContract({ address: collectibles, abi: bossCollectiblesAbi, functionName: "minter", blockNumber: latestBlock }),
-    ...[factory, hook, router, roy, mockUSD, collectibles, poolManager].map((address) => client.getCode({ address, blockNumber: latestBlock })),
+    ...codeAddresses.map((address) => client.getCode({ address, blockNumber: latestBlock })),
   ]);
+  let discoveryFactoryManager = factoryManager;
+  let discoveryFactoryMockUSD = factoryMockUSD;
+  let discoveryFactoryAttackToken = factoryAttackToken;
+  if (!sameAddress(factory, discoveryFactory)) {
+    [discoveryFactoryManager, discoveryFactoryMockUSD, discoveryFactoryAttackToken] = await Promise.all([
+      client.readContract({ address: discoveryFactory, abi: bossFactoryAbi, functionName: "manager", blockNumber: latestBlock }),
+      client.readContract({ address: discoveryFactory, abi: bossFactoryAbi, functionName: "mockUSD", blockNumber: latestBlock }),
+      client.readContract({ address: discoveryFactory, abi: bossFactoryAbi, functionName: "attackToken", blockNumber: latestBlock }),
+    ]);
+  }
   const expectedVolumes = expectedStageVolumeTargets(event.args.volumeTargetMockUSD);
   const expectedBossKey = canonicalPoolKey(roy, bossHP, hook);
   const expectedSupplyKey = canonicalPoolKey(mockUSD, roy, ZERO_ADDRESS);
   if (
     !sameAddress(factoryManager, poolManager) || !sameAddress(factoryMockUSD, mockUSD) || !sameAddress(factoryAttackToken, roy) ||
+    !sameAddress(discoveryFactoryManager, poolManager) || !sameAddress(discoveryFactoryMockUSD, mockUSD) ||
+    !sameAddress(discoveryFactoryAttackToken, roy) ||
     !sameAddress(registeredHook, hook) ||
     !sameAddress(hookManager, poolManager) || !sameAddress(hookRouter, router) || !sameAddress(hookBossHP, bossHP) ||
     !sameAddress(hookRoy, roy) || !sameAddress(hookMockUSD, mockUSD) || !sameAddress(hookCollectibles, collectibles) ||
@@ -667,8 +688,11 @@ async function verifyFactoryOrigin(
   return verified;
 }
 
-async function assertFactoryBuild(client: PublicClient, manifest: DeploymentManifest): Promise<void> {
-  const factory = manifest.bossFactory!;
+async function assertFactoryBuild(
+  client: PublicClient,
+  manifest: DeploymentManifest,
+  factory: Address = manifest.bossFactory!,
+): Promise<void> {
   const status = await createBossFactorySdk({ publicClient: client, factory }).checkFactoryBuild();
   if (status.status === "not-deployed") {
     throw new DeploymentResolutionError("FACTORY_NOT_DEPLOYED", "No Boss Factory contract exists at the configured address.");
@@ -826,6 +850,18 @@ function sameOrigin(left: FactoryBossOrigin, right: FactoryBossOrigin): boolean 
 
 function sameAddress(left: Address, right: Address): boolean {
   return left.toLowerCase() === right.toLowerCase();
+}
+
+function isTrustedFactoryDeployment(
+  manifest: Pick<ManifestBase, "bossFactory" | "bossFactoryDeployedAtBlock" | "previousBossFactories">,
+  factory: Address,
+  deployedAtBlock: number,
+): boolean {
+  if (manifest.bossFactory && sameAddress(manifest.bossFactory, factory) &&
+      manifest.bossFactoryDeployedAtBlock === deployedAtBlock) return true;
+  return manifest.previousBossFactories?.some((previous) =>
+    sameAddress(previous.address, factory) && previous.deployedAtBlock === deployedAtBlock,
+  ) ?? false;
 }
 
 function sameHex(left: Hex, right: Hex): boolean {

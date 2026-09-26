@@ -103,9 +103,9 @@ Preserve the existing approval, simulation, receipt, and stale-stage rules. Atta
 
 ### Live battle page context
 
-`/battle/[pool_id]` consumes the live SDK. `pool_id` is the Boss Hook address; the `network` query selects Local or Base Sepolia. Bare `/battle`, legacy `/mock-battle` links, and the hub select `defaultBossHook` from the network manifest, falling back to `addresses.hook` when unset. The Base Sepolia default is the active Factory encounter; the standalone addresses remain available for verification and explicit historical links. [Live battle page requirements](requirements.md#live-battle-page) owns the user flow. An explicit Hook address selects only that encounter and has no default-boss or simulated-damage fallback.
+`/battle/[pool_id]` consumes the live SDK. `pool_id` is the Boss Hook address; the `network` query selects Local or Base Sepolia. Bare `/battle`, legacy `/mock-battle` links, and the hub select `defaultBossHook` from the network manifest, falling back to `addresses.hook` when unset. The Base Sepolia manifest is anchored to the active Factory encounter and its confirmed launch. The retired standalone Boss contracts are not part of live verification or presentation. Its old Hook does not resolve as a live encounter. [Live battle page requirements](requirements.md#live-battle-page) owns the user flow. An explicit Hook address selects only that encounter and has no default-boss or simulated-damage fallback.
 
-The page represents the shared on-chain encounter selected by network and Hook address. A checked-in mapping selects the Boss name and stage images. The standalone demo maps to Pool Unis; verified Factory bosses without an entry show an unconfigured-appearance message. Appearance does not determine contract addresses, rewards, or progress. The lake arena, player sprite, pixel windows, command menu, and dialogue preserve the existing desktop composition. On-chain stage indices are zero-based; labels and artwork use stages 1 through 3.
+The page represents the shared on-chain encounter selected by network and Hook address. A checked-in mapping selects the Boss name and stage images. The current Factory demo and local standalone fixture map to Pool Unis; verified Factory bosses without an entry show an unconfigured-appearance message. Appearance does not determine contract addresses, rewards, or progress. The lake arena, player sprite, pixel windows, command menu, and dialogue preserve the existing desktop composition. On-chain stage indices are zero-based; labels and artwork use stages 1 through 3.
 
 The existing integration code provides the starting points:
 
@@ -192,7 +192,7 @@ Base Sepolia is the default target, and the published deployment manifest is inc
 
 ## Deployment and proof gate
 
-The target is Base Sepolia chain ID `84532` at `https://sepolia.base.org`. The verified team deployment is recorded in `apps/web/public/deployments/base-sepolia.json` at block `47325823`. It uses its own PoolManager built from pinned v4-core source; it is not an official Base PoolManager. The team-deployed Robinhood fixture remains historical evidence and does not represent an official Robinhood manager.
+The target is Base Sepolia chain ID `84532` at `https://sepolia.base.org`. The live encounter is recorded in `apps/web/public/deployments/base-sepolia.json` using its confirmed Factory launch at block `47332745`. Its origin Factory remains distinct from the current Factory used for new launches. It uses its own PoolManager built from pinned v4-core source; it is not an official Base PoolManager. The team-deployed Robinhood fixture remains historical evidence and does not represent an official Robinhood manager.
 
 BP01 adapts the existing compact real-v4 scenario: both swaps, ordinary BossHP delivery, cumulative purchase accounting, current-stage completion, and the reserve-funded refill/LP addition with all deltas settled. Reuse existing upstream fixtures and settlement helpers. Then verify the real target-chain route after deployment.
 
