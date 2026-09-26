@@ -126,6 +126,24 @@
   }
 }
 
+/* World Channel row entrance: a short slide + fade. Reduced motion keeps opacity only. */
+.world-row {
+  animation: world-row-in 320ms var(--ease-out-strong);
+}
+@keyframes world-row-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-row {
+    animation-name: world-row-fade;
+  }
+  @keyframes world-row-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}
+
 .player-charging {
   transform: rotate(-8deg) translateX(6px);
   transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
