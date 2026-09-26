@@ -4,10 +4,10 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { formatEther } from "viem";
 import {
-  ROBINHOOD_CHAIN_ID,
+  BASE_SEPOLIA_CHAIN_ID,
   TESTNET_MANIFEST_PATH,
   assertCancunTransientStorage,
-  assertRobinhoodChain,
+  assertBaseSepoliaChain,
   assertCommittedDeploymentSources,
   loadTestnetConfig,
   parseForgeGas,
@@ -23,13 +23,13 @@ const root = process.cwd();
 async function main() {
   const config = loadTestnetConfig();
   const frozenSourceCommit = assertCommittedDeploymentSources();
-  await assertRobinhoodChain(config.client);
+  await assertBaseSepoliaChain(config.client);
   await assertCancunTransientStorage(config.client);
   const dryRun = await runDeploymentScript(config, false);
   const estimate = parseForgeGas(dryRun);
   const deployBudget = estimate.requiredWei * 125n / 100n;
   const [freshHead, deployerBalance, currentGasPrice] = await Promise.all([
-    assertRobinhoodChain(config.client),
+    assertBaseSepoliaChain(config.client),
     config.client.getBalance({ address: config.deployerAddress }),
     config.client.getGasPrice(),
   ]);
@@ -54,8 +54,8 @@ async function main() {
   const manifest = {
     ...summary,
     schemaVersion: 1,
-    network: "robinhood-testnet",
-    chainId: ROBINHOOD_CHAIN_ID,
+    network: "base-sepolia",
+    chainId: BASE_SEPOLIA_CHAIN_ID,
     deployedAtBlock: Number(receipt.blockNumber),
     deploymentTxHash: receipt.transactionHash,
     deploymentReceipts: receipt.receipts,
@@ -73,7 +73,7 @@ async function main() {
       solidityVersion: foundryValue("solc_version"),
       evmVersion: foundryValue("evm_version"),
       deploymentScript: "DeployBossPool.s.sol:DeployBossPool",
-      poolManager: "Team deployed from the pinned v4-core source; no official Robinhood PoolManager is claimed.",
+      poolManager: "Team deployed from the pinned v4-core source; no official Base PoolManager is claimed.",
     },
   };
 
@@ -81,7 +81,7 @@ async function main() {
   const temporaryPath = `${TESTNET_MANIFEST_PATH}.tmp`;
   await writeFile(temporaryPath, `${JSON.stringify(manifest, null, 2)}\n`);
   await rename(temporaryPath, TESTNET_MANIFEST_PATH);
-  console.log(`Verified chain ${ROBINHOOD_CHAIN_ID} team deployment at block ${receipt.blockNumber}.`);
+  console.log(`Verified Base Sepolia (${BASE_SEPOLIA_CHAIN_ID}) team deployment at block ${receipt.blockNumber}.`);
   console.log(`Router creation receipt: ${receipt.transactionHash}`);
   console.log(`Gas estimate: ${estimate.gas} units, ${formatEther(estimate.requiredWei)} testETH before buffer.`);
   console.log(`Wrote public address/config metadata to ${path.relative(root, TESTNET_MANIFEST_PATH)}; no RPC URL or signer material was written.`);

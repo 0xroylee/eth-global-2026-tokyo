@@ -1,7 +1,7 @@
 import { formatEther } from "viem";
 import {
   assertCancunTransientStorage,
-  assertRobinhoodChain,
+  assertBaseSepoliaChain,
   loadTestnetConfig,
   parseForgeGas,
   publicRpcLabel,
@@ -11,7 +11,7 @@ import {
 
 async function main() {
   const config = loadTestnetConfig();
-  const head = await assertRobinhoodChain(config.client);
+  const head = await assertBaseSepoliaChain(config.client);
   await assertCancunTransientStorage(config.client);
 
   const [deployerBalance, playerBBalance, gasPrice] = await Promise.all([
@@ -26,7 +26,7 @@ async function main() {
   const deployReady = deployerBalance >= deployBudget + exerciseReserve;
   const exerciseReady = deployerBalance >= exerciseReserve && playerBBalance >= exerciseReserve;
 
-  console.log(`Robinhood testnet preflight: chain ${46_630}, head ${head}, RPC host ${publicRpcLabel(config.rpcUrl)}.`);
+  console.log(`Base Sepolia preflight: chain 84532, head ${head}, RPC host ${publicRpcLabel(config.rpcUrl)}.`);
   console.log("Cancun TSTORE/TLOAD eth_call probe: PASS.");
   console.log(`PoolManager plan: team-deploy from the pinned v4-core submodule; no official manager address is assumed.`);
   console.log(`Deployer ${config.deployerAddress}: ${formatEther(deployerBalance)} testETH.`);

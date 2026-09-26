@@ -121,7 +121,7 @@ The local script runs the setup calls in this order:
 5. Seed the MockUSD/ROY pool with `BossRouter.seedSupplyPool(...)`.
 6. Call `BossRouter.activate()`. It checks full BossHP custody, future-stage HP reserves, starter ROY, prize funding, and the deadline. It then initializes the Boss pool and installs stage 0 liquidity.
 
-The local script sets the deadline to two hours after deployment and the original prize to `1_000e6` MockUSD base units. Those are fixture values, not fixed constructor defaults. The script deploys its own pinned PoolManager. It is a local deployment flow, not proof of a compatible Robinhood testnet manager.
+The local script sets the deadline to two hours after deployment and the original prize to `1_000e6` MockUSD base units. Those are fixture values, not fixed constructor defaults. The script deploys its own pinned PoolManager. It is a local deployment flow, not proof of a compatible Base Sepolia testnet manager.
 
 Both pool keys use fee `3000` (0.30%) and tick spacing `60`. The supported route requires zero protocol fee. The local supply seed targets 5,000 MockUSD and 50,000 ROY, while the Router receives the full 100,000 ROY supply. Read the actual debits and remaining custody from the manifest.
 
@@ -327,19 +327,21 @@ The contracts have no public BossHP sell-back route, held-ROY attack route, LP r
 
 The local Foundry suite runs the full two-wallet HP0 flow against a pinned real PoolManager, including three stages, claims, and NFTs. A focused HP1 test covers normalized price and the first stage refill. The local Anvil exercise completes the full two-wallet flow with BossHP as currency1, including both refills and reward claims. `local:seed` and `local:exercise` send transactions only to loopback Anvil; `local:smoke` is read-only. The browser app remains read-only.
 
-## Robinhood testnet status
+## Base Sepolia testnet target
 
-The official endpoint `https://rpc.testnet.chain.robinhood.com/rpc` returns chain ID `46630` through the repository's Bun/viem client. A team-deployed, non-production fixture is live there. Its 18 deployment and setup receipts were verified. The [Router creation](https://explorer.testnet.chain.robinhood.com/tx/0xa4e3f50b1f819d6a6244f486ac421417a4bf0d1d4358c78212ec05c39307226e) is at block `124390450`; the [activation](https://explorer.testnet.chain.robinhood.com/tx/0x8b7566fe18842e56d042f3dc7a7f962ac14d1e8b9077796c9571bb61f9d27f54) is at block `124390616`. The public deployment manifest is `apps/web/public/deployments/robinhood-testnet.json`. The [verification report](testnet-verification.md) records deployment provenance and the completed player exercise. The deployed PoolManager comes from the pinned v4-core source. It is not an official Robinhood manager. Never use an Anvil development key on Robinhood testnet.
+The active testnet is Base Sepolia, chain ID `84532`, with RPC `https://sepolia.base.org`. No Boss Pool deployment has been verified on Base Sepolia yet. The deploy script will write the public manifest to `apps/web/public/deployments/base-sepolia.json` after deployment verification. It deploys a team-owned PoolManager from the pinned v4-core source; it does not assume an official Base manager.
 
-The root `package.json` provides all three testnet commands. `testnet:preflight` checks chain ID, Cancun transient-storage support, signer balances, and a Forge deployment dry run. It sends no transaction. `testnet:deploy` repeats those checks, broadcasts a team deployment, verifies contract code and receipts, then writes `apps/web/public/deployments/robinhood-testnet.json`. A deployment needs enough testETH for both deployment and the two-wallet exercise.
+The repository also retains a historical, non-production Robinhood testnet deployment. Its 18 deployment and setup receipts were verified. The [Router creation](https://explorer.testnet.chain.robinhood.com/tx/0xa4e3f50b1f819d6a6244f486ac421417a4bf0d1d4358c78212ec05c39307226e) is at block `124390450`; the [activation](https://explorer.testnet.chain.robinhood.com/tx/0x8b7566fe18842e56d042f3dc7a7f962ac14d1e8b9077796c9571bb61f9d27f54) is at block `124390616`. Its manifest, `apps/web/public/deployments/robinhood-testnet.json`, and [verification report](testnet-verification.md) are historical evidence only.
+
+The root `package.json` provides all three testnet commands. `testnet:preflight` checks Base Sepolia chain ID, Cancun transient-storage support, signer balances, and a Forge deployment dry run. It sends no transaction. `testnet:deploy` repeats those checks, broadcasts a team deployment, verifies contract code and receipts, then writes the Base Sepolia manifest. A deployment needs enough testETH for both deployment and the two-wallet exercise.
 
 | Command | Purpose |
 | --- | --- |
-| `testnet:preflight` | Checks chain ID, Cancun support, signer balances, and a Forge dry run. Sends no transaction. |
-| `testnet:deploy` | Deploys the team fixture, verifies the contract code and receipts, and writes the public deployment manifest. |
-| `testnet:exercise` | Uses Player A (deployer) and Player B (separate key) to enroll, attack all three stages, verify refunds/refills, transfer BossHP, redeem rewards, and claim victory NFTs. It writes per-receipt evidence under ignored `.scratch/boss-pool-exercise/` and does not update the public manifest. |
+| `testnet:preflight` | Checks Base Sepolia chain ID, Cancun support, signer balances, and a Forge dry run. Sends no transaction. |
+| `testnet:deploy` | Deploys the team fixture to Base Sepolia, verifies the contract code and receipts, and writes the public deployment manifest. |
+| `testnet:exercise` | Uses Player A (deployer) and Player B (separate key) to enroll, attack all three stages, verify refunds/refills, transfer BossHP, redeem rewards, and claim victory NFTs on Base Sepolia. It writes per-receipt evidence under ignored `.scratch/boss-pool-exercise/` and does not update the public manifest. |
 
-Set `ROBINHOOD_RPC_URL`, `TESTNET_DEPLOYER_PRIVATE_KEY`, and `TESTNET_PLAYER_PRIVATE_KEY` in the ignored `.env.testnet.local` file. Player A uses the deployer key; Player B uses the separate player key. Invoke the scripts through Bun's `--env-file` option:
+Set `BASE_SEPOLIA_RPC_URL`, `TESTNET_DEPLOYER_PRIVATE_KEY`, and `TESTNET_PLAYER_PRIVATE_KEY` in the ignored `.env.testnet.local` file. `BASE_SEPOLIA_RPC_URL` defaults to `https://sepolia.base.org`. Player A uses the deployer key; Player B uses the separate player key. Invoke the scripts through Bun's `--env-file` option:
 
 ```sh
 bun --env-file=.env.testnet.local run testnet:preflight
@@ -347,6 +349,6 @@ bun --env-file=.env.testnet.local run testnet:deploy
 bun --env-file=.env.testnet.local run testnet:exercise
 ```
 
-The exercise confirms Player A matches the manifest deployer, verifies deployment receipts and code, checks chain `46630`, and uses each signer only inside the Bun process. Do not put key values or the RPC URL in command arguments, manifests, logs, or the web bundle.
+The exercise confirms Player A matches the manifest deployer, verifies deployment receipts and code, checks Base Sepolia chain `84532`, and uses each signer only inside the Bun process. Do not put key values or the RPC URL in command arguments, manifests, logs, or the web bundle.
 
-The current testnet round is Defeated with all eligible HP redeemed. It is a one-use fixture. A failed partial run leaves receipt checkpoints for review but does not reset the round. Deploy a new team fixture to run another full journey. The successful two-wallet transaction and state evidence is in [`docs/evidence/robinhood-testnet.json`](evidence/robinhood-testnet.json). Expiry and prize-refund behavior are covered by local Foundry checks only; neither has a Robinhood testnet receipt.
+The historical Robinhood testnet round is Defeated with all eligible HP redeemed. It is a one-use fixture; the successful two-wallet transaction and state evidence is in [`docs/evidence/robinhood-testnet.json`](evidence/robinhood-testnet.json). A failed partial run leaves receipt checkpoints for review but does not reset a round. Deploy a new Base Sepolia fixture before rehearsing that journey there. Expiry and prize-refund behavior are covered by local Foundry checks only; neither has a Base Sepolia receipt.
