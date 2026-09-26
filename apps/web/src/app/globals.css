@@ -34,6 +34,12 @@
       transparent 36%
     );
   }
+
+  /* The app's only canvas is the Phaser game canvas: keep FIT-scaled pixels
+     crisp instead of browser-smoothed. */
+  canvas {
+    image-rendering: pixelated;
+  }
 }
 
 @utility eyebrow {
