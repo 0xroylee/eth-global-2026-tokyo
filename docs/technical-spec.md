@@ -71,7 +71,19 @@ The root package now exposes contract build/test, ABI export/check, web dev/buil
 
 Start with direct viem reads/writes. A's backend work is contracts, deployment, scripts, and shared integration. Add a read-only service under `apps/` only when BP09 demonstrates an RPC or shared-activity need. No Turbo, Nx, database, queue, shared UI library, or extra package split is required for the core demo. [Bun workspaces](https://bun.com/docs/pm/workspaces)
 
-Solidity with Foundry and React with Vite remain the implementation defaults. Pin versions and reuse compatible official templates/libraries under the [implementation rules](agents/implementation.md).
+The selected stack is Solidity with Foundry and Next.js App Router with React, TypeScript, Tailwind CSS, and direct viem wallet/contract access. The user selected Next.js, viem, and Tailwind CSS on 26 September 2026. The current BP01 web shell still uses Vite; its migration remains implementation work. Pin compatible versions under the [implementation rules](agents/implementation.md).
+
+### Frontend architecture
+
+Keep the Next.js application in `apps/web`. Use `src/app/layout.tsx` for the document shell and `src/app/page.tsx` for the arena route. Put interactive arena and wallet state behind a Client Component boundary. Access injected wallet providers in browser effects or event handlers, never during module initialization or server rendering. The server does not sign player transactions or own game state. [Next.js server and client components](https://nextjs.org/docs/app/getting-started/server-and-client-components)
+
+Use Tailwind CSS through `@tailwindcss/postcss`, with the Tailwind import and shared theme tokens in the app's global stylesheet. Use utilities for layout, responsive behavior, and interaction states. Keep custom CSS for game artwork and keyframes where needed. A component kit is optional and is not part of the selected baseline. [Tailwind CSS for Next.js](https://tailwindcss.com/docs/installation/framework-guides/nextjs)
+
+Use a viem public client with the configured HTTP RPC for reads, simulations, and receipts. Use a viem wallet client with `custom(provider)` for the selected injected EIP-1193 provider. The browser wallet holds keys and approves requests. Keep generated ABIs, chain configuration, and reusable viem operations in `packages/chain`; keep wallet discovery, React state, and UI in `apps/web`. Start with direct viem and React state; wagmi, RainbowKit, and TanStack Query are not baseline dependencies. [Viem wallet client](https://viem.sh/docs/clients/wallet), [custom transport](https://viem.sh/docs/clients/transports/custom)
+
+The wallet flow must handle account permission, network switching, rejection, `accountsChanged`, `chainChanged`, and disconnect events. Remove provider listeners on cleanup and discard stale player reads and quotes after an account or chain change. Recheck the selected account, chain, and expected stage before a write. Keep public round reads available without a connected wallet. [EIP-1193 provider API](https://eips.ethereum.org/EIPS/eip-1193)
+
+Preserve the existing approval, simulation, receipt, and stale-stage rules. Enrollment approves MockUSD to BossHook; attacks approve MockUSD to BossRouter; redemption approves BossHP to BossHook. Keep victory-NFT claims separate. Derive damage and stage transitions from confirmed receipts and refreshed canonical state.
 
 ## Deployment and proof gate
 

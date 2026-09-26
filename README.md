@@ -15,11 +15,13 @@ The user confirmed this replacement for the earlier physical/magic design:
 - Stage HP stays **300 → 600 → 900**. Clear the current sellable allocation, perform the controller-only price reset, then add the next stage's incremental liquidity. One attack cannot damage two stages.
 - Player BossHP sell-backs into the battle pool are disabled. Transfers do not deal new damage. The worked reward proposal lets eligible token transfers carry reward rights, then locks surrendered tokens at claim. Protocol reserve and fee HP remain excluded. See [reward math](docs/refill-math.md#rewards-follow-eligible-bosshp).
 - No MROY, magic-price multiplier, or parallel physical/magic pools.
-- Bun, TypeScript, viem, Solidity/Foundry, Uniswap v4, and Robinhood testnet remain the stack. A small Bun monorepo remains the plan.
+- Next.js App Router, TypeScript, Tailwind CSS, and direct viem are the selected frontend stack. Bun, Solidity/Foundry, Uniswap v4, and Robinhood testnet remain in the small monorepo. See the [frontend architecture](docs/technical-spec.md#frontend-architecture) and [migration sequence](docs/delivery-plan.md#frontend-build-sequence).
 
 ## Status
 
 The private Bun workspace, minimal read-only Vite arena, generated contract client, and local deployment flow are in place. Four focused Foundry cases pass, including the full no-burn round and a token-order pricing regression. The final chain-31337 seed/read smoke and browser read pass. See [BP01 scope and verification](docs/bp01-foundation.md). No Robinhood testnet deployment or browser transaction flow has been verified.
+
+The selected Next.js/Tailwind frontend and direct viem wallet connection are planned; the current runnable shell still uses Vite.
 
 The 1,000 MockUSD prize is a test fixture. [Refill math](docs/refill-math.md) gives candidate prices and reserve amounts, with the no-burn accounting change distinguished from historical test evidence. Earlier ROY/MROY allocation tables and price-impact estimates are superseded.
 
