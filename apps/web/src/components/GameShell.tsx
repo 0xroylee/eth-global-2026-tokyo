@@ -54,7 +54,10 @@ export function GameShell() {
     const offRouteNear = bridge.on("region:near", ({ exitId }) => setNearRoute(exitId !== null));
     const offRouteInspect = bridge.on("region:inspect", () => setRouteOpen(true));
     const offSageNear = bridge.on("npc:near", ({ npcId }) => setNearSage(npcId === "sage"));
-    const offSageTalk = bridge.on("npc:talk", () => openSage());
+    const offSageTalk = bridge.on("npc:talk", ({ npcId }) => {
+      // Read the payload instead of assuming the sage: a second NPC lands here later.
+      if (npcId === "sage") openSage();
+    });
     return () => {
       offNear();
       offEnter();
