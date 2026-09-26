@@ -148,52 +148,52 @@
 ### 4.1 渲染架構與地圖
 
 - **Phaser 4.2.1**（`apps/web/package.json:16`），手寫單場景 + Tiled JSON tilemap，無第二引擎。
-- `apps/web/src/game/createGame.ts:7-30`：`pixelArt: true`／`antialias: false`／`roundPixels: true`（:14-16）、`Phaser.Scale.RESIZE`（:19）、arcade physics（:22-24）。
+- `apps/web/src/game/createGame.ts:6-29`：`pixelArt: true`／`antialias: false`／`roundPixels: true`（:13-15）、`Phaser.Scale.RESIZE`（:17）、arcade physics（:21-23）。
 - `apps/web/src/game/HubScene.ts` 是唯一場景：`ZOOM = 3`（:9）；`integerCameraZoom()` 取「≥3 且覆蓋 viewport」的整數 zoom（:12-16）。
 - **hub.json 格式**（`apps/web/public/game/hub.json:1`）：40×30 格、16×16 px（640×480 世界）、單一 tileset `hub`（256×128、16 欄、128 tile）、6 個 layer：`ground`／`ground-detail`／`props`／`overhead`／`collision`／`markers`。markers 內含：`spawn` point、3 個 `gate` rect（property `bossId`）、1 個 `region-exit` rect（`exitId=east-route`、`status=coming-soon`）——已用 script 實讀 JSON 驗證。
-- Layer 建立順序（`HubScene.create()` :114-140）：ground(0) → detail(1) → props(2) → overhead(`OVERHEAD_DEPTH=5000`) → collision（隱形，`setCollisionByExclusion([-1])` :139）。
+- Layer 建立順序（`HubScene.create()` :114；layer 建立 :129-133）：ground(0) → detail(1) → props(2) → overhead(`OVERHEAD_DEPTH=5000`) → collision（隱形，`setCollisionByExclusion([-1])` :139）。
 - 產圖與檢查：`generate-hub-map.ts` 確定性產圖（`SPAWN={col:20,row:25}` :9；`GATES=[cat(7,4), locked(19,2), macro-whale(32,4)]` :10-14，跑法 `bun run map:build`）；`check-hub-map.ts` 做結構/可達性驗證（BFS 從 spawn 到各 gate approach、外圈全封、markers 斷言，跑法 `bun run map:check`）。
 
 ### 4.2 gate「神社」繪製與互動鏈
 
-- **gate 神社是程式碼畫的**（`HubScene.buildGates()` :264-358）：石座 + 雙柱 + 楣 + 拱頂矩形堆疊（:270-290）；拱內 unlocked 放 `portrait-${boss.id}`、locked 畫鎖頭（:293-299）；下方 name plate + 「BOSS POOL」副標（:302-325），以 `resolution: ZOOM` 保持相機縮放後銳利。
-- **只有 cat gate 有動態 stage label**（`buildGates` 內 `boss.id === "cat"` 特判，:326-333）；內容由 `renderCatStageLabel()`（:534-556）依 `round:state` 更新（`S1/3 · x%` 或 DEFEATED/EXPIRED/ACTIVE）。
-- **互動鏈**：① `updateGateProximity()`（:707-719）玩家進入 gate 下方 zone（`new Phaser.Geom.Rectangle(obj.x - 8, base, GATE.width + 16, 40)`，:351）→ emit `gate:near`；② 按 E（`setupInput()` 的 window keydown 攔截器 :394-420，emit `gate:enter` :412）；③ `GameShell.tsx:36` 收 `gate:enter` → `setOpenBoss(bossId)`；④ 開 `BossEntryPanel`，同時送 `ui:modal` 暫停場景輸入（`GameShell.tsx:49` 送出、`HubScene.ts:190` 收 command）。
+- **gate 神社是程式碼畫的**（`HubScene.buildGates()` :264-358）：石座 + 雙柱 + 楣 + 拱頂矩形堆疊（:281-286）；拱內 unlocked 放 `portrait-${boss.id}`、locked 畫鎖頭（:292-297）；下方 name plate + 「BOSS POOL」副標 + plate 底框（:301-335），以 `resolution: ZOOM` 保持相機縮放後銳利。
+- **只有 cat gate 有動態 stage label**（`buildGates` 內 `boss.id === "cat"` 特判，:337-344）；內容由 `renderCatStageLabel()`（:534-556）依 `round:state` 更新（`S1/3 · x%` 或 DEFEATED/EXPIRED/ACTIVE）。
+- **互動鏈**：① `updateGateProximity()`（:707-720）玩家進入 gate 下方 zone（`new Phaser.Geom.Rectangle(obj.x - 8, base, GATE.width + 16, 40)`，:351）→ emit `gate:near`；② 按 E（`setupInput()` 的 window keydown 攔截器 :394-419，emit `gate:enter` :412）；③ `GameShell.tsx:36` 收 `gate:enter` → `setOpenBoss(bossId)`；④ 開 `BossEntryPanel`，同時送 `ui:modal` 暫停場景輸入（`GameShell.tsx:49` 送出、`HubScene.ts:190` 收 command）。
 
 ### 4.3 Beginner guide 現況：可重用零件 vs 缺口
 
 - **已落地**（`plans/2026-09-26-hub-beginner-guide.md` 全數完成）：
-  - `apps/web/src/lib/hubGuide.ts`：純 reducer `transitionGuide`（:27-57），步驟 welcome→move→find→inspect→done/hidden；actions start/moved/near/opened/skip/replay/dismiss；`isUnlocked` 以 `findBoss(id).locked` 判定（:22）；storage key `boss-pool:hub-guide:v1`（:4）。
+  - `apps/web/src/lib/hubGuide.ts`：純 reducer `transitionGuide`（:27-56），步驟 welcome→move→find→inspect→done/hidden；actions start/moved/near/opened/skip/replay/dismiss；`isUnlocked` 以 `findBoss(id).locked` 判定（:22）；storage key `boss-pool:hub-guide:v1`（:4）。
   - `apps/web/src/lib/useHubGuide.ts`：localStorage once-per-browser（:12, :21）+ bridge 同步（`scene:ready` 時重送 command，:77）。
-  - `HubScene` 整合：`guide:step` command（:188）；move 階段位移累積 24px 發 `guide:moved`（`trackGuideTravel`）；find 階段畫琥珀色箭頭指向最近未鎖 gate（`updateGuideHint` :607-630 + `chooseHintGate` :632-648）。
+  - `HubScene` 整合：`guide:step` command（:179）；move 階段位移累積 24px 發 `guide:moved`（`trackGuideTravel`）；find 階段畫琥珀色箭頭指向最近未鎖 gate（`updateGuideHint` :607-630 + `chooseHintGate` :632-648）。
 - **可重用零件**：✅ 對話框 UI 樣板（WelcomeDialog/HubHelp/HubRouteNotice 同一套 modal 模式）；✅ 世界空間 crisp label（`resolution: ZOOM`）；✅ `Phaser.Geom.Rectangle` zone + `Contains` 感應模式（gate 與 region-exit 皆是）→ 可直接複製成 NPC 對話感應區；✅ 輸入鎖定（`ui:modal` command + `domControlFocused`）。
 - **缺口**：❌ **無 NPC 實體型別**（場景中除 player 外只有 gate 群 + atmosphere 光點）；❌ **無打字機/逐字渲染**（全 workspace 搜尋無結果）；❌ 對話互動只有兩種觸發（gate zone 的 E、region-exit zone 的 E）——新增 NPC 對話需在 `setupInput` 的 interact 攔截器加第三分支 + 新 bridge event pair。
 
 ### 4.4 資料層與資產管線
 
-- **Boss 資料**（`apps/web/src/game/bosses.ts`）：`BossId` union 目前只有 `"cat" | "macro-whale" | "locked"`（:2）；`BossDefinition {id,name,tagline,portrait,locked}`（:4-11）；`BOSSES` 3 筆——cat（Roy, unlocked）、macro-whale（unlocked）、locked（"???", locked）（:13-33）。**位置資料在 hub.json markers、靠 `bossId` property 對位，不寫 TS——既定決策。**
+- **Boss 資料**（`apps/web/src/game/bosses.ts`）：`BossId` union 目前只有 `"cat" | "macro-whale" | "locked"`（:2）；`BossDefinition {id,name,tagline,portrait,locked}`（:4-11）；`BOSSES` 3 筆——cat（Roy, unlocked）、macro-whale（unlocked）、locked（"???", locked）（:13-35）。**位置資料在 hub.json markers、靠 `bossId` property 對位，不寫 TS——既定決策。**
 - **鏈上資料**：`packages/chain/src/deployment.ts` 提供 local/robinhood/base-sepolia 三種 deployment fetch；`apps/web/public/deployments/` 目前只有 `local.json` 與 `robinhood-testnet.json`，**無 `base-sepolia.json`** → 這是 HUD 顯示 NOT DEPLOYED 的原因。`useBossPool` 依 network key 選 fetch、5 秒輪詢。
 - **資產分工**（`apps/web/AGENTS.md:18`）：**art masters 在 `public/images/`；game-ready 匯出在 `public/game/`**。
 - **未使用的 NPC 圖確實存在**（`ls public/images/` 實證）：`npc-degen-intern.png`、`npc-sweater-oracle.png`、`npc-thesis-wizard.png`（紫袍法師，老智者候選）、`little-roy-*` 系列——**均無伴隨 `.txt` 記錄**（對照 `player-compact-walk-master.txt` 的生成 prompt 慣例）；**授權與尺寸未確認**。
-- **crop 硬編碼現況**：`makeCroppedTexture`（`textures.ts:7`）兩段式降採樣（Phase 1 平滑縮到 2× 中間 canvas :29-30 → Phase 2 nearest-neighbor 縮到最終 :35-38）；crop 參數硬編碼在 `HubScene.create()`——cat `{x:120,y:60,w:880,h:1240}→28px`（:121）、whale `{x:160,y:80,w:940,h:940}→28px`（:122）。新增 boss 需把 crop 規格搬進 `BossDefinition`，或直接採用已裁好的 `public/game` 匯出。
+- **crop 硬編碼現況**：`makeCroppedTexture`（`textures.ts:7`）兩段式降採樣（Phase 1 平滑縮到 2× 中間 canvas :29-31 → Phase 2 nearest-neighbor 縮到最終 :35-39）；crop 參數硬編碼在 `HubScene.create()`——cat `{x:120,y:60,w:880,h:1240}→28px`（:121）、whale `{x:160,y:80,w:940,h:940}→28px`（:122）。新增 boss 需把 crop 規格搬進 `BossDefinition`，或直接採用已裁好的 `public/game` 匯出。
 
 ### 4.5 既有規格約束 → 本方向是「規格變更請求」
 
 - `docs/superpowers/specs/2026-09-26-rpg-hub-art-direction-design.md`：hub 維持 40×30 / 16px / 3× zoom、保留 3 gate 與既有 bridge/互動流程；**Out of scope 明文「不新增 boss（add new bosses）」**。
-- `docs/superpowers/plans/2026-09-26-hub-completion-pass.md`：**「No … new bosses」**（:20）；**「No … NPC conversations」**（:23）；且明文「**Do not edit `BossEntryPanel.tsx` or battle implementation**」（:21-22）——partner 界線的書面證據。
-- `BossEntryPanel.tsx` 現況：`supported = boss.id === "cat"`（:35）；`actionsReady` 才渲染 `BossActions`（:113）；`BossHealth` 非 cat 一律 `NO CONTRACT YET`（:148-149）；eyebrow 三態 `GATE LOCKED / BOSS GATE / FIXTURE ONLY`。
+- `docs/superpowers/plans/2026-09-26-hub-completion-pass.md`：**「No … new bosses」**（:19）；**「No … NPC conversations」**（:23）；且明文「**Do not edit `BossEntryPanel.tsx` or battle implementation**」（:20）——partner 界線的書面證據。
+- `BossEntryPanel.tsx` 現況：`supported = boss.id === "cat"`（:35）；`actionsReady` 才渲染 `BossActions`（:113）；`BossHealth` 非 cat 一律 `NO CONTRACT YET`（:151）；eyebrow 三態 `GATE LOCKED / BOSS GATE / FIXTURE ONLY`。
 - **結論**：10 Boss + 老智者方向與上述明文 out-of-scope 直接衝突。Round 2 的實作計畫必須明示這是**規格變更請求**，先取得規格所有方同意（特別是 partner 擁有的 battle-entry 界線），再動 codebase。
 
 ### 4.6 「10 Boss 化」挑戰清單（源自 Explore 12 疑點；file:line 已校正）
 
-1. **3-gate 硬編碼無處不在**：`BossId` union（`bosses.ts:2`）、`GATE_COLORS`（`HubScene.ts:24-28`）、3-gate 斷言（`check-hub-map.ts:68` 數量、:72 bossIds 清單）、cat-only stage label（`HubScene.ts:326-333`）→ 全部需 data-driven 化。
+1. **3-gate 硬編碼無處不在**：`BossId` union（`bosses.ts:2`）、`GATE_COLORS`（`HubScene.ts:24-28`）、3-gate 斷言（`check-hub-map.ts:68` 數量、:72 bossIds 清單）、cat-only stage label（`HubScene.ts:337-344`）→ 全部需 data-driven 化。
 2. **gate 呈現是程式碼畫的「神社」**（`HubScene.ts:264-358`）→ 10 個 boss 是否維持統一造型、或把門面變成資產，需先決策。
 3. **portrait crop 硬編碼只處理 2 張圖**（`HubScene.ts:121-122`）→ crop 規格需納入 `BossDefinition` 或改用預裁匯出。
 4. **解鎖語義不清**：`locked` 是視覺 fixture，macro-whale 是 unlocked 但無合約 → 10 boss 需要三態（有合約／未部署／未開放），現有 `locked: boolean` 不足。
-5. **`BossEntryPanel`/`BossHealth`/`BossActions` 全以 `boss.id === "cat"` 特判**（`BossEntryPanel.tsx:35,113,148-149`）→ 擴充 boss 會踩 partner 擁有的 battle-entry 界線，需協調。
+5. **`BossEntryPanel`/`BossHealth`/`BossActions` 全以 `boss.id === "cat"` 特判**（`BossEntryPanel.tsx:35,113,151`）→ 擴充 boss 會踩 partner 擁有的 battle-entry 界線，需協調。
 6. **guide/提示邏輯會受影響**：`chooseHintGate` 對所有 unlocked gate 取最近（`HubScene.ts:632-648`）、`isUnlocked` 用 `findBoss(id).locked`（`hubGuide.ts:22`）→ 10 boss 時箭頭/流程需重想。
 7. **`round:state` bridge command 是單 boss（cat）語義**（`bridge.ts:31`）→ 多 boss 的 live 狀態要麼擴充 schema，要麼維持 hub 只做 presentation。
-8. **對話系統需從零架**：目前只有 gate/route 兩種 E 互動（`HubScene.ts:394-420`）→ 需新 bridge event + 新感應區 + 對話 UI；無打字機/多輪對話/選擇分支可重用。
+8. **對話系統需從零架**：目前只有 gate/route 兩種 E 互動（`HubScene.ts:394-419`）→ 需新 bridge event + 新感應區 + 對話 UI；無打字機/多輪對話/選擇分支可重用。
 9. **NPC 動畫資產現成但來源未確認**：`npc-*.png` 存在（ls 實證）但無授權 txt、尺寸未確認 → 使用前需補授權記錄（對照 `player-compact-walk-master.txt` 慣例）。
 10. **地圖空間**：40×30（640×480）放 10 gate + 老智者可能擁擠 → 改 layout 要走 `generate-hub-map.ts`（位置不寫 TS 是既定決策），且 `check-hub-map.ts` 的 gate 數量/名單斷言要同步改。
 11. **無 `base-sepolia.json`** → 預設網路顯示 NOT DEPLOYED；10 boss 的「解鎖/部署狀態」來源需先定（deployments manifest vs 獨立 read），且 10 隻中多數沒有部署，deployment manifest 只描述「已部署的合約集」。
@@ -206,13 +206,13 @@
 | `package.json:19` phaser 4.2.1 | `package.json:16` |
 | `generate-hub-map.ts:6-12` SPAWN/GATES | `:9`（SPAWN）、`:10-14`（GATES） |
 | `check-hub-map.ts:63-65` 3-gate 斷言 | `:68`（數量）、`:72`（bossIds 清單） |
-| `hubGuide.ts:32-60` transitionGuide | `:27-57`（storage key :4、isUnlocked :22） |
+| `hubGuide.ts:32-60` transitionGuide | `:27-56`（storage key :4、isUnlocked :22） |
 | `BossEntryPanel.tsx:34` supported 特判 | `:35` |
-| `BossEntryPanel.tsx:139-145` BossHealth 特判 | `:148-149` |
+| `BossEntryPanel.tsx:139-145` BossHealth 特判 | `:151` |
 | `GameShell.tsx:41-42/:54-56` bridge 接線 | `:36`（gate:enter）、`:49`（ui:modal） |
 | `HubScene.ts:229-246` buildGates | `:264-358` |
 | `apps/web/AGENTS.md:25` 資產分工 | `:18` |
-| `hub-completion-pass.md:19/:22` 約束行 | `:20`（No new bosses）、`:23`（No NPC conversations） |
+| `hub-completion-pass.md:19/:22` 約束行 | `:19`（No new bosses）、`:23`（No NPC conversations） |
 
 所有內容層面主張（3 boss、神社繪製、cat 特判、crop 硬編碼、markers 對位、guide 狀態機、24 motes、6 layers、未使用 npc-* 圖、無打字機程式碼）均與源碼一致。
 
