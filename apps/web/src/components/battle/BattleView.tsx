@@ -78,7 +78,7 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
   const defeated = round?.status === 3;
   const expired = Boolean(round && !defeated && (round.status === 4 || secondsLeft === 0));
   const busy = arena.writeState.status === "prompting" || arena.writeState.status === "pending" || arena.writeState.status === "unresolved" || Boolean(arena.pendingRecord);
-  const canAttack = round?.status === 1 && secondsLeft > 0 && !busy && arena.network !== "robinhood-testnet";
+  const canAttack = round?.status === 1 && secondsLeft > 0 && !busy;
   const stage = round ? STAGES[round.currentStage] : undefined;
   const visualStage = effect ? STAGES[effect.stage] : stage;
   const openActions = () => actionsDialog.current?.showModal();
@@ -135,27 +135,26 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
             {!account ? "CONNECT WALLET" : arena.networkMismatch ? "SWITCH NETWORK" : `${account.slice(0, 6)}…${account.slice(-4)}`}
           </button>
           <button type="button" className={BUTTON} onClick={openActions}>{arena.pendingRecord ? "CHECK TRANSACTION" : "BATTLE DETAILS"}</button>
-          {arena.deployment.kind !== "live" && <button type="button" className={BUTTON} onClick={arena.refresh}>RETRY</button>}
           <button type="button" onClick={onClose} className={BUTTON}>ESC · EXIT</button>
         </div>
-        <div className="min-w-0 md:col-start-1 md:row-start-2"><StatusPanel deployment={arena.deployment} /></div>
-        <div className="w-full min-w-0 max-w-[480px] justify-self-end md:col-start-2 md:row-start-2"><NamePlate stage={stage} action={action} /></div>
+        <div className="min-w-0 md:col-start-1 md:row-start-2 lg:absolute lg:left-6 lg:top-7 lg:z-20 lg:w-[44vw]"><StatusPanel deployment={arena.deployment} /></div>
+        <div className="w-full min-w-0 max-w-[480px] justify-self-end md:col-start-2 md:row-start-2 lg:absolute lg:right-4 lg:top-16 lg:z-20 lg:w-auto lg:max-w-none"><NamePlate stage={stage} action={action} /></div>
         <div className="grid min-w-0 grid-cols-[minmax(100px,0.85fr)_minmax(0,1.15fr)] items-end gap-3 md:contents">
-          <div className="flex min-w-0 flex-col items-start gap-3 self-end md:col-start-1 md:row-start-3">
+          <div className="flex min-w-0 flex-col items-start gap-3 self-end md:col-start-1 md:row-start-3 lg:absolute lg:bottom-[calc(min(40vh,360px)+48px)] lg:left-6 lg:z-20 lg:gap-2">
             <BattleMeta deployment={arena.deployment} now={now} />
-            <div className="w-[108px] border-[3px] border-[#FFF9E9] bg-[#16356e] p-1.5 shadow-[3px_3px_0_#041833]">
+            <div className="w-[108px] rounded-lg border-[3px] border-[#f3ead2] bg-[#16356e] p-1.5 shadow-[3px_3px_0_#041833]">
               <div className="mx-auto h-[84px] w-[70px] overflow-hidden"><CroppedSprite className="h-[140px]" /></div>
-              <p className="mt-1 text-center text-sm leading-none text-[#f6e7b2]">YOU</p>
+              <p className="mt-1 text-center text-base leading-none text-[#f6e7b2]">YOU</p>
             </div>
           </div>
-          <div className="relative h-[260px] min-w-0 self-end sm:h-[300px] md:col-start-2 md:row-start-3 md:h-[clamp(180px,30vh,360px)]">
+          <div className="relative h-[260px] min-w-0 self-end sm:h-[300px] md:col-start-2 md:row-start-3 md:h-[clamp(180px,30vh,360px)] lg:pointer-events-none lg:absolute lg:left-1/2 lg:top-[max(20%,194px)] lg:z-[18] lg:h-[min(50vh,calc(80vh-272px))] lg:w-[35%]">
             {visualStage && <BossStage stage={visualStage} state={effect?.defeated || defeated ? "defeated" : effect?.stageCleared ? "transition" : effect ? "hit" : "idle"} />}
           </div>
         </div>
-        {!defeated && <div className="min-w-0 self-end md:col-start-1 md:row-start-4"><CommandWindow label="SWAP ATTACK" disabled={!canAttack} onAction={openActions} onClose={onClose} /></div>}
-        {(!defeated || effect) && <div className={`min-w-0 self-end md:row-start-4 ${defeated ? "md:col-span-2" : "md:col-start-2"}`}><DialogWindow title={title} detail={detail} /></div>}
-        {defeated && round && !effect && <div className="mx-auto w-full max-w-[640px] md:col-span-2 md:row-start-4">
-          <VictoryCard round={round} player={live?.player} onClaim={openActions} onClose={onClose} />
+        {!defeated && <div className="min-w-0 self-end md:col-start-1 md:row-start-4 lg:absolute lg:bottom-8 lg:left-6 lg:z-20 lg:h-[min(40vh,360px)] lg:w-[36vw]"><CommandWindow label="SWAP ATTACK" disabled={!canAttack} onAction={openActions} onClose={onClose} /></div>}
+        {(!defeated || effect) && <div className={`min-w-0 self-end md:row-start-4 lg:absolute lg:bottom-8 lg:left-[54%] lg:right-4 lg:z-20 lg:h-[200px] ${defeated ? "md:col-span-2" : "md:col-start-2"}`}><DialogWindow title={title} detail={detail} /></div>}
+        {defeated && round && !effect && <div className="mx-auto w-full md:col-span-2 md:row-start-4 lg:absolute lg:inset-0 lg:z-40 lg:grid lg:place-items-center lg:bg-[#041833]/80 lg:p-4">
+          <div className="mx-auto w-full max-w-[480px]"><VictoryCard round={round} player={live?.player} onClaim={openActions} onClose={onClose} /></div>
         </div>}
         {effect?.stageCleared && !effect.defeated && <div role="status" className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-ink/70">
           <div className="window-chrome px-6 py-3 font-mono text-[#2b4a8b]">STAGE {effect.stage + 1} CLEARED!</div>

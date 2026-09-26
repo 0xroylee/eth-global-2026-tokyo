@@ -1,8 +1,9 @@
 # Boss Pool chain SDK
 
-`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses generated Foundry ABIs and pinned Router/Hook creation bytecode. Standalone round deployment and maker administration remain CLI operations. The Base Sepolia deployment manifest includes the Boss Factory address.
+`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses generated Foundry ABIs and pinned Router/Hook creation bytecode. Standalone round deployment and maker administration remain CLI operations. The Base Sepolia deployment manifest includes the original Boss Factory address. That deployment predates the review fixes and is incompatible with the corrected bundled build; deploy and configure a matching Factory to enable new launches.
 
 The attack currency is named **Attack Token** in the UI and documentation. SDK fields such as `royBought`, `roySpent`, `royRefunded`, `minRoyOut`, and `royBalance`, plus the manifest key `roy` and contract `RoyToken`, retain their existing names for deployment compatibility. All refer to Attack Token. See [domain language](../../CONTEXT.md).
+
 
 Use `createLocalPublicClient` and `fetchLocalDeployment` for Anvil. Use `createBaseSepoliaPublicClient` and `fetchBaseSepoliaDeployment` for Base Sepolia. Use the corresponding `createRobinhoodPublicClient` and `fetchRobinhoodDeployment` exports only to inspect the historical Robinhood deployment. Public deployment manifests omit RPC URLs. Pass the endpoint separately to the client.
 
@@ -36,7 +37,7 @@ Maker setup (`setHook`, `setMinter`, `seedSupplyPool`, `fundPrize`, `activate`),
 `createBossFactorySdk` supports token metadata and balance reads, launch quotes, exact token-allowance checks and approvals, and a simulated launch transaction. It verifies that the generated Router and Hook bytecode match the Factory's pinned hashes, mines the v4 Hook salt off chain, and validates the `BossLaunched` event from the confirmed receipt. The creator supplies the deployed Factory address.
 
 ```ts
-import { createBossFactorySdk, parseUnits } from "@boss-pool/chain";
+import { createBossFactorySdk, parseUnits, type FactoryPendingOperation } from "@boss-pool/chain";
 
 const factorySdk = createBossFactorySdk({ publicClient, factory: factoryAddress });
 const config = {
@@ -45,14 +46,30 @@ const config = {
   prizeBps: 1_000,
   volumeTargetMockUSD: parseUnits("6000", 6),
   deadline: BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60),
+  maxAttackTokenPerMockUSDX128: 0n,
 };
 const quote = await factorySdk.quoteLaunch(config);
+const acceptedConfig = { ...config, maxAttackTokenPerMockUSDX128: quote.maxRoyPerMockUSDX128 };
 const writer = factorySdk.withWallet(walletClient);
-await writer.approveToken(token, config.tokenAllocation);
-const launched = await writer.launchBoss(config);
+// Browser example: save each submitted request before the SDK waits for its receipt.
+const onSubmitted = (operation: FactoryPendingOperation) => {
+  localStorage.setItem("factory.pending", JSON.stringify(operation));
+};
+await writer.approveToken(token, config.tokenAllocation, onSubmitted);
+const launched = await writer.launchBoss(acceptedConfig, undefined, onSubmitted);
+localStorage.removeItem("factory.pending");
 ```
 
-Amounts use token base units as `bigint`: MockUSD has 6 decimals; ROY and BossHP have 18. Stage indices are zero-based. There is no enrollment or entry-NFT action in the current contracts.
+Before quotes, approvals, or launches, the Factory SDK checks that its generated Router and Hook creation code matches the configured Factory hashes. The launch flow then derives the hook init code from the accepted frozen rate, mines a permission-correct CREATE2 salt, simulates the launch, and validates the `BossLaunched` event from the confirmed receipt. The Factory separately checks the live supply rate against the accepted bound. Supply-price changes within that bound do not invalidate the mined address.
+
+`checkFactoryBuild()` is a public read that returns `compatible`, `incompatible`, or `not-deployed`. An incompatible result includes the actual and expected creation-code hashes. RPC failures throw. Use this result to explain unavailable launch actions; saved receipt recovery remains available independently of build compatibility.
+
+`approveToken` and `launchBoss` accept an `onSubmitted` callback. Persist its JSON-safe `FactoryPendingOperation` synchronously. `resumeOperation(operation)` checks the saved transaction without sending another one and works with a public SDK client. A receipt timeout raises `FactoryOperationPendingError` and keeps the request unresolved. The app must retain its write lock until a validated success, a proven revert, or a different/cancelled replacement. RPC errors and mismatched successful receipts do not authorize a retry. Replacement transactions must match the sender, destination, calldata, value, chain, and expected events; launch recovery also checks the boss ID and configuration.
+
+The web app's root `FactoryOperationProvider` holds the lock through preparation and navigation, including zero-reset approval followed by the selected allowance. Recovery becomes available after the original caller releases ownership. Submitted requests and confirmed launch results survive a reload. A browser refresh before the wallet returns a transaction hash cannot be reconciled by hash.
+
+Amounts use token base units as `bigint`: MockUSD has 6 decimals; Attack Token and BossHP have 18. Stage indices are zero-based. There is no enrollment or entry-NFT action in the current contracts.
+
 
 ## Verify a deployment and read state
 

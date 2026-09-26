@@ -1,12 +1,13 @@
 # Boss Pool technical specification
 
-Status (26 September 2026): The no-burn standalone contracts, shared viem SDK, volume-based Boss Factory, Factory launch SDK and creator form, and real-v4 Foundry fixture are implemented. The local fixture covers volume gates, quote simulation, MEME prizes, and transition rollback. Base Sepolia has a verified standalone Boss Pool fixture at block `47325823` and a deployed Factory at block `47330324`; no Factory launch or player E2E is verified there. The player battle UI for Factory rounds remains outstanding. See the [contract usage guide](contract-usage.md), [Boss Factory reference](boss-factory.md), [SDK verification record](sdk-verification.md), and [historical foundation report](testnet-verification.md).
+Status (26 September 2026): The no-burn standalone contracts, shared viem SDK, volume-based Boss Factory, Factory launch SDK and creator form, and real-v4 Foundry fixture are implemented. The local fixture covers volume gates, quote simulation, MEME prizes, and transition rollback. Base Sepolia has a verified standalone Boss Pool fixture at block `47325823` and a deployed Factory at block `47330324`; no Factory launch or player E2E is verified there. The published Factory predates the review fixes; this corrected build requires a new deployment, and the SDK rejects incompatible creation-code hashes before a quote or approval. The player battle UI for Factory rounds remains outstanding. See the [contract usage guide](contract-usage.md), [Boss Factory reference](boss-factory.md), [SDK verification record](sdk-verification.md), and [historical foundation report](testnet-verification.md).
 
 ## Factory volume settlement
 
-`BossFactory.quoteLaunch` accepts the creator's MEME token, total allocation, prize percentage, MockUSD volume target, and deadline. It reserves the chosen MEME prize, leaves one percent of the post-prize allocation as battle headroom, and computes the start tick from the live MockUSD/Attack Token pool price. The factory funds the prize escrow separately from the battle router.
+`BossFactory.quoteLaunch` accepts the creator's MEME token, total allocation, prize percentage, MockUSD volume target, and deadline. It reserves the chosen MEME prize, leaves one percent of the post-prize allocation as battle headroom, and computes a discovery quote from the live MockUSD/Attack Token pool price. The accepted rate is then frozen in the launch configuration before Hook salt mining; launch checks the live spot separately against that bound. The factory funds the prize escrow separately from the battle router.
 
-Each factory attack uses one authenticated PoolManager unlock for MockUSD to Attack Token and Attack Token to MEME. The Hook credits eligible volume as `floor(MockUSDSpent * attackTokenSpent / attackTokenBought)`, so returned intermediate Attack Token does not count. Compatibility event and SDK field names still use `ROYSpent` and `ROYBought`. The Hook limits cumulative MEME output against the funded sale budget and target volume. The Router caps accepted MockUSD at the active stage's remainder. The 1:2:3 stage thresholds release incremental liquidity after a controller refill in the same unlock; a failed transition rolls the attack back. Final-stage completion freezes player MEME output and enables proportional MEME prize claims.
+Each factory attack uses one authenticated PoolManager unlock for MockUSD to Attack Token and Attack Token to MEME. The Hook credits eligible volume as `floor(MockUSDSpent * attackTokenSpent / attackTokenBought)`, so returned intermediate Attack Token does not count. Compatibility event and SDK fields retain the names `roySpent` and `royBought`. It limits cumulative MEME output against the funded sale budget and target volume. The caller's input cap and the active stage's terminal price bound each trade. The 1:2:3 stage values are minimum additional volumes; crossing a minimum records the complete actual purchase and releases incremental liquidity after a controller refill in the same unlock. Extra volume stays in the starting stage. A failed transition rolls the attack back. Final-stage completion freezes player MEME output and enables proportional MEME prize claims.
+
 
 `quoteAttackWithMockUSD` simulates both swaps and a possible transition in a reverting execution frame. It returns the hop amounts and stage result without changing balances, volume, or pool state. Factory and quote ABIs are exported from `@boss-pool/chain`. See [Boss Factory](boss-factory.md) for the public inputs, quote fields, and expiry flow.
 
@@ -95,7 +96,7 @@ Preserve the existing approval, simulation, receipt, and stale-stage rules. Atta
 
 ### Live battle page context
 
-`/mock-battle` now consumes the live SDK while retaining its existing URL. [Live battle page requirements](requirements.md#live-battle-page) owns the user flow. The route uses the selected verified deployment and has no simulated-damage fallback.
+`/battle` consumes the live SDK. Existing `/mock-battle` links permanently redirect to `/battle`, preserving `network=local` or defaulting to `network=base-sepolia`. [Live battle page requirements](requirements.md#live-battle-page) owns the user flow. The route uses the selected verified deployment and has no simulated-damage fallback.
 
 The page represents one shared, deployed Boss Pool round. The lake arena, player sprite, Pool Unis boss forms, pixel windows, command menu, and dialog describe that encounter. Pool Unis in the nameplate is the boss identity; its displayed level follows the stage. Attack Token is the payment currency. On-chain stage indices are zero-based; labels and artwork use stages 1 through 3. The Silkscreen battle frames use a responsive grid so the HUD, nameplate, portrait, boss, commands, and dialogue stay separate on narrow or short screens.
 
@@ -103,11 +104,11 @@ The existing integration code provides the starting points:
 
 | File | Current responsibility | Role in the live page |
 | --- | --- | --- |
-| [`mock-battle/page.tsx`](../apps/web/src/app/mock-battle/page.tsx) | Reads the selected network from route parameters and renders `BattlePage`; exit navigates to `/`. | Route entry for the live battle controller. |
+| [`battle/page.tsx`](../apps/web/src/app/battle/page.tsx) | Reads the selected network from route parameters and renders `BattlePage`; exit navigates to `/`. | Route entry for the live battle controller. |
 | [`BattleView.tsx`](../apps/web/src/components/battle/BattleView.tsx) | `BattlePage` selects the route's network. `BattleView` renders the arena, controls, native action dialog, and confirmed effects. | Round and player state come from the shared provider and SDK. |
 | [`BossPoolProvider.tsx`](../apps/web/src/components/BossPoolProvider.tsx) | Owns one `useBossPool` instance in the root layout. | Wallet prompts, the write lock, and receipt recovery survive route navigation. |
 | [`useBossPool.ts`](../apps/web/src/lib/useBossPool.ts) | Verifies deployments, manages the injected wallet, polls every five seconds, and saves pending requests. | Existing owner of SDK access, refresh, `runPending`, and `resumePending`. |
-| [`BossActions.tsx`](../apps/web/src/components/BossActions.tsx) | Implements the fixed 1 MockUSD cap, quote freshness, approval, attack, reward, NFT, faucet, and receipt recovery actions. | The hub and battle use the same component. |
+| [`BossActions.tsx`](../apps/web/src/components/BossActions.tsx) | Implements the fixed 1 MockUSD cap, quote freshness, approval, attack, reward, NFT, and receipt recovery actions. | The battle dialog owns these player actions; the hub links to the battle. |
 | [`GameShell.tsx`](../apps/web/src/components/GameShell.tsx) and [`BossEntryPanel.tsx`](../apps/web/src/components/BossEntryPanel.tsx) | The hub uses the shared arena and links to the battle with the selected network. | The shared `confirmedBattleAttack` helper scopes receipt effects in both views. |
 | [`reads.ts`](../packages/chain/src/reads.ts) and [`sdk.ts`](../packages/chain/src/sdk.ts) | Export `RoundSnapshot`, `PlayerSnapshot`, quotes, writes, decoded receipt events, and recovery. | Authoritative application interface through `@boss-pool/chain`. |
 
@@ -148,9 +149,10 @@ The action flow reuses these SDK operations:
 | Recover receipt | `arena.resumePending()` | Checks the saved request against its original deployment without resubmitting the attack. |
 | Redeem reward | `previewReward`, claim `getApproval` and `approve`, then `claimReward(hpAmount)` through `runPending` | Surrenders selected BossHP to permanent custody and pays the proportional MockUSD reward. |
 | Claim optional NFT | `sdk.claimVictoryNFT()` through `runPending` | Separate action subject to `hasAttacked` and `victoryClaimed`. Holding transferred BossHP alone does not establish NFT eligibility. |
-| Obtain test funds when needed | `sdk.faucetMockUSD(amount)` through `runPending` | Existing test-only funding action. Its current UI amount is 100 MockUSD; its location in the battle flow remains a UI choice. |
 
-The live page and hub use a fixed cap of 1 MockUSD per attack, with no amount editor or preset selector. Its SDK value is `1_000_000n`, because MockUSD uses six decimals. Shared action logic uses 100 basis points of slippage, and the SDK defaults to a five-minute quote lifetime bounded by the round deadline. The player's MockUSD balance must cover the cap. Actual spend can be lower when a stage clears, and unused MockUSD and intermediate Attack Token are returned. A fixed cap does not produce fixed damage.
+The live battle uses a fixed cap of 1 MockUSD per attack, with no amount editor or preset selector. Its SDK value is `1_000_000n`, because MockUSD uses six decimals. Action logic uses 100 basis points of slippage, and the SDK defaults to a five-minute quote lifetime bounded by the round deadline. The player's MockUSD balance must cover the cap. Actual spend can be lower when a stage clears, and unused MockUSD and intermediate Attack Token are returned. A fixed cap does not produce fixed damage.
+
+The player UI has no faucet. `sdk.faucetMockUSD(amount)` remains available to test scripts, and the shared transaction controller can recover previously submitted faucet requests.
 
 Quote freshness follows the existing checks in `BossActions`. Configured cap, account, wallet chain, selected deployment, stage, observed stage sales or boss price, and elapsed quote lifetime can invalidate the preview. `sdk.attack` then enforces the accepted output floors with a fresh authenticated simulation. A changed quote requires another review; a failed simulation never authorizes looser output floors automatically.
 
@@ -177,7 +179,7 @@ The mock reducer, timer-driven attack hook, and mock badge are removed. [`battle
 
 The SDK exposes both configured pool fee rates in `RoundSnapshot` and `AttackQuote`, read from the Router's pool keys at the snapshot block. Quote review shows both rates. The newly available paginated `readActivity` API can supply historical contribution, but the battle's current HUD displays wallet holdings and rewards only. It does not sum an incomplete session history or count transfer events as attacks.
 
-Base Sepolia is the default target, and the published deployment manifest is included. Local Anvil remains available for integration with a real deployed fixture; historical Robinhood is read-only. Missing manifests and failed verification still produce unavailable states. Browser and local-chain verification are recorded separately in the PR; this integration does not broadcast transactions to Base Sepolia.
+Base Sepolia is the default target, and the published deployment manifest is included. The app's network settings offer Base Sepolia and Local Anvil only. Legacy Robinhood battle URLs fall back to Base Sepolia; Robinhood deployment and receipt reads remain available through the SDK. Missing manifests and failed verification still produce unavailable states. Browser and local-chain verification are recorded separately in the PR; this integration does not broadcast transactions to Base Sepolia.
 
 ## Deployment and proof gate
 

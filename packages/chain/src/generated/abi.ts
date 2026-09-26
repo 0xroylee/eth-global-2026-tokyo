@@ -159,6 +159,11 @@ export const bossFactoryAbi = [
             "name": "deadline",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "maxAttackTokenPerMockUSDX128",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       },
@@ -213,6 +218,11 @@ export const bossFactoryAbi = [
           },
           {
             "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maxAttackTokenPerMockUSDX128",
             "type": "uint256",
             "internalType": "uint256"
           }
@@ -349,6 +359,11 @@ export const bossFactoryAbi = [
           },
           {
             "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maxAttackTokenPerMockUSDX128",
             "type": "uint256",
             "internalType": "uint256"
           }

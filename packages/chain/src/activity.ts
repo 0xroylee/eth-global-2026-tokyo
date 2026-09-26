@@ -280,7 +280,7 @@ export async function readActivity(
       if (decoded.eventName !== selected.name) {
         throw new Error(`Decoded ${source.name} event does not match its indexed signature.`);
       }
-      const args = decoded.args as Record<string, unknown>;
+      const args = normalizeActivityEventArgs(decoded.eventName, decoded.args as Record<string, unknown>);
       const entry = createEntry(source, selected.name, args, {
         chainId: deployment.chainId,
         deploymentTxHash,
@@ -342,6 +342,15 @@ export async function readActivity(
     completeThroughSnapshot,
     entries,
     ...(nextCursor ? { nextCursor } : {}),
+  };
+}
+
+function normalizeActivityEventArgs(eventName: string, args: Record<string, unknown>): Record<string, unknown> {
+  if (eventName !== "RewardClaimed") return args;
+  return {
+    player: args.player,
+    bossHPIn: args.bossHPIn ?? args.rewardCreditUsed,
+    mockUSDOut: args.mockUSDOut ?? args.memeTokenPrize,
   };
 }
 

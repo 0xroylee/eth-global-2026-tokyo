@@ -7,7 +7,6 @@ import Link from "next/link";
 import type { BossDefinition } from "@/game/bosses";
 import { displayAmount, roundStatusLabel } from "@/lib/format";
 import { type useBossPool } from "@/lib/useBossPool";
-import { BossActions } from "./BossActions";
 
 type Arena = ReturnType<typeof useBossPool>;
 const CAT_FORMS = ["/images/boss-cat-form-a.png", "/images/boss-cat-form-b.png", "/images/boss-cat-form-c.png"] as const;
@@ -35,7 +34,6 @@ export function BossEntryPanel({
   const supported = boss.id === "cat";
   const needsWallet = supported && !arena.wallet.account;
   const needsSwitch = supported && Boolean(arena.wallet.account) && arena.networkMismatch;
-  const actionsReady = supported && !needsWallet && !needsSwitch;
 
   useEffect(() => {
     if (suspendInput) return;
@@ -112,7 +110,6 @@ export function BossEntryPanel({
             {arena.wallet.busy ? "SWITCHING NETWORK…" : `SWITCH WALLET TO ${arena.selectedChainId}`}
           </button>
         )}
-        {actionsReady && <BossActions arena={arena} />}
         {supported && (
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/30 px-3 py-3">
             <div>
@@ -120,7 +117,7 @@ export function BossEntryPanel({
               <p className="mt-1 text-xs text-muted">Enter the arena. Each attack spends up to 1 MockUSD.</p>
             </div>
             <Link
-              href={`/mock-battle?network=${arena.network}`}
+              href={`/battle?network=${arena.network}`}
               className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog transition-colors hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               ENTER BATTLE

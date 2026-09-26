@@ -27,12 +27,10 @@ type ActionResult =
   | { kind: "approval"; hash: string; token: string; spender: string; amount: bigint }
   | { kind: "attack"; hash: string; result: AttackResult }
   | { kind: "reward"; hash: string; hpAmount: bigint; payout: bigint }
-  | { kind: "nft"; hash: string; tokenId: bigint }
-  | { kind: "faucet"; hash: string; amount: bigint };
+  | { kind: "nft"; hash: string; tokenId: bigint };
 
 const MOCK_USD_DECIMALS = 6;
 const BOSS_HP_DECIMALS = 18;
-const PUBLIC_FAUCET_AMOUNT = 100n * 10n ** BigInt(MOCK_USD_DECIMALS);
 const DEFAULT_SLIPPAGE_BPS = 100;
 const ATTACK_CAP = 1_000_000n;
 
@@ -133,7 +131,6 @@ export function BossActions({
     : 0;
   const attackApproval = approvals.attack;
   const claimApproval = approvals.claim;
-  const needsFaucet = Boolean(player && inputAmount !== null && player.mockUSDBalance < inputAmount);
   const hasInputBalance = Boolean(player && inputAmount !== null && inputAmount > 0n && player.mockUSDBalance >= inputAmount);
   const attackReady = Boolean(
     sdk && account && arena.canWrite && !arena.networkMismatch && active && hasInputBalance &&
@@ -211,18 +208,6 @@ export function BossActions({
     }
   }
 
-  async function faucetMockUSD() {
-    if (!sdk) return;
-    try {
-      const confirmed = await arena.runPending("Faucet MockUSD", () => sdk.faucetMockUSD(PUBLIC_FAUCET_AMOUNT));
-      if (confirmed?.status === "confirmed") {
-        setLastResult({ kind: "faucet", hash: confirmed.hash, amount: confirmed.result.amount });
-      }
-    } catch {
-      // The shared write status retains rejection and receipt errors.
-    }
-  }
-
   async function attack() {
     if (!sdk || !quoteFresh || !quoteState) return;
     setQuoteError(null);
@@ -240,12 +225,10 @@ export function BossActions({
   }
 
   const statusText = round ? roundStatusLabel(round.status) : arena.deployment.kind === "not-deployed" ? "Not deployed" : arena.deployment.kind === "error" ? "Unavailable" : "Checking";
-  const attackBlockReason = arena.network === "robinhood-testnet"
-    ? "This enrollment-era Robinhood deployment is read-only in the current player UI."
-    : !account
+  const attackBlockReason = !account
     ? "Connect a wallet before attacking. The quote remains public."
     : arena.networkMismatch
-      ? `Switch the wallet to ${arena.network === "local" ? "local chain 31337" : arena.network === "base-sepolia" ? "Base Sepolia 84532" : "historical Robinhood testnet 46630"}.`
+      ? `Switch the wallet to ${arena.network === "local" ? "local chain 31337" : "Base Sepolia 84532"}.`
       : !active
         ? round?.status === 3 ? "The boss has been defeated." : round?.status === 4 ? "This round has expired." : "Attack is unavailable outside an active round."
         : !hasInputBalance
@@ -362,7 +345,7 @@ export function BossActions({
         <p className="eyebrow">PLAYER READINESS</p>
         <h3 id="readiness-heading" className="mt-1 text-base font-medium">Complete these actions in order</h3>
         {!account ? (
-          <p className="mt-2 text-xs leading-relaxed text-muted">Connect a wallet in the header to attack or claim. Public round reads and quotes work without a wallet.</p>
+          <p className="mt-2 text-xs leading-relaxed text-muted">Connect a wallet to attack or claim. Public round reads and quotes work without a wallet.</p>
         ) : !player ? (
           <p className="mt-2 text-xs text-muted">Reading this account on the selected network…</p>
         ) : (
@@ -371,16 +354,7 @@ export function BossActions({
               {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD · {displayAmount(player.royBalance, BOSS_HP_DECIMALS)} Attack Token · {displayAmount(player.bossHPBalance, BOSS_HP_DECIMALS)} BossHP · {displayAmount(player.nativeBalance, BOSS_HP_DECIMALS)} ETH gas
               <span className="ml-2">{player.hasAttacked ? "ATTACKED" : "NO ATTACK YET"}</span>
             </p>
-            {!defeated && <><ReadinessRow step="A" title="MockUSD faucet" state={needsFaucet ? "needed" : "ready"}>
-              <p className="text-xs text-muted">Balance: {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD</p>
-              {needsFaucet && (
-                <ActionButton disabled={!arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord)} onClick={() => void faucetMockUSD()}>
-                  Faucet 100 mUSD
-                </ActionButton>
-              )}
-            </ReadinessRow>
-
-            <ReadinessRow step="B" title="Router allowance" state={!quoteState ? "waiting" : !quoteFresh ? "stale" : attackApproval?.approvalNeeded ? "needed" : "ready"}>
+            {!defeated && <><ReadinessRow step="A" title="Router allowance" state={!quoteState ? "waiting" : !quoteFresh ? "stale" : attackApproval?.approvalNeeded ? "needed" : "ready"}>
               {!quoteState ? <p className="text-xs text-muted">Get the public quote above before approving the attack input.</p> : (
                 <>
                   {attackApproval && (
@@ -401,7 +375,7 @@ export function BossActions({
               )}
             </ReadinessRow>
 
-            <ReadinessRow step="C" title="Attack" state={attackReady ? "ready" : active ? "waiting" : "closed"}>
+            <ReadinessRow step="B" title="Attack" state={attackReady ? "ready" : active ? "waiting" : "closed"}>
               <p className="text-xs leading-relaxed text-muted" role="status">{attackBlockReason}</p>
               <ActionButton primary disabled={!attackReady} onClick={() => void attack()}>
                 ATTACK · STAGE {round ? round.currentStage + 1 : "—"}
@@ -581,9 +555,6 @@ function ConfirmedResult({ result }: { result: ActionResult }) {
       break;
     case "nft":
       text = `Victory NFT #${result.tokenId} confirmed`;
-      break;
-    case "faucet":
-      text = `Faucet delivered ${displayAmount(result.amount, MOCK_USD_DECIMALS)} mUSD`;
       break;
   }
   return (

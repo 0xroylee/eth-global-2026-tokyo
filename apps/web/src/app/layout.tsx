@@ -28,8 +28,26 @@ const silkscreen = Silkscreen({
 });
 
 export const metadata: Metadata = {
-  title: "Boss Pool · Local Arena",
-  description: "Pixel-art boss raid on Uniswap v4. Every hit buys real BossHP.",
+  title: "Boss BoostPad",
+  description:
+    "Boss BoostPad turns a token pool into a boss raid. Fighters swap to attack and share the prize.",
+  openGraph: {
+    title: "Boss BoostPad",
+    description:
+      "Boss BoostPad turns a token pool into a boss raid. Fighters swap to attack and share the prize.",
+    images: [{ url: "/images/boss-boostpad.png", width: 1024, height: 1024, alt: "Boss BoostPad" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "Boss BoostPad",
+    description:
+      "Boss BoostPad turns a token pool into a boss raid. Fighters swap to attack and share the prize.",
+    images: ["/images/boss-boostpad.png"],
+  },
+  icons: {
+    icon: "/images/boss-boostpad.png",
+    apple: "/images/boss-boostpad.png",
+  },
 };
 
 export const viewport: Viewport = {
