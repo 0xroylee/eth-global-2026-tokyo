@@ -1,6 +1,6 @@
 # Boss Pool technical specification
 
-Status (26 September 2026): The no-burn, no-entry contracts, transferable HP redemption, and public real-v4 fixture are implemented. Five focused Foundry cases pass, including direct fresh-wallet attacks and quote non-persistence. The Next.js player UI and shared viem SDK support direct attacks. The current local SDK journey passed with 14 successful transactions at commit `3450be7`. The earlier local 18-transaction journey and Robinhood 16+2 receipts used enrollment-era source and are historical evidence only. Base Sepolia `84532` is the current target. The RPC is reachable, but no Boss Pool deployment or direct-attack E2E is verified there. See the [SDK verification record](sdk-verification.md) and [historical foundation report](testnet-verification.md).
+Status (26 September 2026): The no-burn, no-entry contracts, transferable HP redemption, and public real-v4 fixture are implemented. Five focused Foundry cases pass, including direct fresh-wallet attacks and quote non-persistence. The Next.js player UI and shared viem SDK support direct attacks. The current local SDK journey passed with 14 successful transactions at commit `3450be7`. The earlier local 18-transaction journey and Robinhood 16+2 receipts used enrollment-era source and are historical evidence only. A team-owned non-production fixture is now verified on Base Sepolia `84532` at block `47325823`; its manifest is `apps/web/public/deployments/base-sepolia.json`. The fixture deploys its own pinned v4-core PoolManager, and no Base Sepolia player E2E has been verified. See the [contract usage guide](contract-usage.md), [SDK verification record](sdk-verification.md), and [historical foundation report](testnet-verification.md).
 
 ## Architecture
 
@@ -87,7 +87,7 @@ Preserve the existing approval, simulation, receipt, and stale-stage rules. Atta
 
 ## Deployment and proof gate
 
-The target is Base Sepolia chain ID `84532` at `https://sepolia.base.org`. The repository's read-only client reaches the chain. No Boss Pool Base Sepolia manifest or deployment exists yet. The team-deployed Robinhood fixture uses its own PoolManager built from pinned v4-core source. It is historical evidence, not an official Robinhood manager or Base Sepolia deployment.
+The target is Base Sepolia chain ID `84532` at `https://sepolia.base.org`. The verified team deployment is recorded in `apps/web/public/deployments/base-sepolia.json` at block `47325823`. It uses its own PoolManager built from pinned v4-core source; it is not an official Base PoolManager. The team-deployed Robinhood fixture remains historical evidence and does not represent an official Robinhood manager.
 
 BP01 adapts the existing compact real-v4 scenario: both swaps, ordinary BossHP delivery, cumulative purchase accounting, current-stage completion, and the reserve-funded refill/LP addition with all deltas settled. Reuse existing upstream fixtures and settlement helpers. Then verify the real target-chain route after deployment.
 
