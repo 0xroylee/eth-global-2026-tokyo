@@ -1,6 +1,6 @@
 # Boss Pool technical specification
 
-Status: the current Factory build activates all sale liquidity at launch, bounds purchases to each volume stage, and enforces 60/120-second cooldowns. The current Base Sepolia launch Factory matches that build and supports a separate owner liquidity position, using fixed 0.3% fees. The owner-controlled mock-price/dynamic-fee configuration remains a local demo. Earlier public Factories and the default Boss retain their historical behavior. New launches require a compatible bundled build. See the [Factory reference](boss-factory.md).
+Status: the current Factory build activates all sale liquidity at launch, bounds purchases to each volume stage, and enforces 60/120-second cooldowns. The current Base Sepolia launch Factory matches that build and supports a separate owner liquidity position, using fixed 0.3% fees. The owner-controlled mock-price/dynamic-fee configuration remains a local demo. Earlier public Factories and the retired timed Roy retain their historical behavior. New launches require a compatible bundled build. See the [Factory reference](boss-factory.md).
 
 The source baseline is [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`, checked on 27 September 2026. The [hook design explanation](uniswap-v4-hooks.md) owns the rationale, benefits, limitations, and execution diagram; this specification defines interfaces and accounting.
 
@@ -38,7 +38,7 @@ The contract enables `beforeInitialize`, `beforeAddLiquidity`, `beforeRemoveLiqu
 
 Calling callbacks directly fails PoolManager authentication. Another router calling the canonical Boss pool fails initiating-sender/context checks. A script calling BossRouter still obeys the same cooldown, fee, and volume rules as the browser. Free-form `hookData`, transfers, and external markets cannot create game credit. Cooldowns therefore remain enforceable even when the frontend is bypassed. See the [official hooks overview](https://developers.uniswap.org/docs/protocols/v4/concepts/hooks).
 
-The remaining staged LP, refill, and transferable HP descriptions in this document describe the standalone BossHP mode. The existing default public Factory battle retains its historical staged behavior and bypass new getters through their pinned build identities.
+The remaining staged LP, refill, and transferable HP descriptions in this document describe the standalone BossHP mode. Historical public Factory battles retain their original staged behavior and bypass new getters through their pinned build identities.
 
 ## BoostPad creation
 
@@ -229,7 +229,7 @@ Base Sepolia is the default target, and the published deployment manifest is inc
 
 ## Deployment and proof gate
 
-The target is Base Sepolia chain ID `84532` at `https://sepolia.base.org`. The live encounter is recorded in `apps/web/public/deployments/base-sepolia.json` using its confirmed Factory launch at block `47332745`. Its origin Factory remains distinct from the current Factory used for new launches. It uses its own PoolManager built from pinned v4-core source; it is not an official Base PoolManager. The team-deployed Robinhood fixture remains historical evidence and does not represent an official Robinhood manager.
+The target is Base Sepolia chain ID `84532` at `https://sepolia.base.org`. The live Roy encounter is recorded in `apps/web/public/deployments/base-sepolia.json` using its confirmed Factory launch at block `47342620`. Its origin is the current continuous-liquidity Factory at `0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7`. The former timed Roy remains historical and is no longer the default encounter or a Roy presentation. Both use the existing team PoolManager built from pinned v4-core source; it is not an official Base PoolManager. The team-deployed Robinhood fixture remains historical evidence and does not represent an official Robinhood manager.
 
 BP01 adapts the existing compact real-v4 scenario: both swaps, ordinary BossHP delivery, cumulative purchase accounting, current-stage completion, and the reserve-funded refill/LP addition with all deltas settled. Reuse existing upstream fixtures and settlement helpers. Then verify the real target-chain route after deployment.
 

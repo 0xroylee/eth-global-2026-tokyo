@@ -2,13 +2,13 @@
 
 Boss BoostPad turns a token pool into a boss raid on Uniswap v4. Creators commit tokens and a prize. Fighters swap to attack, advance through volume goals and stage cooldowns, and share the prize after victory.
 
-[Live demo](https://web-smoky-tau-35.vercel.app/) · [Create a boss](https://web-smoky-tau-35.vercel.app/boostpad) · [Play the demo battle](https://web-smoky-tau-35.vercel.app/battle/0xc11D07448948AC4757592E91D8f5155907Ef6AC0?network=base-sepolia) · [Uniswap feedback](FEEDBACK.md)
+[Live demo](https://web-smoky-tau-35.vercel.app/) · [Create a boss](https://web-smoky-tau-35.vercel.app/boostpad) · [Play Roy](https://web-smoky-tau-35.vercel.app/battle/0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0?network=base-sepolia) · [Uniswap feedback](FEEDBACK.md)
 
 Pitch: Boss BoostPad creates a pool for an existing token and turns it into a boss battle. Attacks are swaps, so each attack adds to that token's trading volume. After victory, fighters share the creator-funded prize. All sale liquidity is active from the start. Clearing stage one starts a 60-second wait; clearing stage two starts a 120-second wait before attacks resume.
 
 [Background](#background-and-the-problem) · [Why hooks](#why-uniswap-v4-hooks) · [How it works](#how-it-works) · [Components](#components) · [Contract addresses](#contract-addresses) · [Integration code](#uniswap-v4-integration-code) · [Run](#run-the-project) · [Build](#build-and-check) · [Evidence](#verification-and-current-status) · [Milestones](#planned-milestones)
 
-The Factory behavior below follows [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`, checked on 27 September 2026. Continuous sale liquidity, stage cooldowns, and owner-added LP are implemented in the current Base Sepolia launch Factory. Optional mock-driven fees remain a local demo feature. The linked default Boss uses an older deployment with its original rules.
+The Factory behavior below follows [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`, checked on 27 September 2026. Continuous sale liquidity, stage cooldowns, and owner-added LP are implemented in the current Base Sepolia launch Factory. Optional mock-driven fees remain a local demo feature. The current default Roy uses the continuous-liquidity build; retired encounters retain their original rules.
 
 ## Background and the problem
 
@@ -50,7 +50,7 @@ The project uses a two-person ownership split:
 3. Review the launch quote and approve the token deposit. The SDK calculates the pool configuration and mines a valid Uniswap v4 hook address.
 4. Launch the boss. `BossFactory` deploys a dedicated Router, Hook, and collectible contract. It funds the prize in the Hook, funds the battle inventory in the Router, and activates the full sale position and first stage.
 
-New Factory bosses have three fixed stages and default cat portraits. The prize, initial LP position, initial-position fees, and Router residue stay locked. Owners can add and remove a separate proportional liquidity position. These bosses have no expiry or creator cancellation. Public Factory deployments retain their original rules and require a matching build for new launches.
+New Factory bosses have three fixed stages and default cat portraits. The prize, initial LP position, initial-position fees, and Router residue stay locked. Owners can add and remove a separate proportional liquidity position. These bosses have no expiry or creator cancellation. The current Base Sepolia launch Factory matches this build; earlier public bosses retain their original rules.
 
 ### Fight through stage cooldowns
 
@@ -76,7 +76,7 @@ Unused MockUSD and Attack Token are refunded. The three stages require additiona
 
 Clearing stage one starts a shared 60-second cooldown; clearing stage two starts a 120-second cooldown. All sale liquidity is active from launch and sells continuously along the standard AMM curve. There is no percentage token bucket or proportional release. Stage changes preserve pool price and LP position, with no refill or activation transaction. Quotes and attacks reject during the cooldown, and failed swaps roll back all purchase credit. Clearing the final stage defeats the boss.
 
-The optional Mock Token Oracle uses an owner-controlled testnet reference. A Boss pool price below the reference raises its LP fee; a sufficiently higher price can reduce it to 0%. The supply pool fee stays 0.3%. The demo rejects references older than 600 seconds and required Boss fees above 90%, while claims and owner LP remain available. Player minimum outputs still bound execution after a quote changes. The reference is labelled `TESTNET MOCK PRICE`, not live USD data. Dynamic fees change purchase cost; they do not reset AMM price or guarantee protection from arbitrage or market losses. See the [mock price and fee reference](docs/boss-factory.md#testnet-mock-price-and-fees).
+The optional local Mock Token Oracle uses an owner-controlled testnet reference and is not deployed publicly. The current Base Sepolia Factory uses fixed 0.3% fees for both pools. A Boss pool price below the reference raises its LP fee; a sufficiently higher price can reduce it to 0%. The supply pool fee stays 0.3%. The demo rejects references older than 600 seconds and required Boss fees above 90%, while claims and owner LP remain available. Player minimum outputs still bound execution after a quote changes. The reference is labelled `TESTNET MOCK PRICE`, not live USD data. Dynamic fees change purchase cost; they do not reset AMM price or guarantee protection from arbitrage or market losses. See the [mock price and fee reference](docs/boss-factory.md#testnet-mock-price-and-fees).
 
 The creator can add or remove a separate LP position to change depth. The initial position, its fees, Router residue, player credit, and Hook prize escrow stay separate. The locked initial liquidity is a position-size floor, not a price floor.
 
@@ -101,7 +101,7 @@ The local deployment script also supports the earlier standalone BossHP game. It
 | Claim | Consume credit and keep purchased tokens | Surrender BossHP into permanent Hook custody |
 | Expiry | None | Deadline configured at deployment |
 
-The bundled Base Sepolia demo was launched by an earlier timed Factory. It uses Factory reward credit but retains its original deadline. See its deployment details below.
+The bundled Base Sepolia Roy demo uses the current continuous-liquidity Factory and has no expiry. The earlier timed Roy has been removed from the default entry and presentation mapping; its contracts and earned player credit remain on chain.
 
 ## Components
 
@@ -168,22 +168,22 @@ The following addresses come from the [app manifest](apps/web/public/deployments
 
 | Contract | Address | Use |
 | --- | --- | --- |
-| BossFactory | [0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7](https://sepolia.basescan.org/address/0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7) | Current compatible continuous-liquidity launch Factory; fixed 0.3% fees |
+| BossFactory | [0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7](https://sepolia.basescan.org/address/0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7) | Current launch Factory; continuous liquidity, 60/120-second cooldowns, and matching SDK build |
 | PoolManager | [0x1EF1e7e79B14AFB530d9671A79B7B173FE41a1c3](https://sepolia.basescan.org/address/0x1EF1e7e79B14AFB530d9671A79B7B173FE41a1c3) | Shared v4 infrastructure |
 | MockUSD | [0x184B037F95A8E7a6E956AACad2244E5ded40d487](https://sepolia.basescan.org/address/0x184B037F95A8E7a6E956AACad2244E5ded40d487) | Test payment token |
 | Attack Token | [0x6e5390D3231beb061c1E49916806F2f26B3Feb22](https://sepolia.basescan.org/address/0x6e5390D3231beb061c1E49916806F2f26B3Feb22) | Shared intermediate token |
-| Demo boss token, BHP | [0x5a5517f63714f44F19337d34ab29d5ACC652e4CF](https://sepolia.basescan.org/address/0x5a5517f63714f44F19337d34ab29d5ACC652e4CF) | Token purchased and awarded in the bundled demo |
-| Demo BossHook | [0xc11D07448948AC4757592E91D8f5155907Ef6AC0](https://sepolia.basescan.org/address/0xc11D07448948AC4757592E91D8f5155907Ef6AC0) | Bundled default encounter |
-| Demo BossRouter | [0x087D22c53082ED7841cB5716cB699111a02b0dEf](https://sepolia.basescan.org/address/0x087D22c53082ED7841cB5716cB699111a02b0dEf) | Demo attack and liquidity controller |
-| Demo BossCollectibles | [0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925](https://sepolia.basescan.org/address/0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925) | Demo victory NFT |
-| Previous perpetual BossFactory | [0x353749ffa9640c4152dd28068c416adfc2eb168e](https://sepolia.basescan.org/address/0x353749ffa9640c4152dd28068c416adfc2eb168e) | Earlier staged build, retained for historical discovery |
-| Earlier BossFactory | [0x9039F58150F1fFDFB301A3D7218D47A44406a269](https://sepolia.basescan.org/address/0x9039F58150F1fFDFB301A3D7218D47A44406a269) | Origin of the bundled timed demo |
+| Roy boss token, BHP | [0x3A4AF1018EB5B9D774119C818a4eaC7CcdfBC1A2](https://sepolia.basescan.org/address/0x3A4AF1018EB5B9D774119C818a4eaC7CcdfBC1A2) | Fresh fixed-supply token purchased and awarded in Roy's pool |
+| Roy BossHook | [0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0](https://sepolia.basescan.org/address/0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0) | Current default encounter |
+| Roy BossRouter | [0x824464AF219850Fde45d539FC9f754205Dbf2df7](https://sepolia.basescan.org/address/0x824464AF219850Fde45d539FC9f754205Dbf2df7) | Roy attack and liquidity controller |
+| Roy BossCollectibles | [0xDE19925D3ECbB29cBbF2bed254452D1f6197c376](https://sepolia.basescan.org/address/0xDE19925D3ECbB29cBbF2bed254452D1f6197c376) | Roy victory NFT |
+| Previous perpetual BossFactory | [0x353749ffa9640c4152dd28068c416adfc2eb168e](https://sepolia.basescan.org/address/0x353749ffa9640c4152dd28068c416adfc2eb168e) | Historical staged-liquidity build retained for discovery and recovery |
+| Earlier timed BossFactory | [0x9039F58150F1fFDFB301A3D7218D47A44406a269](https://sepolia.basescan.org/address/0x9039F58150F1fFDFB301A3D7218D47A44406a269) | Origin of the retired timed Roy |
 
 The PoolManager is a team-deployed test instance built from pinned v4-core source. These addresses are not an official Uniswap deployment.
 
-The current Factory was deployed at block `47341945`: [deployment transaction](https://sepolia.basescan.org/tx/0x48b3c5d6a87f4432d8c0e974bb21370c146f4134067092d3e2de1d71082a85ef), [build and deployment evidence](docs/evidence/base-sepolia-continuous-factory.json). It uses a zero fee controller, so both pools charge 0.3%. No Boss was created during this migration; the default encounter retains its earlier timed build.
+The current Factory was deployed at block `47341945`: [deployment transaction](https://sepolia.basescan.org/tx/0x48b3c5d6a87f4432d8c0e974bb21370c146f4134067092d3e2de1d71082a85ef), [build and deployment evidence](docs/evidence/base-sepolia-continuous-factory.json). The public Blacksmith uses this address, passes SDK build verification, and returns funding quotes.
 
-The bundled demo was launched at block `47332745`: [launch transaction](https://sepolia.basescan.org/tx/0x757a887b2de2275dcd617b8daa8eeef6fa19d8dc469185b2aaa8f0aa1517a120), [launch evidence](docs/evidence/base-sepolia-factory-demo-boss.json). Its creator deposited 10,000 BHP, including a 1,000 BHP prize, and set a 60 MockUSD target. This older encounter's deadline is **3 October 2026 at 14:42:42 UTC**.
+The current Roy was launched at block `47342620`: [launch transaction](https://sepolia.basescan.org/tx/0x1db679d76d70c95281211f8f1f8f126430da729ab7a0accefed083d986ff04fa), [Roy launch evidence](docs/evidence/base-sepolia-roy-boss.json). Its creator deposited 10,000 BHP, including a 1,000 BHP prize, and set a 60 MockUSD target. All 9,000 sale BHP fund the initial position. Stage goals are 10, 20, and 30 MockUSD, with 60/120-second cooldowns and no expiry.
 
 Each new launch creates a different Hook, Router, and collectible contract. Read their addresses from the Factory's `BossLaunched` event. Uniswap v4 pools live inside PoolManager, so a pool ID is not a separate contract address.
 
@@ -201,6 +201,10 @@ The original Factory predates the current build. The old standalone boss is expi
 | Contract | Explorer address |
 | --- | --- |
 | Original BossFactory | [0x77794cD6099e9d676bd1DC378308d86344A66962](https://sepolia.basescan.org/address/0x77794cD6099e9d676bd1DC378308d86344A66962) |
+| Retired timed Roy Hook | [0xc11D07448948AC4757592E91D8f5155907Ef6AC0](https://sepolia.basescan.org/address/0xc11D07448948AC4757592E91D8f5155907Ef6AC0) |
+| Retired timed Roy Router | [0x087D22c53082ED7841cB5716cB699111a02b0dEf](https://sepolia.basescan.org/address/0x087D22c53082ED7841cB5716cB699111a02b0dEf) |
+| Retired timed Roy BHP | [0x5a5517f63714f44F19337d34ab29d5ACC652e4CF](https://sepolia.basescan.org/address/0x5a5517f63714f44F19337d34ab29d5ACC652e4CF) |
+| Retired timed Roy collectibles | [0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925](https://sepolia.basescan.org/address/0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925) |
 | Standalone BossHook | [0xe217b4840049f928d4392030ac86aCe6b3766AC0](https://sepolia.basescan.org/address/0xe217b4840049f928d4392030ac86aCe6b3766AC0) |
 | Standalone BossRouter | [0xc404DA7b3ceB94414e8Bf304E4538E9365936994](https://sepolia.basescan.org/address/0xc404DA7b3ceB94414e8Bf304E4538E9365936994) |
 | Standalone BossHP | [0xc75C1075e998e0d42d3BEE3F11027261C1343B78](https://sepolia.basescan.org/address/0xc75C1075e998e0d42d3BEE3F11027261C1343B78) |
@@ -208,6 +212,8 @@ The original Factory predates the current build. The old standalone boss is expi
 | Standalone CREATE2 helper | [0xbf5048ec35b9acef8b3ef73bdb9fa91beac47739](https://sepolia.basescan.org/address/0xbf5048ec35b9acef8b3ef73bdb9fa91beac47739) |
 
 Sources: [original Factory record](docs/evidence/base-sepolia-boss-factory-deployment.json), [archived standalone manifest](https://github.com/0xroylee/eth-global-2026-tokyo/blob/27f35c2dbd6dd4a5ccede6d223e4afe7b1681702/apps/web/public/deployments/base-sepolia.json).
+
+The retired timed Roy was launched at block `47332745` with a 10,000 BHP allocation and a 1,000 BHP prize. Its original deadline is 3 October 2026 at 14:42:42 UTC. Its [launch evidence](docs/evidence/base-sepolia-factory-demo-boss.json) remains historical; it is no longer the hub's Roy or the bare `/battle` default.
 
 </details>
 
@@ -378,12 +384,13 @@ The repository records the following evidence:
 | --- | --- |
 | Contract behavior and local SDK journeys | [Factory review](docs/evidence/factory-review-verification.json) and [SDK verification](docs/sdk-verification.md) |
 | Current Base Sepolia Factory deployment and build hashes | [Continuous Factory deployment](docs/evidence/base-sepolia-continuous-factory.json) |
-| Bundled Factory demo, prize custody, launch receipt, and public attack quote | [Demo boss evidence](docs/evidence/base-sepolia-factory-demo-boss.json) |
+| Current Roy, prize custody, launch receipt, and public attack quote | [Roy boss evidence](docs/evidence/base-sepolia-roy-boss.json) |
+| Retired timed Roy | [Historical demo boss evidence](docs/evidence/base-sepolia-factory-demo-boss.json) |
 | Historical Robinhood gameplay and NFT claims | [SDK report](docs/sdk-verification.md#historical-robinhood-testnet-run) and [foundation report](docs/testnet-verification.md) |
 
 These evidence files record their own source versions. The Factory review predates PR #72 and does not verify its continuous-liquidity, owner-LP, or mock-fee behavior. The recorded Base Sepolia demo verification covers deployment and a read-only attack quote. It does not record a completed player attack-and-claim journey for that boss. The manual browser-wallet popup journey remains a separate verification item.
 
-[PR #75](https://github.com/0xroylee/eth-global-2026-tokyo/pull/75) records deployment of PR #72's continuous-liquidity Factory with matching Router/Hook hashes. New launches use that Factory; the default Boss and historical receipt recovery retain their original contracts. The optional mock-oracle Factory is not publicly deployed. Ordinary `local:seed` still creates the standalone fixture.
+[PR #75](https://github.com/0xroylee/eth-global-2026-tokyo/pull/75) records deployment of PR #72's continuous-liquidity Factory with matching Router/Hook hashes. New launches use that Factory. [PR #77](https://github.com/0xroylee/eth-global-2026-tokyo/pull/77) records a fresh continuous-liquidity Roy as the default Boss; older encounters retain their original contracts and receipt recovery. The optional mock-oracle Factory is not publicly deployed. Ordinary `local:seed` still creates the standalone fixture.
 
 This is a testnet prototype using MockUSD and a team-deployed PoolManager. Factory token accounting expects ordinary ERC-20 transfers with stable balances; taxed or rebasing transfers are outside the supported model.
 
