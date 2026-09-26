@@ -1,8 +1,8 @@
 # Boss HP completion and stage activation
 
-Status: current purchase-accounting design, 26 September 2026. Attacks do not burn tokens. Focus on one Attack Token / BossHP battle pool with three gated stages. Physical/magic routing remains deferred.
+Scope: this document records the standalone BossHP round's no-burn accounting design and earlier gated-liquidity proposal. Its refill and stage-activation rules are not the current Factory behavior. Current Factory bosses activate all sale liquidity at launch, advance on MockUSD volume goals, and enforce shared 60/120-second cooldowns. See the [Boss Factory reference](boss-factory.md#purchases-volume-and-rewards) and [technical specification](technical-spec.md#factory-volume-settlement). Physical/magic routing remains deferred.
 
-The accepted same-pool refill/reset model is documented in [Refill math](refill-math.md). A controller-only reverse swap during transition restores the lower price, then incremental liquidity funds the next stage. The BP01 shared fixture now verifies no-burn delivery, stages, custody and claims, with a targeted mirrored HP1 price/refill case. Historical burn results below remain separate from current evidence.
+For the standalone BossHP implementation, the same-pool refill/reset model is documented in [Refill math](refill-math.md). A controller-only reverse swap during transition restores the lower price, then incremental liquidity funds the next stage. The BP01 shared fixture verifies that standalone path. Factory bosses do not use these refills or gated LP additions. Historical burn results below remain separate from current evidence.
 
 ## Finite registered stage liquidity
 

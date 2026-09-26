@@ -1,6 +1,6 @@
 # Battle routing by boss address
 
-Status: implemented and locally verified, with the retired Base Sepolia standalone boss removed from the live app on 27 September 2026. Factory battles, local standalone regression support, and hardcoded Boss presentation mappings remain. [Verification evidence](evidence/battle-hook-routing-verification.json) records the SDK journeys, desktop browser checks, and review result.
+Scope: historical implementation plan, completed and locally verified. On 27 September 2026, the retired Base Sepolia standalone boss was removed from the live app. Factory battles, local standalone regression support, and hardcoded Boss presentation mappings remain. [Verification evidence](evidence/battle-hook-routing-verification.json) records the SDK journeys, desktop browser checks, and review result.
 
 [Retirement verification](evidence/retired-boss-removal-verification.json) records the old Hook rejection and the absence of reads to retired Boss contracts.
 
@@ -10,10 +10,10 @@ Use `/battle/<hook-address>?network=base-sepolia` to open one specific boss. The
 
 The route parameter can remain named `pool_id`, but its value is an EVM Hook address. It is neither the Uniswap v4 `bytes32` pool ID nor the Factory's `bossId`. The selected encounter is identified by chain ID and normalized Hook address.
 
-Example for the current Factory demo:
+The current default Factory boss:
 
 ```text
-/battle/0xc11D07448948AC4757592E91D8f5155907Ef6AC0?network=base-sepolia
+/battle/0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0?network=base-sepolia
 ```
 
 An unknown address must never display or transact with the default demo. The existing quote review, explicit wallet approval, attack confirmation, and receipt recovery remain. The player UI continues to have no faucet.
@@ -34,9 +34,9 @@ Initial known mapping:
 
 | Network | Hook address | Presentation |
 | --- | --- | --- |
-| Base Sepolia, 84532 | `0xc11D07448948AC4757592E91D8f5155907Ef6AC0` | Pool Unis, cat forms A/B/C |
+| Base Sepolia, 84532 | `0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0` | Current Factory Roy, cat forms A/B/C |
 
-Add other mappings when their actual Hook addresses and intended Boss presentations are known. The local demo's verified manifest supplies its current Hook address and explicitly maps it to the same Pool Unis presentation. Do not invent deployed addresses or assign art from the token symbol.
+The current Roy Hook has an explicit Pool Unis mapping. Other verified perpetual Factory bosses use that presentation as a fallback when no mapping exists. Timed Factory bosses still require a mapping; otherwise the app shows an unavailable-appearance message. The old `0xc11D...` mapping and URL in the original implementation are historical. Do not infer an encounter's identity from its token symbol.
 
 The mapping controls presentation only. Read tokens, progress, deadlines, rewards, and transaction targets from the verified encounter. A mapping entry is not proof that a contract is valid. Display the Hook address and network in battle details.
 
@@ -94,10 +94,10 @@ Add `apps/web/src/app/battle/[pool_id]/page.tsx` and update battle components an
 - Redirect bare `/battle` and legacy `/mock-battle` links to the configured default boss on the selected network. The Base Sepolia manifest selects the active Factory Hook through `defaultBossHook`; manifests without that setting retain their standalone Hook. If that default deployment is missing, show an unavailable state rather than inventing an address.
 - Keep explicit pool URLs fixed to their requested Hook. Changing network must update the URL and verify that Hook on the selected chain; it must not silently replace it with another boss.
 - Render Factory identity, token units, stage-volume progress, and reward credit from its verified state. Show purchased MEME separately from the stage's volume-based completion condition. Keep the standalone HP-based display.
-- Look up the hardcoded presentation by chain ID and Hook address, then pass its name and stage images into `BattleView`, `NamePlate`, and `BossStage`. Show the explicit unconfigured appearance state when no entry exists. Update `StatusPanel`, `VictoryCard`, and `BossActions` for the correct progress and reward mode.
+- Look up the hardcoded presentation by chain ID and Hook address, then pass its name and stage images into `BattleView`, `NamePlate`, and `BossStage`. Current perpetual Factory bosses without an explicit mapping use the Pool Unis fallback. Other unmapped encounters show an unconfigured appearance state. Update `StatusPanel`, `VictoryCard`, and `BossActions` for the correct progress and reward mode.
 - Show a clear invalid, unknown, unavailable, incompatible, expired, or defeated state as applicable. Expiry continues to follow the on-chain deadline.
 
-Acceptance: a copied direct link loads the same boss in a fresh browser. Two Factory bosses with the same token can show different configured presentations, and remain distinct by address and state. Address casing does not change the mapping, and an unmapped Hook never displays Pool Unis by default.
+Acceptance: a copied direct link loads the same boss in a fresh browser. Two Factory bosses with the same token can show different configured presentations, and remain distinct by address and state. Address casing does not change the mapping. Only a verified perpetual Factory boss can use the Pool Unis fallback; other unmapped Hooks show an unconfigured appearance.
 
 ### 5. Verify and deliver
 
@@ -115,6 +115,6 @@ Follow the current `docs/agents/models.md` routing: GPT-6 Luna at xhigh for impl
 
 ## Release dependencies
 
-No contract accounting changes were required. Main now includes the corrected Base Sepolia Factory at block `47332647` and an active demo boss at block `47332745`. The user selected Pool Unis for the new Hook `0xc11D07448948AC4757592E91D8f5155907Ef6AC0`. The original Factory remains historical and incompatible. Public-chain player transactions remain a separate verification step.
+Historical implementation note: the original plan referenced the timed Factory at block `47332647` and its boss at block `47332745`, Hook `0xc11D07448948AC4757592E91D8f5155907Ef6AC0`. That boss is no longer the default. The current Factory is `0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7` at block `47341945`; current default Roy is Hook `0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0`, launched at block `47342620`. See the [Factory deployment reference](boss-factory.md#base-sepolia-deployment).
 
 The expired Base Sepolia standalone round is retired from live configuration and presentation. Its old address does not resolve through the live battle selector. Historical evidence, generic local regression support, and recovery of already submitted operations remain. No contract was modified or redeployed for this removal.
