@@ -4,7 +4,7 @@ Boss BoostPad turns a token pool into a boss raid on Uniswap v4. Creators commit
 
 [Live demo](https://web-smoky-tau-35.vercel.app/) · [Create a boss](https://web-smoky-tau-35.vercel.app/boostpad) · [Play the demo battle](https://web-smoky-tau-35.vercel.app/battle/0xc11D07448948AC4757592E91D8f5155907Ef6AC0?network=base-sepolia) · [Uniswap feedback](FEEDBACK.md)
 
-廣東話 pitch：Boss BoostPad 為已有代幣開一個池，再變成 Boss 戰。攻擊就係 swap，所以每一下攻擊都增加該幣嘅成交量。打贏之後戰士分創建者放嘅獎。開戰時全部售賣流動性已經啟用。清第一階等 60 秒，清第二階等 120 秒，再繼續攻擊。
+Pitch: Boss BoostPad creates a pool for an existing token and turns it into a boss battle. Attacks are swaps, so each attack adds to that token's trading volume. After victory, fighters share the creator-funded prize. All sale liquidity is active from the start. Clearing stage one starts a 60-second wait; clearing stage two starts a 120-second wait before attacks resume.
 
 [Background](#background-and-the-problem) · [Why hooks](#why-uniswap-v4-hooks) · [How it works](#how-it-works) · [Components](#components) · [Contract addresses](#contract-addresses) · [Integration code](#uniswap-v4-integration-code) · [Run](#run-the-project) · [Build](#build-and-check) · [Evidence](#verification-and-current-status) · [Milestones](#planned-milestones)
 
