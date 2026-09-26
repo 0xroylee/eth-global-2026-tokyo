@@ -54,7 +54,7 @@ export const POOL_UNIS_PRESENTATION: BossPresentation = {
 
 /** A presentation is a checked-in choice for one chain and Hook; it never verifies a contract. */
 const BOSS_PRESENTATIONS: Readonly<Record<string, BossPresentation>> = {
-  "84532:0xc11d07448948ac4757592e91d8f5155907ef6ac0": POOL_UNIS_PRESENTATION,
+  "84532:0x1df6674f1c6b18d9c1b3df2480093ac831816ac0": POOL_UNIS_PRESENTATION,
 };
 
 export function findBossPresentation(chainId: number, hookAddress: string, localDefaultHookAddress?: string): BossPresentation | undefined {

@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "network": "base-sepolia",
+  "chainId": 84532,
+  "name": "Roy",
+  "presentation": "Pool Unis",
+  "factory": "0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7",
+  "contractSourceRevision": "d0ad8d87ca5bab80c927e7412bd2a200a75549c5",
+  "sourceRevision": "e12dc8d94497d3a4232f366ca450132ab27304f6",
+  "classification": "TEAM_DEPLOYED_NON_PRODUCTION_DEMO",
+  "token": "0x3A4AF1018EB5B9D774119C818a4eaC7CcdfBC1A2",
+  "tokenDetails": {
+    "name": "Boss HP",
+    "symbol": "BHP",
+    "decimals": 18,
+    "totalSupply": "10000000000000000000000",
+    "deploymentTxHash": "0x521077b78ac96b6ac898a25448b0e7c8d60ecb9f69720b522e4822d6844707e7",
+    "deploymentBlock": 47342611
+  },
+  "config": {
+    "token": "0x3A4AF1018EB5B9D774119C818a4eaC7CcdfBC1A2",
+    "tokenAllocation": "10000000000000000000000",
+    "prizeBps": 1000,
+    "volumeTargetMockUSD": "60000000",
+    "deadline": "0",
+    "maxAttackTokenPerMockUSDX128": "3789738636001464975628547786588400165369676310724346"
+  },
+  "quote": {
+    "prizeAmount": "1000000000000000000000",
+    "battleTokenBudget": "9000000000000000000000",
+    "saleHPBudget": "9000000000000000000000",
+    "requiredBattleTokenFunding": "9000000000000000000000",
+    "estimatedAttackToken": "668222453656902511414",
+    "stageOneHP": "1500000000000000000000",
+    "hpPriceTick": -25980,
+    "maxRoyPerMockUSDX128": "3789738636001464975628547786588400165369676310724346"
+  },
+  "hash": "0x1db679d76d70c95281211f8f1f8f126430da729ab7a0accefed083d986ff04fa",
+  "bossId": "0xd9d21173a7144a6e5d632b1a33097331756c7c2fc1fdebc77725450d26bff4d7",
+  "maker": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+  "hook": "0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0",
+  "router": "0x824464AF219850Fde45d539FC9f754205Dbf2df7",
+  "collectibles": "0xDE19925D3ECbB29cBbF2bed254452D1f6197c376",
+  "blockNumber": 47342620,
+  "launchLogIndex": 11,
+  "userSalt": "0xa15fc5feddfe97346ea5d3aae629636d14dadcc7d8f1b344b68492d6789b6521",
+  "hookSalt": "0x0000000000000000000000000000000000000000000000000000000000000179",
+  "routerCreationCodeHash": "0x60b4e72101c0eece991872c4c7295a4b2ccbf8d81598f842409cd1b66c71bd7f",
+  "hookCreationCodeHash": "0x5ca09a209d8456bf912313dbc75fd6e81c23183ccbcf4cf51b644de9ca13689d",
+  "verification": {
+    "verifiedAt": "2026-09-26T20:14:10.623Z",
+    "block": "47342662",
+    "status": 1,
+    "stage": 0,
+    "totalVolume": "0",
+    "deadline": "0",
+    "originalPrize": "1000000000000000000000",
+    "totalSupply": "10000000000000000000000",
+    "bossHPInHook": "1000000000000000000000",
+    "bossHPInRouter": "0",
+    "bossHPInPoolManager": "9000000000000000000000",
+    "stageLiquidity": [
+      "26825697136040820684432",
+      "26825697136040820684432",
+      "26825697136040820684432"
+    ],
+    "stageVolumeTarget": [
+      "10000000",
+      "20000000",
+      "30000000"
+    ],
+    "remainingSellableHP": "8999999999999999999999",
+    "initialSaleBudget": "9000000000000000000000",
+    "minimumLiquidity": "26825697136040820684432",
+    "poolLiquidity": "26825697136040820684432",
+    "owner": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+    "codeMatches": {
+      "BossHook": true,
+      "BossRouter": true,
+      "BossCollectibles": true,
+      "BossHP": true
+    },
+    "attackQuote": {
+      "requestedMaxMockUSD": "1000000",
+      "chainId": 84532,
+      "deploymentTxHash": "0x1db679d76d70c95281211f8f1f8f126430da729ab7a0accefed083d986ff04fa",
+      "router": "0x824464AF219850Fde45d539FC9f754205Dbf2df7",
+      "hook": "0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0",
+      "quotedBlock": "47342670",
+      "quotedAt": "1790453628",
+      "expiresAt": "1790453928",
+      "stage": 0,
+      "maxMockUSD": "1000000",
+      "mockUSDSpent": "1000000",
+      "mockUSDRefunded": "0",
+      "royBought": "10093679563565791709",
+      "roySpent": "10093679563565791709",
+      "royRefunded": "0",
+      "bossHPOut": "135017034314816772759",
+      "minRoyOut": "9992742767930133791",
+      "minBossHPOut": "133666863971668605031",
+      "slippageBps": 100,
+      "supplyPoolFee": 3000,
+      "bossPoolFee": 3000,
+      "stageCleared": false,
+      "bossDefeated": false,
+      "nextStage": 0
+    }
+  },
+  "operations": [
+    {
+      "kind": "token-deployment",
+      "transactionHash": "0x521077b78ac96b6ac898a25448b0e7c8d60ecb9f69720b522e4822d6844707e7"
+    },
+    {
+      "kind": "approval",
+      "transactionHash": "0x5a812c7aef36d3c0a350f3a3193ece276d82196895a59bec993bc08440fa26eb",
+      "calldataHash": "0x7386653647f0e16bdb2ef3c83d6ae8b3cd23c8d9cecf9a19d8bf29dbdee200a4"
+    },
+    {
+      "kind": "launch",
+      "transactionHash": "0x1db679d76d70c95281211f8f1f8f126430da729ab7a0accefed083d986ff04fa",
+      "calldataHash": "0x00ec3ffdb2500fe1a7c5f79668b6c865cf1fea2283e274fd5976dce55ac5db3e"
+    }
+  ],
+  "playerTransactionsSent": 0,
+  "retiredRoy": {
+    "hook": "0xc11D07448948AC4757592E91D8f5155907Ef6AC0",
+    "router": "0x087D22c53082ED7841cB5716cB699111a02b0dEf",
+    "token": "0x5a5517f63714f44F19337d34ab29d5ACC652e4CF",
+    "collectibles": "0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925",
+    "factory": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
+    "launchHash": "0x757a887b2de2275dcd617b8daa8eeef6fa19d8dc469185b2aaa8f0aa1517a120",
+    "removedFromDefault": true,
+    "removedFromRoyPresentation": true,
+    "contractsRemainOnChain": true
+  },
+  "forkPreflight": {
+    "rpcUrl": "http://127.0.0.1:18551",
+    "forkBlock": 47342432,
+    "passed": true,
+    "note": "Anvil priority fee was 1 gwei versus public Base Sepolia 0.001 gwei. Raising only the fork wallet ETH balance resolved estimate-gas affordability; public contract code was unchanged."
+  }
+}
