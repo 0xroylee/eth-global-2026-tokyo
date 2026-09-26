@@ -1,4 +1,4 @@
-import { ROBINHOOD_TESTNET_CHAIN_ID, type ActivityEntry } from "@boss-pool/chain";
+import { ROBINHOOD_TESTNET_CHAIN_ID, type ActivityEntry, type ActivityPage, type DeploymentManifest } from "@boss-pool/chain";
 import { displayEstimate } from "./format";
 
 /**
@@ -155,4 +155,60 @@ export function generateMockEvents(seed: number, count: number): WorldChannelEve
 /** Injection cadence in [3000, 8000) ms so the ambient stream never looks metronomic. */
 export function mockIntervalMs(rng: () => number): number {
   return 3_000 + Math.floor(rng() * 5_000);
+}
+
+export const MAX_WORLD_ROWS = 24;
+
+function sourceRank(event: WorldChannelEvent): number {
+  return event.source === "chain" ? 0 : 1;
+}
+
+/** Newest first; on a timestamp tie chain outranks mock; id is the final stable tiebreak. Cap the feed length. */
+function sortAndCap(events: WorldChannelEvent[]): WorldChannelEvent[] {
+  return events
+    .sort((a, b) =>
+      b.timestamp - a.timestamp ||
+      sourceRank(a) - sourceRank(b) ||
+      (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
+    .slice(0, MAX_WORLD_ROWS);
+}
+
+/**
+ * Merge a fresh real page into the feed. Generalizes mergeBattleAttacks: belongsToBoss matches on
+ * chain + deployment only (defeat / nft / reward emit from the hook, not the router), mock rows are
+ * always retained, and chain rows inside the rescanned window are replaced by the new page (reorg-safe).
+ */
+export function blendWorldEvents(
+  current: readonly WorldChannelEvent[],
+  page: ActivityPage,
+  manifest: DeploymentManifest,
+  ctx: WorldEventContext,
+): WorldChannelEvent[] {
+  const belongsToBoss = (entry: ActivityEntry) =>
+    entry.chainId === manifest.chainId &&
+    entry.deploymentTxHash.toLowerCase() === manifest.deploymentTxHash.toLowerCase();
+  const events = new Map<string, WorldChannelEvent>();
+  for (const event of current) {
+    if (event.source === "mock") {
+      events.set(event.id, event);
+      continue;
+    }
+    if (event.blockNumber !== undefined &&
+      (event.blockNumber < page.scannedFromBlock || event.blockNumber > page.scannedToBlock)) {
+      events.set(event.id, event);
+    }
+  }
+  for (const entry of page.entries) {
+    if (!belongsToBoss(entry)) continue;
+    const mapped = toWorldEvent(entry, ctx);
+    if (mapped) events.set(mapped.id, mapped);
+  }
+  return sortAndCap([...events.values()]);
+}
+
+/** Insert one event (a freshly injected mock row) and re-apply the sort/cap invariant. */
+export function addWorldEvent(current: readonly WorldChannelEvent[], event: WorldChannelEvent): WorldChannelEvent[] {
+  const events = new Map(current.map((existing) => [existing.id, existing]));
+  events.set(event.id, event);
+  return sortAndCap([...events.values()]);
 }
