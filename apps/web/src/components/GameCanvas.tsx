@@ -33,7 +33,10 @@ export function GameCanvas({ bridge }: { bridge: GameBridge }) {
 
   return (
     <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-white/10 bg-ink shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
-      <div ref={hostRef} className="absolute inset-0 [&>canvas]:!h-full [&>canvas]:!w-full" />
+      <div
+        ref={hostRef}
+        className="absolute inset-0 [&>canvas]:!h-full [&>canvas]:!w-full [&>canvas]:[image-rendering:pixelated]"
+      />
       {booting && (
         <div className="absolute inset-0 grid place-items-center font-mono text-[10px] tracking-[0.2em] text-dim">
           LOADING HUB

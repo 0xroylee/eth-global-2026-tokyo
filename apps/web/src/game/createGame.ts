@@ -12,7 +12,8 @@ export function createGame(parent: HTMLElement, bridge: GameBridge): Phaser.Game
     width: VIEWPORT.width,
     height: VIEWPORT.height,
     backgroundColor: "#080b14",
-    antialias: true,
+    pixelArt: true,
+    antialias: false,
     roundPixels: true,
     scale: {
       mode: Phaser.Scale.FIT,
