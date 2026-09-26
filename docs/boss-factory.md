@@ -97,3 +97,9 @@ Verified on 26 September 2026 against the merge-updated working tree for PR #38.
 - `cd contracts && forge test --match-contract BossPoolCoreTest -vv` passes all twelve shared scenarios. Coverage includes the standalone round, factory rounds with either token ordering, three volume-gated stages, public quote simulation, MEME prizes, creators reusing a token and launch salt, six-decimal MEME, failed-transition rollback, funding errors, expiry, and LP recovery with outstanding claims. Review regressions cover a one-base-unit volume tail, stable mined addresses through a supply-price move, and partial-price bitmap fee rounding.
 
 These runs use the real pinned v4 PoolManager. Network deployment remains unverified.
+
+PR #38 review fixes are verified through code commit `93ae695a24e57fca5b3c083bf80c82d9eae878d9`. Sixteen SDK/UI regression checks, typecheck, production web build, and generated ABI/bytecode consistency pass. A local Factory SDK smoke covered exact approval including a zero reset, frozen-rate launch, captured transaction identities, and read-only recovery without another transaction.
+
+The full standalone SDK journey caught renamed `RewardClaimed` arguments that broke the older public decoder fields. The SDK and activity reader now normalize those names. The already-mined claim was recovered without another transaction or changes to redemption totals; a fresh standalone journey then completed all fourteen transactions. [Review verification evidence](evidence/factory-review-verification.json) records the local results and contract sizes.
+
+Desktop browser checks covered the missing-Factory state, invalid token input, and reachable launch actions at 1280×720. No mobile layout checks or public-chain transactions were performed. Injected-wallet popup confirmation remains a manual check.
