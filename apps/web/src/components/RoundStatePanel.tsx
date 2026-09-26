@@ -64,6 +64,9 @@ function StatusBadge({ state }: { state: DeploymentState }) {
 
 function LiveRound({ deployment }: { deployment: Extract<DeploymentState, { kind: "live" }> }) {
   const { manifest, round } = deployment;
+  const factory = round.encounterMode === "factory";
+  const hpToken = round.hpToken;
+  const rewardToken = round.rewardToken;
   return (
     <>
       <p className="mt-4 font-mono text-[9px] leading-[1.6] tracking-[0.02em] text-[#828da8]">
@@ -76,21 +79,23 @@ function LiveRound({ deployment }: { deployment: Extract<DeploymentState, { kind
         <Metric label="CURRENT STAGE" value={`${round.currentStage + 1} / 3`} />
         <Metric
           label="ORIGINAL PRIZE"
-          value={`${displayAmount(round.originalPrize, 6)} mUSD`}
-          detail={`Hook MockUSD balance: ${displayAmount(round.mockUSDInHook, 6)} mUSD`}
+          value={`${displayAmount(round.originalPrize, rewardToken.decimals)} ${rewardToken.symbol}`}
+          detail={factory
+            ? `Hook ${hpToken.symbol} balance: ${displayAmount(round.bossHPInHook, hpToken.decimals)} ${hpToken.symbol} · MockUSD: ${displayAmount(round.mockUSDInHook, 6)} mUSD`
+            : `Hook MockUSD balance: ${displayAmount(round.mockUSDInHook, 6)} mUSD`}
         />
       </div>
 
       <div className="mt-5">
-        <p className="eyebrow mb-2.5">STAGE HP SOLD</p>
+        <p className="eyebrow mb-2.5">{factory ? "STAGE TOKEN SOLD" : "STAGE HP SOLD"}</p>
         <div className="hairline grid grid-cols-1 overflow-hidden rounded-[9px] border divide-y divide-white/8 md:grid-cols-3 md:divide-x md:divide-y-0">
           {round.stageSold.map((sold, index) => (
             <div className="flex min-w-0 flex-col gap-[11px] p-3.5" key={index}>
               <span className="font-mono text-[9px] tracking-[0.1em] text-dim">STAGE 0{index + 1}</span>
               <strong className="text-sm font-medium text-[#e7ebf8] [overflow-wrap:anywhere]">
-                {displayAmount(sold, 18)}{" "}
+                {displayAmount(sold, hpToken.decimals)}{" "}
                 <small className="text-[10px] font-normal text-[#828da8]">
-                  / {displayAmount(round.stageCapacity[index], 18)} HP
+                  / {displayAmount(round.stageCapacity[index], hpToken.decimals)} {hpToken.symbol}
                 </small>
               </strong>
             </div>
@@ -102,20 +107,20 @@ function LiveRound({ deployment }: { deployment: Extract<DeploymentState, { kind
         <summary className="eyebrow cursor-pointer list-none select-none marker:content-none">
           <span className="group-open:hidden">▸ </span>
           <span className="hidden group-open:inline">▾ </span>
-          BOSSHP CUSTODY · DEV VIEW
+          {factory ? "TOKEN CUSTODY · DEV VIEW" : "BOSSHP CUSTODY · DEV VIEW"}
         </summary>
         <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-[18px] md:grid-cols-4 md:gap-y-3">
-          <Metric label="TOTAL SUPPLY" value={`${displayAmount(round.bossHPTotalSupply, 18)} HP`} />
+          <Metric label="TOTAL SUPPLY" value={`${displayAmount(round.bossHPTotalSupply, hpToken.decimals)} ${hpToken.symbol}`} />
           <Metric
             label="POOL MANAGER"
-            value={`${displayAmount(round.bossHPInPoolManager, 18)} HP`}
+            value={`${displayAmount(round.bossHPInPoolManager, hpToken.decimals)} ${hpToken.symbol}`}
             detail="LP inventory and fees"
           />
-          <Metric label="ROUTER RESERVE" value={`${displayAmount(round.bossHPInRouter, 18)} HP`} />
+          <Metric label="ROUTER RESERVE" value={`${displayAmount(round.bossHPInRouter, hpToken.decimals)} ${hpToken.symbol}`} />
           <Metric
             label="HOOK CUSTODY"
-            value={`${displayAmount(round.bossHPInHook, 18)} HP`}
-            detail={`${displayAmount(round.redeemedHP, 18)} redeemed`}
+            value={`${displayAmount(round.bossHPInHook, hpToken.decimals)} ${hpToken.symbol}`}
+            detail={`${displayAmount(round.redeemedHP, hpToken.decimals)} ${factory ? "Factory credit used" : "redeemed"}`}
           />
         </div>
         <p className="hairline mt-[18px] border-t pt-3 text-xs text-[#a2abc1]">

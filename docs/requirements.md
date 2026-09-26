@@ -103,7 +103,7 @@ Keep the shared E2E and focused accounting checks. Optional held-Attack Token at
 
 ## Live battle page
 
-`/battle/<hook-address>?network=base-sepolia` opens one verified Boss encounter using `@boss-pool/chain`; `network=local` selects the local chain. The path contains the Boss Hook address, not a Uniswap pool ID or Factory boss ID. Bare `/battle` and old `/mock-battle` links lead to the selected network's standalone demo. Explicit addresses never fall back to a different Boss.
+`/battle/<hook-address>?network=base-sepolia` opens one verified Boss encounter using `@boss-pool/chain`; `network=local` selects the local chain. The path contains the Boss Hook address, not a Uniswap pool ID or Factory boss ID. Bare `/battle`, old `/mock-battle` links, and the hub use the manifest's configured default Boss. Base Sepolia selects the active Factory Hook `0xc11D07448948AC4757592E91D8f5155907Ef6AC0`. Local and older manifests fall back to their standalone Hook. Explicit addresses never fall back to a different Boss.
 
 Boss names and stage artwork are configured in code by network and Hook address. The existing Base Sepolia demo and configured local demo use **Pool Unis**. Other addresses need an explicit presentation mapping. A verified Factory boss without a mapping shows **Boss appearance not configured**, while its real token data and actions remain available. The mapping does not authorize an unverified contract. **SWAP ATTACK** remains the attack command.
 

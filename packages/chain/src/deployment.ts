@@ -79,6 +79,8 @@ type ManifestBase = {
     address: Address;
     deployedAtBlock: number;
   }>;
+  /** Hook used by bare battle routes; defaults to the standalone deployment Hook for legacy manifests. */
+  defaultBossHook?: Address;
   /** Factory launch proof retained with a resolved encounter so recovery can re-verify its original origin. */
   bossOrigin?: FactoryBossOrigin;
   addresses: DeploymentAddresses;
@@ -101,6 +103,10 @@ export type BaseSepoliaDeploymentManifest = ManifestBase & {
 };
 export type TestnetDeploymentManifest = RobinhoodDeploymentManifest | BaseSepoliaDeploymentManifest;
 export type DeploymentManifest = LocalDeploymentManifest | TestnetDeploymentManifest;
+
+export function getDefaultBossHook(manifest: DeploymentManifest): Address {
+  return manifest.defaultBossHook ?? manifest.addresses.hook;
+}
 export type VerifiedDeployment = {
   readonly manifest: DeploymentManifest;
   readonly chainId: SupportedChainId;
@@ -139,6 +145,9 @@ export function parseDeployment(value: unknown): DeploymentManifest {
     typeof manifest.deploymentTxHash !== "string" || !/^0x[\da-fA-F]{64}$/.test(manifest.deploymentTxHash) ||
     !addresses || names.some((name) => !isAddressValue(addresses[name]))
   ) throw new Error("Deployment manifest is missing a valid chain receipt or contract address.");
+  if (manifest.defaultBossHook !== undefined && !isAddressValue(manifest.defaultBossHook)) {
+    throw new Error("Deployment manifest has an invalid default Boss Hook address.");
+  }
   if (manifest.bossFactory !== undefined && !isAddressValue(manifest.bossFactory)) {
     throw new Error("Deployment manifest has an invalid Boss Factory address.");
   }
@@ -831,6 +840,7 @@ function manifestIdentity(manifest: DeploymentManifest): string {
     JSON.stringify(manifest.previousBossFactories ?? []),
     origin?.factoryAddress.toLowerCase() ?? "", origin?.bossId.toLowerCase() ?? "",
     origin?.launchTxHash.toLowerCase() ?? "", origin?.launchLogIndex ?? "", origin?.launchBlockNumber ?? "",
+    manifest.defaultBossHook?.toLowerCase() ?? "",
     addresses.hook.toLowerCase(), addresses.router.toLowerCase(), addresses.bossHP.toLowerCase(),
     addresses.roy.toLowerCase(), addresses.mockUSD.toLowerCase(), addresses.collectibles.toLowerCase(),
     addresses.poolManager.toLowerCase()].join(":");

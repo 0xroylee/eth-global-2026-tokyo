@@ -1,5 +1,6 @@
 {
   "chainId": 84532,
+  "defaultBossHook": "0xc11D07448948AC4757592E91D8f5155907Ef6AC0",
   "deployer": "0x1ab476210D3Ad23fCEdA23B10Bf8Fee0F9f802F5",
   "bossFactory": "0x353749ffa9640c4152dd28068c416adfc2eb168e",
   "addresses": {

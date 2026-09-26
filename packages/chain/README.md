@@ -96,6 +96,8 @@ console.log(round.status, round.currentStage, round.bossCurrentSqrtPriceX96, pla
 
 ### Select a boss by Hook address
 
+`getDefaultBossHook(manifest)` returns the configured `defaultBossHook`, falling back to the standalone `addresses.hook` for older and local manifests. This changes the default entry without replacing the standalone deployment's verification addresses or receipt.
+
 `resolveBossDeployment(publicClient, baseManifest, hookAddress)` resolves either the configured standalone demo or a boss launched by the configured Factory. Factory discovery starts at `bossFactoryDeployedAtBlock`, which must accompany `bossFactory` in the base manifest. It verifies launch provenance and contract wiring before returning a deployment usable by `createBossPoolSdk`.
 
 ```ts

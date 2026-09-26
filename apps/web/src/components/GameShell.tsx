@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type Address, type DeploymentManifest } from "@boss-pool/chain";
+import { getDefaultBossHook, type Address, type DeploymentManifest } from "@boss-pool/chain";
 import { confirmedBattleAttack } from "@/lib/battle";
 import { findBoss, type BossId } from "@/game/bosses";
-import { GameBridge } from "@/game/bridge";
+import { GameBridge, hubStageProgress } from "@/game/bridge";
 import { useHubGuide } from "@/lib/useHubGuide";
 import type { useBossPool, NetworkKey } from "@/lib/useBossPool";
 import { useArena } from "./BossPoolProvider";
@@ -96,8 +96,7 @@ export function GameShell() {
       bridge.send("round:state", {
         status: deployment.round.status,
         currentStage: deployment.round.currentStage,
-        stageSold: deployment.round.stageSold,
-        stageCapacity: deployment.round.stageCapacity,
+        ...hubStageProgress(deployment.round),
       });
     } else {
       const label = deployment.kind === "loading"
@@ -404,8 +403,7 @@ function RoutePrompt({ hidden }: { hidden: boolean }) {
 }
 
 function isHubEncounter(state: ReturnType<typeof useBossPool>["deployment"]): state is Extract<ReturnType<typeof useBossPool>["deployment"], { kind: "live" }> {
-  return state.kind === "live" && state.hookAddress.toLowerCase() === state.context.baseManifest.addresses.hook.toLowerCase() &&
-    state.context.deployment.encounterMode === "standalone";
+  return state.kind === "live" && state.hookAddress.toLowerCase() === getDefaultBossHook(state.context.baseManifest).toLowerCase();
 }
 
 type AttackOrigin = { network: NetworkKey; hookAddress: Address; manifest: DeploymentManifest; target: string };

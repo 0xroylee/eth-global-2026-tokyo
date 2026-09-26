@@ -550,9 +550,9 @@ export class HubScene extends Phaser.Scene {
       return;
     }
     const stage = this.roundState.currentStage;
-    const capacity = this.roundState.stageCapacity[stage] ?? 0n;
-    const sold = this.roundState.stageSold[stage] ?? 0n;
-    const percent = capacity > 0n ? Math.min(100, Number((sold * 100n) / capacity)) : 0;
+    const target = this.roundState.stageTarget[stage] ?? 0n;
+    const progress = this.roundState.stageProgress[stage] ?? 0n;
+    const percent = target > 0n ? Math.min(100, Number((progress * 100n) / target)) : 0;
     const status = this.roundState.status === 3 ? "DEFEATED" : this.roundState.status === 4 ? "EXPIRED" : "ACTIVE";
     catGate.stageLabel.setText(status === "ACTIVE" ? `S${stage + 1}/3 · ${percent}%` : `S${stage + 1}/3 · ${status}`);
     catGate.stageLabel.setColor(this.roundState.status === 3 ? "#91e7c5" : this.roundState.status === 4 ? "#9da8c3" : "#f5b04a");
