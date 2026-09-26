@@ -90,6 +90,8 @@ bun run local:activity-smoke
 
 `ACTIVITY_JOURNAL_PATH` defaults to `docs/evidence/local-sdk-direct-attack.json`; keep the manifest and journal from the same deployment and completed exercise.
 
+Verified against the existing local two-wallet journey: 69 supported events, four authoritative attacks, wallet-filtered transfer/claim/NFT history, and cursor guards. See the [activity verification record](../../docs/evidence/wallet-activity-verification.json). This verification reads receipts and logs only.
+
 ## Public quote before approval
 
 The Router quote uses the real two-hop route and any reserve-funded stage transition inside a reverting simulation frame. It requires no account, allowance, or player balance. It does not change pool state.
