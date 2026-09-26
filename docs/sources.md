@@ -1,6 +1,6 @@
 # Source notes
 
-Reviewed on 26 September 2026. These references support the no-burn BossHP implementation. BP01 has local core evidence, an actual Anvil deployment and a verified read-only arena. The historical Robinhood testnet fixture has deployment and player-journey receipts; the active Base Sepolia target and complete browser attack/claim journey remain unverified. Historical burn proofs remain separately labeled; see [current BP01 evidence](bp01-foundation.md).
+Hook and fee references checked on 27 September 2026 against [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`. Sponsor and network notes below retain their earlier research context. [PR #75](https://github.com/0xroylee/eth-global-2026-tokyo/pull/75) and the [continuous Factory record](evidence/base-sepolia-continuous-factory.json) establish the current Base Sepolia launch Factory with fixed 0.3% fees. The [current Roy launch](evidence/base-sepolia-roy-boss.json) uses that continuous-liquidity Factory, while the retired timed Roy retains its earlier staged build. A mock-enabled public deployment and complete browser attack/claim journey remain unverified. Historical Robinhood receipts and burn proofs remain separately labelled. See [Factory deployment history](boss-factory.md#base-sepolia-deployment) and [BP01 evidence](bp01-foundation.md).
 
 ## Sponsor requirements
 
@@ -44,9 +44,11 @@ Relevant source snapshots:
 - [Hooks.sol](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/Hooks.sol): returned hook deltas are deducted from the caller's swap delta. Hook calls can be skipped for a swap initiated by that hook itself. Use a separate attack router.
 - [PoolManager.sol](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/PoolManager.sol): `take` moves currency and accounts a negative delta. Swap accounts the hook's returned delta. Unlock rejects unsettled currency deltas. Its `burn` function burns ERC-6909 claims, **not the Attack Token ERC-20 supply**.
 
-The implementation uses the supply pool followed by the Boss pool. afterSwap counts actual BossHP output, returns zero hook delta, and lets the router deliver tokens normally. A separate BossRouter initiates operations so intended callbacks are not suppressed. The current shared real-v4 fixture covers the full HP0 no-burn/token-redemption path, a mirrored HP1 price/refill path, deadline rejection and expiry. Callback identity, stage bounds, reserve-funded maintenance and rollback are core checks. LP fees are fixed and protocol fees must be zero in the supported route.
+The implementation uses the supply pool followed by the Boss pool. `afterSwap` counts actual output, returns zero hook delta, and lets the Router deliver tokens normally. A separate BossRouter initiates operations so intended callbacks are not suppressed. Factory output earns per-player credit; the standalone fixture uses transferable HP redemption and reserve-funded stage maintenance. Current Factory stages use volume and cooldowns without refill or LP release. The supply LP fee is fixed at 0.3%; the Boss LP fee is fixed at 0.3% without a controller and dynamic with one. Protocol fees must be zero in the supported route. The [design explanation](uniswap-v4-hooks.md#code-reading-map) maps these claims to current symbols.
 
 The five selected callbacks are beforeInitialize, beforeSwap, afterSwap, beforeAddLiquidity and beforeRemoveLiquidity. Return-delta permissions are off. The hook must be deployed to an address whose flags match that permission set; use the upstream HookMiner rather than assuming an arbitrary address works.
+
+The pinned [LPFeeLibrary.sol](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/LPFeeLibrary.sol) defines the dynamic-mode sentinel and per-swap override flag. [BossHook.beforeSwap](../contracts/src/BossHook.sol) returns an override computed by [BossFeeController.feeForSwap](../contracts/src/BossFeeController.sol), rather than changing the curve or returning a custom token delta. [MockBossPriceSource](../contracts/src/MockBossPriceSource.sol) provides owner-selected reference data, not external USD market data. The [deployment script](../contracts/script/DeployBossFactory.s.sol) sets demo freshness to 600 seconds and maximum fee to 90%. Invalid/stale data and above-maximum required fees reject attacks rather than supplying a fallback or clamped fee.
 
 ## Client tools
 
@@ -58,6 +60,11 @@ Use [viem simulateContract](https://viem.sh/docs/contract/simulateContract) befo
 
 ## Claims to avoid
 
+- The old timed Roy was upgraded by the newer launch Factory. The current default Roy is a fresh encounter; existing contracts retain their rules. Public current-build encounters use continuous liquidity and fixed fees, while mock-driven fees remain local.
+- Factory stages release token percentages or separate sale buckets. All sale liquidity is active at launch; 1:2:3 splits eligible volume goals.
+- The Mock Token Oracle reports real USD prices or completes external-oracle protection. It is an owner-controlled testnet reference.
+- Dynamic fees reset AMM price or guarantee that arbitrage and market losses disappear. They change the transaction's LP fee only.
+- A locked initial LP size guarantees a price floor. It does not.
 - V3 cannot implement a game or atomic buy-and-burn workflow. It can, with external contracts and different integration constraints.
 - Testnet entry costs provide real Sybil resistance. They do not.
 - $6,000 is the first-place award. It is the standard-track total.

@@ -4,9 +4,11 @@ Boss BoostPad turns a token pool into a boss raid on Uniswap v4. Creators commit
 
 [Live demo](https://web-smoky-tau-35.vercel.app/) · [Create a boss](https://web-smoky-tau-35.vercel.app/boostpad) · [Play Roy](https://web-smoky-tau-35.vercel.app/battle/0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0?network=base-sepolia) · [Uniswap feedback](FEEDBACK.md)
 
-廣東話 pitch：Boss BoostPad 為已有代幣開一個池，再變成 Boss 戰。攻擊就係 swap，所以每一下攻擊都增加該幣嘅成交量。打贏之後戰士分創建者放嘅獎。開戰時全部售賣流動性已經啟用。清第一階等 60 秒，清第二階等 120 秒，再繼續攻擊。
+Pitch: Boss BoostPad creates a pool for an existing token and turns it into a boss battle. Attacks are swaps, so each attack adds to that token's trading volume. After victory, fighters share the creator-funded prize. All sale liquidity is active from the start. Clearing stage one starts a 60-second wait; clearing stage two starts a 120-second wait before attacks resume.
 
-[Background](#background-and-the-problem) · [How it works](#how-it-works) · [Components](#components) · [Contract addresses](#contract-addresses) · [Integration code](#uniswap-v4-integration-code) · [Run](#run-the-project) · [Build](#build-and-check) · [Evidence](#verification-and-current-status) · [Milestones](#planned-milestones)
+[Background](#background-and-the-problem) · [Why hooks](#why-uniswap-v4-hooks) · [How it works](#how-it-works) · [Components](#components) · [Contract addresses](#contract-addresses) · [Integration code](#uniswap-v4-integration-code) · [Run](#run-the-project) · [Build](#build-and-check) · [Evidence](#verification-and-current-status) · [Milestones](#planned-milestones)
+
+The Factory behavior below follows [PR #72](https://github.com/0xroylee/eth-global-2026-tokyo/pull/72), head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`, checked on 27 September 2026. Continuous sale liquidity, stage cooldowns, and owner-added LP are implemented in the current Base Sepolia launch Factory. Optional mock-driven fees remain a local demo feature. The current default Roy uses the continuous-liquidity build; retired encounters retain their original rules.
 
 ## Background and the problem
 
@@ -21,6 +23,14 @@ The project addresses three concrete needs:
 - Stage progress, cooldowns, and reward accounting follow contract execution, so the game state can be checked against transactions.
 
 Eligible volume comes from purchases through that boss's own pool. Transfers, unrelated markets, and reserve maintenance do not earn progress.
+
+### Why Uniswap v4 hooks
+
+The game needs to enforce its rules at the point a purchase happens. A disabled browser button cannot stop another client from submitting a swap. The Boss pool's Hook checks attack authorization and the shared cooldown in `beforeSwap`, then records actual swap output, eligible volume, and prize credit in `afterSwap`. A different router or a direct callback call fails contract authentication. Failed checks revert the purchase and its credit together.
+
+V4's lifecycle callbacks and per-swap fee override let these rules run alongside its existing AMM. The Router executes both hops in one unlock and settles the resulting currency deltas. We use the standard price curve and return zero hook deltas. See the official [hooks](https://developers.uniswap.org/docs/protocols/v4/concepts/hooks) and [dynamic fees](https://developers.uniswap.org/docs/protocols/v4/concepts/dynamic-fees) references, and the [design explanation with callback trace](docs/uniswap-v4-hooks.md).
+
+Players receive the tokens they bought and earn verifiable per-boss prize credit. Creators get a funded community objective and can add depth through separate LP. Cooldowns give players time to see each stage and review a new quote; one purchase cannot finish several stages. These rules do not guarantee fair participation, organic demand, or stable token value.
 
 ### Team roles
 
@@ -62,11 +72,13 @@ Both swaps execute in one transaction and one Uniswap v4 `PoolManager.unlock` ca
 eligible volume = floor(MockUSD spent × Attack Token spent / Attack Token bought)
 ```
 
-Unused MockUSD and Attack Token are refunded. The three stages require additional volume in a 1:2:3 ratio. For example, a 60 MockUSD target gives stage minimums of 10, 20, and 30 MockUSD. Each attack is bounded to its stage's remaining goal plus one MockUSD base unit, or a terminal purchase of exactly one Boss token base unit. All actual volume stays in that stage and never advances a future stage.
+Unused MockUSD and Attack Token are refunded. The three stages require additional volume in a 1:2:3 ratio. For example, a 60 MockUSD target gives stage minimums of 10, 20, and 30 MockUSD. This ratio allocates volume goals, not tokens. Each attack is bounded to its stage's remaining goal plus one MockUSD base unit, or a terminal purchase of exactly one Boss token base unit. The exceptions handle indivisible fee/token rounding; all actual volume, including overshoot, stays in that stage and never advances a future stage.
 
-Clearing stage one starts a shared 60-second cooldown; clearing stage two starts a 120-second cooldown. The full sale inventory is active from launch. Stage changes preserve the standard AMM price curve and LP position. Quotes and attacks reject during the cooldown, and failed swaps roll back all purchase credit. Clearing the final stage defeats the boss.
+Clearing stage one starts a shared 60-second cooldown; clearing stage two starts a 120-second cooldown. All sale liquidity is active from launch and sells continuously along the standard AMM curve. There is no percentage token bucket or proportional release. Stage changes preserve pool price and LP position, with no refill or activation transaction. Quotes and attacks reject during the cooldown, and failed swaps roll back all purchase credit. Clearing the final stage defeats the boss.
 
-The optional mock-oracle demo can use an owner-controlled reference to make Boss fees more expensive or cheaper, including 0%. It has been verified locally but is not deployed publicly. The current Base Sepolia Factory uses fixed 0.3% fees for both pools. The mock reference is labelled TESTNET MOCK PRICE and does not report a live market price. See the [mock price and fee reference](docs/boss-factory.md#testnet-mock-price-and-fees).
+The optional local Mock Token Oracle uses an owner-controlled testnet reference and is not deployed publicly. The current Base Sepolia Factory uses fixed 0.3% fees for both pools. A Boss pool price below the reference raises its LP fee; a sufficiently higher price can reduce it to 0%. The supply pool fee stays 0.3%. The demo rejects references older than 600 seconds and required Boss fees above 90%, while claims and owner LP remain available. Player minimum outputs still bound execution after a quote changes. The reference is labelled `TESTNET MOCK PRICE`, not live USD data. Dynamic fees change purchase cost; they do not reset AMM price or guarantee protection from arbitrage or market losses. See the [mock price and fee reference](docs/boss-factory.md#testnet-mock-price-and-fees).
+
+The creator can add or remove a separate LP position to change depth. The initial position, its fees, Router residue, player credit, and Hook prize escrow stay separate. The locked initial liquidity is a position-size floor, not a price floor.
 
 ### Claim the prize
 
@@ -82,6 +94,8 @@ The local deployment script also supports the earlier standalone BossHP game. It
 | --- | --- | --- |
 | Token sold | Creator-selected ERC-20 | Dedicated BossHP token |
 | Stage gates | Eligible MockUSD volume, split 1:2:3, with 60/120-second cooldowns | Sellable BossHP allocations, nominally 300, 600, and 900 |
+| Sale liquidity | All active at launch; no stage refill or price reset | Incremental stage LP with reserve-funded price resets |
+| Boss fee | Fixed 0.3%, or optional mock-driven dynamic LP fee | Fixed 0.3% |
 | Prize | Creator-selected token | MockUSD |
 | Reward right | Per-player attack credit | Eligible BossHP ownership |
 | Claim | Consume credit and keep purchased tokens | Surrender BossHP into permanent Hook custody |
@@ -245,20 +259,22 @@ Sources: [foundation manifest](docs/evidence/robinhood-foundation-deployment.jso
 
 ## Uniswap v4 integration code
 
-This historical integration table is pinned to source commit `6dd9c8e` so the line references stay stable. The earlier deployed demo retains its original build; its source commit is recorded in the launch evidence.
+This integration table is pinned to PR #72 head `d0ad8d87ca5bab80c927e7412bd2a200a75549c5`. Each link opens the implementing symbol. Earlier public deployments retain their original builds, recorded in the deployment evidence.
 
 | Integration | Contract and lines |
 | --- | --- |
-| Creator quote, contract deployment, prize funding, and pool activation | [BossFactory.sol, lines 94–192](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossFactory.sol#L94-L192) |
-| Pool key and hook permission flags | [BossHook.sol, lines 179–227](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossHook.sol#L179-L227) |
-| Attack entry and PoolManager unlock | [BossRouter.sol, lines 226–259](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossRouter.sol#L226-L259), [callback, lines 362–369](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossRouter.sol#L362-L369) |
-| Two pool swaps, token delivery, and refunds | [BossRouter.sol, lines 452–489](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossRouter.sol#L452-L489) |
-| Swap authorization, damage, volume, and reward credit | [BossHook.sol, lines 359–462](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossHook.sol#L359-L462) |
-| Reserve-funded refill and next-stage liquidity | [BossRouter.sol, lines 497–544](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossRouter.sol#L497-L544) |
-| ERC-20 settlement through PoolManager | [BossRouter.sol, lines 556–562](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossRouter.sol#L556-L562) |
-| Prize and victory-NFT claims | [BossHook.sol, lines 465–494](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossHook.sol#L465-L494) |
+| Creator quote, contract deployment, prize funding, and pool activation | [BossFactory.quoteLaunch](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossFactory.sol#L99), [launchBoss](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossFactory.sol#L154) |
+| Pool key, dynamic-fee mode, and hook permissions | [BossHook constructor](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossHook.sol#L138) |
+| Attack entry and PoolManager unlock | [BossRouter.attackWithMockUSD](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossRouter.sol#L227), [unlockCallback](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossRouter.sol#L379) |
+| Both swaps, token delivery, refunds, and settlement | [BossRouter._executeTwoHop](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossRouter.sol#L501) |
+| Swap authorization, cooldown, and fee override | [BossHook.beforeSwap](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossHook.sol#L381) |
+| Actual damage, eligible volume, and reward credit | [BossHook.afterSwap](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossHook.sol#L417) |
+| Volume-stage completion with 60/120-second cooldowns | [BossHook._clearVolumeStage](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossHook.sol#L612) |
+| Reference-price fee calculation and source updates | [BossFeeController.feeForSwap](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossFeeController.sol#L33), [MockBossPriceSource](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/MockBossPriceSource.sol#L7) |
+| Separate owner LP, principal slippage, and direct settlement | [BossRouter.modifyOwnerLiquidity](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossRouter.sol#L294), [liquidity callback](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossRouter.sol#L389) |
+| Prize and victory-NFT claims | [BossHook.claimReward](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossHook.sol#L489), [claimVictoryNFT](https://github.com/0xroylee/eth-global-2026-tokyo/blob/d0ad8d87ca5bab80c927e7412bd2a200a75549c5/contracts/src/BossHook.sol#L511) |
 
-That historical build and the current public Factory use a 0.30% fee for both pools and tick spacing 60. The optional local mock-oracle demo supports dynamic Boss fees while keeping the supply fee at 0.30%. The Hook uses ordinary v4 output settlement with zero hook return deltas. The integration calls v4-core directly through viem and the custom Router.
+Both pools use tick spacing 60. The supply fee is 0.30%; Boss fees are fixed 0.30% without a controller and dynamic with one. The Hook uses ordinary v4 output settlement with zero hook return deltas. The SDK calls the custom Router through viem; the Router calls v4-core. `_runTransition` remains for the standalone fixture and is not called by current Factory stage completion. The [callback trace](docs/uniswap-v4-hooks.md#code-reading-map) maps each rule to code.
 
 ## Run the project
 
@@ -372,7 +388,9 @@ The repository records the following evidence:
 | Retired timed Roy | [Historical demo boss evidence](docs/evidence/base-sepolia-factory-demo-boss.json) |
 | Historical Robinhood gameplay and NFT claims | [SDK report](docs/sdk-verification.md#historical-robinhood-testnet-run) and [foundation report](docs/testnet-verification.md) |
 
-The recorded Base Sepolia demo verification covers deployment and a read-only attack quote. It does not record a completed player attack-and-claim journey for that boss. The manual browser-wallet popup journey remains a separate verification item.
+These evidence files record their own source versions. The Factory review predates PR #72 and does not verify its continuous-liquidity, owner-LP, or mock-fee behavior. The recorded Base Sepolia demo verification covers deployment and a read-only attack quote. It does not record a completed player attack-and-claim journey for that boss. The manual browser-wallet popup journey remains a separate verification item.
+
+[PR #75](https://github.com/0xroylee/eth-global-2026-tokyo/pull/75) records deployment of PR #72's continuous-liquidity Factory with matching Router/Hook hashes. New launches use that Factory. [PR #77](https://github.com/0xroylee/eth-global-2026-tokyo/pull/77) records a fresh continuous-liquidity Roy as the default Boss; older encounters retain their original contracts and receipt recovery. The optional mock-oracle Factory is not publicly deployed. Ordinary `local:seed` still creates the standalone fixture.
 
 This is a testnet prototype using MockUSD and a team-deployed PoolManager. Factory token accounting expects ordinary ERC-20 transfers with stable balances; taxed or rebasing transfers are outside the supported model.
 
@@ -399,10 +417,11 @@ This milestone requires a new contract version; existing deployed bosses retain 
 | [Domain context](CONTEXT.md) | Product terms and differences between Factory and standalone encounters |
 | [Requirements](docs/requirements.md) | Product behavior and player flows |
 | [Boss Factory](docs/boss-factory.md) | Launch quotes, volume gates, funding, rewards, and deployment history |
+| [Why v4 hooks](docs/uniswap-v4-hooks.md) | Design rationale, callback trace, dynamic fees, cooldown benefits, and limits |
 | [Technical specification](docs/technical-spec.md) | Module boundaries, interfaces, and accounting |
 | [Contract usage](docs/contract-usage.md) | Local setup and direct contract operations |
 | [Chain SDK](packages/chain/README.md) | Reads, quotes, wallet calls, and transaction recovery |
-| [Economy](docs/economy.md) and [refill math](docs/refill-math.md) | Token allocations, reserves, and stage liquidity |
+| [Economy](docs/economy.md) and [refill math](docs/refill-math.md) | Factory allocation and LP isolation; standalone stage reserves and refill math |
 | [Development guidance](AGENTS.md) | Repository contribution and verification rules |
 
 The [public repository](https://github.com/0xroylee/eth-global-2026-tokyo) includes [FEEDBACK.md](FEEDBACK.md). The [Uniswap Developer Feedback Form](https://developers.uniswap.org/hackathon-feedback) must also be submitted with the [public FEEDBACK.md link](https://github.com/0xroylee/eth-global-2026-tokyo/blob/main/FEEDBACK.md). Form submission is still outstanding in the repository's feedback record.
