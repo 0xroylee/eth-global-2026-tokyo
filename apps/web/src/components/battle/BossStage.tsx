@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- art masters are static PNGs; no optimisation needed yet */
 
 import { useEffect, useRef, useState } from "react";
-import type { BossVisualState } from "@/lib/mockBattle";
+import type { BossVisualState } from "@/lib/battle";
 
 /** Stage 1 form A, stage 2 form B, stage 3 form C. */
 const BOSS_IMAGES = {
@@ -58,14 +58,13 @@ export function BossStage({ stage, state }: { stage: 1 | 2 | 3; state: BossVisua
 
   return (
     <div
-      className="boss-float relative h-full w-full bg-transparent"
-      style={idle ? { animation: "boss-float 2.8s ease-in-out infinite alternate" } : undefined}
+      className={`relative h-full w-full bg-transparent ${idle ? "boss-float" : ""}`}
     >
       <img
         src={BOSS_IMAGES[stage]}
         alt=""
         aria-hidden
-        className="absolute inset-0 h-full w-full bg-transparent object-contain object-bottom opacity-100 [image-rendering:pixelated] transition-[transform,opacity] duration-[120ms] ease-[var(--ease-out-strong)]"
+        className="boss-sprite absolute inset-0 h-full w-full bg-transparent object-contain object-bottom opacity-100 [image-rendering:pixelated] transition-[transform,opacity] duration-[120ms] ease-[var(--ease-out-strong)]"
         style={{
           transform,
           opacity,

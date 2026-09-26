@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type Address, type DecodedContractEvent, type DeploymentManifest } from "@boss-pool/chain";
+import { type Address, type DeploymentManifest } from "@boss-pool/chain";
+import { confirmedBattleAttack } from "@/lib/battle";
 import { findBoss, type BossId } from "@/game/bosses";
 import { GameBridge } from "@/game/bridge";
 import { useHubGuide } from "@/lib/useHubGuide";
-import { useBossPool, type NetworkKey } from "@/lib/useBossPool";
+import type { useBossPool, NetworkKey } from "@/lib/useBossPool";
+import { useArena } from "./BossPoolProvider";
 import { BossEntryPanel } from "./BossEntryPanel";
 import { FullscreenControl } from "./FullscreenControl";
 import { GameCanvas, type CanvasPhase } from "./GameCanvas";
@@ -18,7 +20,7 @@ import { RoundStatePanel } from "./RoundStatePanel";
 export function GameShell() {
   const bridge = useMemo(() => new GameBridge(), []);
   const shellRef = useRef<HTMLElement>(null);
-  const arena = useBossPool();
+  const arena = useArena();
   const { deployment, writeState } = arena;
   const [nearBoss, setNearBoss] = useState<BossId | null>(null);
   const [openBoss, setOpenBoss] = useState<BossId | null>(null);
@@ -78,13 +80,13 @@ export function GameShell() {
     const writingAttack = originMatchesSelected && (
       writeState.status === "prompting" || writeState.status === "pending" || writeState.status === "unresolved"
     );
-    const confirmedAttack = originMatchesSelected && writeState.status === "confirmed";
+    const confirmedAttack = confirmedBattleAttack(writeState, arena.network, live?.manifest, arena.wallet.account);
     bridge.send("attack:pending", {
       active: Boolean(writingAttack),
       stage: live?.round.currentStage,
     });
-    if (confirmedAttack && live) sendConfirmedAttack(bridge, writeState.result, live.manifest.addresses.hook);
-  }, [arena.network, arena.selectedChainId, bridge, deployment, writeState]);
+    if (confirmedAttack) bridge.send("attack:confirmed", confirmedAttack);
+  }, [arena.network, arena.selectedChainId, arena.wallet.account, bridge, deployment, writeState]);
 
   useEffect(() => {
     if (!showChain) return;
@@ -93,8 +95,14 @@ export function GameShell() {
       event.preventDefault();
       setShowChain(false);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [showChain]);
+
+  const chainWasOpen = useRef(false);
+  useEffect(() => {
+    if (chainWasOpen.current && !showChain) focusHubCanvas();
+    chainWasOpen.current = showChain;
   }, [showChain]);
 
   const closeBoss = useCallback(() => setOpenBoss(null), []);
@@ -146,7 +154,7 @@ export function GameShell() {
               type="button"
               disabled={overlayOpen || canvasPhase === "error"}
               onClick={() => setOpenBoss("cat")}
-              aria-label="Open Boss actions for Roy the cat"
+              aria-label="Open Pool Unis boss actions"
               className="rounded-lg border border-[#f5b04a]/35 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-[#ffd28a] disabled:opacity-40"
             >
               BOSS ACTIONS
@@ -157,7 +165,19 @@ export function GameShell() {
                 aria-label="Deployment network"
                 value={arena.network}
                 disabled={overlayOpen}
-                onChange={(event) => arena.selectNetwork(event.target.value as NetworkKey)}
+                onChange={(event) => {
+                  arena.selectNetwork(event.target.value as NetworkKey);
+                  focusHubCanvas();
+                }}
+                onBlur={(event) => {
+                  const next = event.relatedTarget;
+                  if (next instanceof Element && next.closest("header")) return;
+                  focusHubCanvas();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Escape") return;
+                  focusHubCanvas();
+                }}
                 className="ml-2 bg-transparent text-fog outline-none"
               >
                 <option value="local">LOCAL · 31337</option>
@@ -287,6 +307,13 @@ export function GameShell() {
   );
 }
 
+function focusHubCanvas() {
+  const canvas = document.querySelector("main canvas");
+  if (!(canvas instanceof HTMLCanvasElement)) return;
+  canvas.tabIndex = -1;
+  canvas.focus({ preventScroll: true });
+}
+
 function shortAddress(address: Address): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
@@ -364,20 +391,4 @@ function matchesSelectedDeployment(
     origin.manifest.addresses.router.toLowerCase() === selected.addresses.router.toLowerCase() &&
     origin.manifest.addresses.hook.toLowerCase() === selected.addresses.hook.toLowerCase() &&
     origin.target.toLowerCase() === selected.addresses.router.toLowerCase();
-}
-
-function sendConfirmedAttack(bridge: GameBridge, value: unknown, expectedHook: string) {
-  if (!value || typeof value !== "object" || !("events" in value)) return;
-  const events = (value as { events?: readonly DecodedContractEvent[] }).events;
-  const event = events?.find((item) => item.eventName === "AttackRecorded" && item.address.toLowerCase() === expectedHook.toLowerCase());
-  if (!event || !("stage" in event.args) || !("bossHPOut" in event.args)) return;
-  const stage = event.args.stage;
-  const bossHPOut = event.args.bossHPOut;
-  if (typeof stage !== "number" || typeof bossHPOut !== "bigint") return;
-  bridge.send("attack:confirmed", {
-    transactionHash: event.transactionHash,
-    logIndex: event.logIndex,
-    stage,
-    bossHPOut,
-  });
 }

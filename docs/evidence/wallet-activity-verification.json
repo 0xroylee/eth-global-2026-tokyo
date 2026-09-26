@@ -1,0 +1,32 @@
+{
+  "feature": "Boss Pool wallet activity",
+  "date": "2026-09-26",
+  "readerCommit": "d4fad92",
+  "journeyEvidence": "local-sdk-direct-attack.json",
+  "chainId": 31337,
+  "fromBlock": "0",
+  "toBlock": "54",
+  "snapshotBlockHash": "0x405a7310bd2e4f3d4f60a66348ba1f07dec4d468d3e9f1089f31c3a66b81d851",
+  "supportedEntries": 69,
+  "successfulExerciseTransactions": 14,
+  "authoritativeAttacks": 4,
+  "corroboratingAttackRecords": 4,
+  "stageRefills": 2,
+  "pages": 6,
+  "checks": {
+    "typecheck": "passed",
+    "globalAndWalletReplay": "passed",
+    "emptyWalletCursor": "passed",
+    "cursorReorgWalletAndShapeGuards": "passed",
+    "senderAndRecipientTransfer": "passed",
+    "claimAndNftReceiptMatching": "passed",
+    "solHighReview": "no remaining findings"
+  },
+  "onChainWritesDuringActivityVerification": 0,
+  "uiChangesOrTests": false,
+  "limits": [
+    "Current Local/Base contract ABI only; historical enrollment-era Robinhood deployment rejected",
+    "Events represent explicit participants, not all transaction senders",
+    "Observed snapshot is provisional, not chain finality"
+  ]
+}

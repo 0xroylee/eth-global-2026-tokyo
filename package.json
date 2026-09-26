@@ -14,6 +14,7 @@
     "testnet:deploy": "bun scripts/testnet-deploy.ts",
     "testnet:exercise": "bun scripts/exercise-boss-pool.ts testnet",
     "local:exercise": "bun scripts/exercise-boss-pool.ts local",
+    "local:activity-smoke": "bun scripts/local-activity-smoke.ts",
     "local:node": "anvil --chain-id 31337 --port 8547",
     "web:dev": "bun --filter @boss-pool/web dev",
     "web:build": "bun --filter @boss-pool/web build",

@@ -4,11 +4,11 @@ Updated 26 September 2026. The no-burn direct-attack contracts, shared SDK, Next
 
 ## Outcome and scope
 
-Two fresh wallets approve MockUSD to the Router when needed, attack directly to buy ROY and BossHP, clear three stages, see two reserve-funded price resets, transfer eligible HP between wallets, and redeem HP for MockUSD. Attack and token-claim paths mint no NFT. Defeated-round attackers can separately claim an optional victory NFT. The Hook controls purchase counting and liquidity release.
+Two fresh wallets approve MockUSD to the Router when needed, attack directly to buy Attack Token and BossHP, clear three stages, see two reserve-funded price resets, transfer eligible HP between wallets, and redeem HP for MockUSD. Attack and token-claim paths mint no NFT. Defeated-round attackers can separately claim an optional victory NFT. The Hook controls purchase counting and liquidity release.
 
 The [requirements](requirements.md) own gameplay, [technical specification](technical-spec.md) owns contracts/interfaces/custody, [HP lifecycle](hp-lifecycle.md) owns clearing details, and [refill/reward math](refill-math.md) owns calculations. [CONTEXT.md](../CONTEXT.md) is the glossary.
 
-Confirmed: one ROY attack currency, one ROY/BossHP battle pool, one MockUSD/ROY supply pool, no attack burn, stages 300/600/900, staged HP liquidity, rewards represented by BossHP, Base Sepolia, Next.js/TypeScript/Tailwind CSS, direct viem, Bun, and a small monorepo. Physical/magic, MROY, damage multipliers, dynamic fees and public BossHP sell-backs are outside the core.
+Confirmed: one Attack Token attack currency, one Attack Token/BossHP battle pool, one MockUSD/Attack Token supply pool, no attack burn, stages 300/600/900, staged HP liquidity, rewards represented by BossHP, Base Sepolia, Next.js/TypeScript/Tailwind CSS, direct viem, Bun, and a small monorepo. Physical/magic, MROY, damage multipliers, dynamic fees and public BossHP sell-backs are outside the core.
 
 Working claim default: eligible HP is transferable; claim atomically surrenders it into permanent custody and pays a fixed proportional reward, without burning. This is the model used by the current plan. A frozen-balance alternative was discussed but not selected. Do not silently combine the two.
 
@@ -48,12 +48,12 @@ BP01's Vite build evidence is historical. Current Next.js checks are listed in t
 | Entry | None | Fresh wallets can attack directly after Router approval |
 | BossHP supply | 2,000, 18 decimals | Prove integer reserve sufficiency for permitted attacks |
 | Battle fee | Fixed 0.30%, modeled protocol fee zero | Verify actual supported fees; reject unsupported configurations |
-| Battle price | 1 to about 1.211659 ROY/HP each stage | Same-range plan, correct currency ordering and reset limits |
-| Supply LP example | 50,000 ROY + 5,000 MockUSD | Full-range estimate must become actual v4 position amounts |
-| ROY supply candidate | 100,000 total supply, about 50,000 for the supply LP; remaining ROY stays locked in Router custody | Reconcile actual LP debits and reserves; no starter grant is issued |
+| Battle price | 1 to about 1.211659 Attack Token/HP each stage | Same-range plan, correct currency ordering and reset limits |
+| Supply LP example | 50,000 Attack Token + 5,000 MockUSD | Full-range estimate must become actual v4 position amounts |
+| Attack Token supply candidate | 100,000 total supply, about 50,000 for the supply LP; remaining Attack Token stays locked in Router custody | Reconcile actual LP debits and reserves; no starter grant is issued |
 | Round deadline | Two hours after activation as a demo default | Fixed before activation; independent of event submission time |
 
-The calculated battle budget is about 1,987.318762 ROY and 1,802.708124 HP of total reserve spending. About 1,800 HP ends in player circulation and 2.708124 in LP fees. First refill restores 300 HP then adds 300; second restores 600 then adds 300. Final stage performs no reset.
+The calculated battle budget is about 1,987.318762 Attack Token and 1,802.708124 HP of total reserve spending. About 1,800 HP ends in player circulation and 2.708124 in LP fees. First refill restores 300 HP then adds 300; second restores 600 then adds 300. Final stage performs no reset.
 
 The earlier 217.58-MockUSD solo attack-plus-entry estimate included an entry fee that no longer exists. Recalculate attack costs from the fresh direct-attack journey. The model does not establish fair participation, market stability, or Sybil resistance.
 
@@ -65,12 +65,12 @@ Keep the existing epic and 14 child issue identifiers. Rewrite their scopes rath
 | --- | --- | --- | --- | --- | --- |
 | [BP01](https://github.com/0xroylee/eth-global-2026-tokyo/issues/2) | Prove the no-burn BossHP lifecycle and bootstrap the monorepo | P0 | None | A + B | 4–6 h |
 | [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3) | Fund and display a round with protected HP reserves and prize | P0 | [BP01](https://github.com/0xroylee/eth-global-2026-tokyo/issues/2) | A + B | 4–6 h |
-| [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | Attack directly from a fresh wallet; no entry NFT or starter ROY | P0 | [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3) | A + B | 2–3 h |
-| [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | Attack through MockUSD to ROY to BossHP without burning | P0 | [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | A + B | 4–6 h |
+| [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | Attack directly from a fresh wallet; no entry NFT or starter Attack Token | P0 | [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3) | A + B | 2–3 h |
+| [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | Attack through MockUSD to Attack Token to BossHP without burning | P0 | [BP03](https://github.com/0xroylee/eth-global-2026-tokyo/issues/4) | A + B | 4–6 h |
 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | Clear stages and atomically refill the same BossHP pool | P0 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | A + B | 4–7 h |
 | [BP06](https://github.com/0xroylee/eth-global-2026-tokyo/issues/7) | Present three confirmed boss forms and recover arena state | P0 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | B + A | 3–5 h |
 | [BP07](https://github.com/0xroylee/eth-global-2026-tokyo/issues/8) | Redeem BossHP for MockUSD and claim a victory NFT | P0 | [BP05](https://github.com/0xroylee/eth-global-2026-tokyo/issues/6) | A + B | 4–7 h |
-| [BP08](https://github.com/0xroylee/eth-global-2026-tokyo/issues/9) | Use held ROY to buy BossHP as an optional attack route | P1 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | A + B | 1–2 h |
+| [BP08](https://github.com/0xroylee/eth-global-2026-tokyo/issues/9) | Use held Attack Token to buy BossHP as an optional attack route | P1 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | A + B | 1–2 h |
 | [BP09](https://github.com/0xroylee/eth-global-2026-tokyo/issues/10) | Replay shared attacks and distinguish damage from reward holdings | P1 | [BP04](https://github.com/0xroylee/eth-global-2026-tokyo/issues/5) | A + B | 2–3 h |
 | [BP10](https://github.com/0xroylee/eth-global-2026-tokyo/issues/11) | Expire unfinished rounds and preserve outstanding reward custody | P0 | [BP02](https://github.com/0xroylee/eth-global-2026-tokyo/issues/3), [BP07](https://github.com/0xroylee/eth-global-2026-tokyo/issues/8) | A + B | 2–3 h |
 | [BP11](https://github.com/0xroylee/eth-global-2026-tokyo/issues/12) | Deploy and rehearse the real two-wallet Base Sepolia journey (original issue targets Robinhood) | P0 | [BP06](https://github.com/0xroylee/eth-global-2026-tokyo/issues/7), [BP07](https://github.com/0xroylee/eth-global-2026-tokyo/issues/8), [BP10](https://github.com/0xroylee/eth-global-2026-tokyo/issues/11) | A + B | 2–4 h |
@@ -98,7 +98,7 @@ flowchart TD
     G --> I
     H --> I
     I --> J["BP12: public evidence and submission"]
-    D -. optional .-> K["BP08: held ROY"]
+    D -. optional .-> K["BP08: held Attack Token"]
     D -. optional .-> L["BP09: activity"]
 ```
 
@@ -120,7 +120,7 @@ B's fixture work can start before its integration dependencies finish. It does n
 
 BP01 drafts these shapes; the compiled ABI becomes authoritative when contracts exist.
 
-- Attack request: input cap, minimum ROY output, minimum HP output, expected stage and deadline. Player identity comes from the router caller.
+- Attack request: input cap, minimum Attack Token output, minimum HP output, expected stage and deadline. Player identity comes from the router caller.
 - Round view: status, current stage, nominal stage capacity, remaining sellable HP, stageSold values, prize, deadline and frozen eligible supply after victory.
 - Player view: attack history, token balances/allowances, victory-NFT claim flag and redeemable-HP reward preview.
 - Events: AttackExecuted with both hop amounts; StageCleared; StageActivated after successful refill/LP addition; BossDefeated with finalEligibleHP; HP redemption; expiry/refund.
@@ -159,7 +159,7 @@ BP01 is the local feasibility gate. Chain readiness is reported there but remain
 
 ## Cut order and demo
 
-Cut held-ROY convenience, global activity, dynamic fees, World ID, emissions/vesting, elaborate sound and extra animation first. Keep no-burn HP delivery, protected reward rights, stage gates, two-hop execution, optional victory NFTs, and honest target-chain evidence.
+Cut held-Attack Token convenience, global activity, dynamic fees, World ID, emissions/vesting, elaborate sound and extra animation first. Keep no-burn HP delivery, protected reward rights, stage gates, two-hop execution, optional victory NFTs, and honest target-chain evidence.
 
 Use prepared wallets and approvals. A 60–90 second demo can show a direct partial attack, stages 1 → 2 → 3, defeat, current HP reward rights, redemption and the optional victory NFT. Accelerate presentation or use a disclosed prepared stage; do not fake contract effects or introduce an admin HP setter. Keep an uncut two-wallet recording as supporting evidence.
 

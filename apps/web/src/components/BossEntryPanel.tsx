@@ -110,22 +110,20 @@ export function BossEntryPanel({
             SWITCH WALLET TO {arena.selectedChainId}
           </button>
         )}
-        {actionsReady && (
-          <>
-            <BossActions arena={arena} />
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/30 px-3 py-3">
-              <div>
-                <p className="font-mono text-[9px] tracking-[0.12em] text-dim">SEPARATE MOCK PREVIEW</p>
-                <p className="mt-1 text-xs text-muted">The pixel battle is a visual demo and never changes contract state.</p>
-              </div>
-              <Link
-                href="/mock-battle"
-                className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog transition-colors hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              >
-                OPEN MOCK BATTLE
-              </Link>
+        {actionsReady && <BossActions arena={arena} />}
+        {supported && (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/30 px-3 py-3">
+            <div>
+              <p className="font-mono text-[9px] tracking-[0.12em] text-dim">LIVE BATTLE</p>
+              <p className="mt-1 text-xs text-muted">Enter the arena. Each attack spends up to 1 MockUSD.</p>
             </div>
-          </>
+            <Link
+              href={`/mock-battle?network=${arena.network}`}
+              className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog transition-colors hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              ENTER BATTLE
+            </Link>
+          </div>
         )}
         {!supported && (
           <p className="mt-4 rounded-lg border border-white/8 px-3 py-3 text-xs leading-relaxed text-muted">
@@ -164,9 +162,8 @@ function BossHealth({ boss, deployment }: { boss: BossDefinition; deployment: Ar
   }
   const { round } = deployment;
   const stage = round.currentStage;
-  const sold = round.stageSold[stage] ?? 0n;
   const cap = round.stageCapacity[stage] ?? 0n;
-  const remaining = cap > sold ? cap - sold : 0n;
+  const remaining = round.remainingSellableHP;
   const fraction = cap > 0n ? Number((remaining * 1000n) / cap) / 1000 : 0;
   return (
     <Row label={`STAGE ${stage + 1} / 3 · ${roundStatusLabel(round.status).toUpperCase()}`} badge="LIVE">

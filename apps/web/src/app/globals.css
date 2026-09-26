@@ -81,29 +81,21 @@
   background: #1b2a55;
 }
 
-/* Roy idle: a 2px float. Movement only. */
+/* Pool Unis idle: a 2px float. Movement only. */
+.boss-float {
+  animation: boss-float 2.8s ease-in-out infinite alternate;
+}
 @keyframes boss-float {
   from { transform: translateY(0); }
   to { transform: translateY(-2px); }
 }
-@keyframes boss-blink {
-  0%, 90%, 100% { transform: scaleY(0); }
-  93%, 97% { transform: scaleY(1); }
-}
-@keyframes boss-bubble {
-  from { transform: translateY(0); opacity: 0.8; }
-  to { transform: translateY(-36px); opacity: 0; }
-}
-@keyframes boss-splash {
-  from { transform: scaleX(0.8); opacity: 0.35; }
-  to { transform: scaleX(1.2); opacity: 0.75; }
-}
 @media (prefers-reduced-motion: reduce) {
-  .boss-float,
-  .boss-lid,
-  .boss-bubble,
-  .boss-splash {
+  .boss-float {
     animation: none;
+  }
+  .boss-sprite {
+    transform: none !important;
+    transition-property: opacity;
   }
 }
 

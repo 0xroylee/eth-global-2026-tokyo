@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Mono, Silkscreen, Space_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
+import { BossPoolProvider } from "@/components/BossPoolProvider";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -38,7 +39,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${dmMono.variable} ${silkscreen.variable}`}>
-      <body>{children}</body>
+      <body><BossPoolProvider>{children}</BossPoolProvider></body>
     </html>
   );
 }

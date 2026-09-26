@@ -4,7 +4,7 @@ Approved for implementation on 26 September 2026. This plan extends the existing
 
 The SDK and player UI are implemented. The later chain-target change (`4cecdb3`) makes Base Sepolia `84532` the active testnet target. Robinhood `46630` support and receipts remain historical. The Base RPC is reachable, but there is no Boss Pool Base Sepolia manifest or deployment.
 
-Issue #28 supersedes the original entry flow. Fresh wallets attack directly after any required MockUSD-to-Router approval. The optional victory NFT remains; entry fees, starter ROY, enrollment, and entry NFTs do not.
+Issue #28 supersedes the original entry flow. Fresh wallets attack directly after any required MockUSD-to-Router approval. The optional victory NFT remains; entry fees, starter Attack Token, enrollment, and entry NFTs do not.
 
 ## Confirmed scope
 
@@ -16,7 +16,7 @@ The user selected these behaviors:
 
 Use the selected Next.js, React, TypeScript, Tailwind, Phaser, and direct-viem stack. Keep the SDK independent of React and Phaser. Do not add a second SDK package, publish to npm, add a backend signer, or introduce another wallet library for this work.
 
-The supported attack is `MockUSD -> ROY -> BossHP`. There is no deployed held-ROY attack entry point. Existing test scripts and the [contract usage guide](contract-usage.md) remain the starting point.
+The supported attack is `MockUSD -> Attack Token -> BossHP`. There is no deployed held-Attack Token attack entry point. Existing test scripts and the [contract usage guide](contract-usage.md) remain the starting point.
 
 ## Accepted quote decisions
 
@@ -58,7 +58,7 @@ Use chain `31337` for local Anvil and chain `84532` for Base Sepolia. The SDK re
 
 Verify chain ID, deployment evidence, deployed code, and immutable contract wiring when loading a deployment. Do not require an Active round, zero counters, an untouched prize, or a future deadline during ordinary verification. Recheck wallet chain and account before each write.
 
-Keep token values as `bigint`: MockUSD has 6 decimals, ROY and BossHP have 18. Keep zero-based stage indices in SDK data. The app adds one for display. Expose current price as current price; the existing `bossInitialSqrtPriceX96` snapshot field currently reads mutable `lastSqrtPriceX96` and needs a clear name.
+Keep token values as `bigint`: MockUSD has 6 decimals, Attack Token and BossHP have 18. Keep zero-based stage indices in SDK data. The app adds one for display. Expose current price as current price; the existing `bossInitialSqrtPriceX96` snapshot field currently reads mutable `lastSqrtPriceX96` and needs a clear name.
 
 ## Proposed player-facing operations
 
@@ -69,7 +69,7 @@ These operations are implemented in `@boss-pool/chain`; use the package README f
 | `verifyDeployment` | Validated identities and chain context, independent of encounter progress |
 | `readRound` | One-block status, stage, sold/capacity values, deadline, price, original prize, eligible HP, redeemed HP, and paid prize |
 | `readPlayer` | Account, native gas balance, token balances, allowances, attack participation, reward rights, and optional victory-NFT eligibility |
-| `quoteAttack` | Input cap, expected input spent, ROY bought/spent/refund, BossHP output, stage-clear prediction, stage, deployment identity, block, and expiry |
+| `quoteAttack` | Input cap, expected input spent, Attack Token bought/spent/refund, BossHP output, stage-clear prediction, stage, deployment identity, block, and expiry |
 | `getApproval` | Correct token/spender, current allowance, and whether approval is needed for an action |
 | `approve` | Unlimited approval to that action's verified spender, submitted hash, and confirmed receipt |
 | `attack` | Normal authenticated simulation followed by submission and confirmed `AttackExecuted` plus transition events |
@@ -88,7 +88,7 @@ Player reward ownership and optional NFT eligibility are separate. A transferred
 
 The current `attackWithMockUSD` transfers the player's MockUSD before unlocking PoolManager and needs a Router allowance for a real write. The public quote path simulates the same swaps and transitions without player funding or allowance; the authenticated attack simulation remains the final execution check after approval.
 
-The standard Uniswap V4Quoter is not a direct replacement. BossHook authenticates the configured Router, requires its stage price boundary, and supports partial consumption of intermediate ROY at that boundary. The inspected upstream helper uses different limits and rejects that partial-input condition. Reuse its [revert-and-catch quote pattern](https://github.com/Uniswap/v4-periphery/blob/9969eec44cfdf07e24b41de47f40276a58401976/src/lens/V4Quoter.sol), rather than copying its route assumptions.
+The standard Uniswap V4Quoter is not a direct replacement. BossHook authenticates the configured Router, requires its stage price boundary, and supports partial consumption of intermediate Attack Token at that boundary. The inspected upstream helper uses different limits and rejects that partial-input condition. Reuse its [revert-and-catch quote pattern](https://github.com/Uniswap/v4-periphery/blob/9969eec44cfdf07e24b41de47f40276a58401976/src/lens/V4Quoter.sol), rather than copying its route assumptions.
 
 First prove a router-native quote that executes the same two swaps and stage transition inside a call frame that always reverts. Reuse existing swap, range, fee, refill, and liquidity math. No separate TypeScript AMM calculation is needed.
 

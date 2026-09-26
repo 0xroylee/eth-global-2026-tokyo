@@ -1,6 +1,6 @@
 # Deployment and local exercise commands
 
-`DeployBossPool.s.sol` deploys its own pinned v4 `PoolManager`, fixed-supply ROY and BossHP, MockUSD, collectibles, Router, and permission-mined Hook. The script seeds the MockUSD/ROY pool, funds a 1,000 MockUSD fixture prize, and activates stage 1. Boss pool ticks are derived from the actual Hook getters: `[0, 1920]` when BossHP is currency0 and `[-1920, 0]` when BossHP is currency1. The summary records both pool keys and IDs, stage configuration, and actual custody balances.
+`DeployBossPool.s.sol` deploys its own pinned v4 `PoolManager`, fixed-supply Attack Token and BossHP, MockUSD, collectibles, Router, and permission-mined Hook. The script seeds the MockUSD/Attack Token pool, funds a 1,000 MockUSD fixture prize, and activates stage 1. Boss pool ticks are derived from the actual Hook getters: `[0, 1920]` when BossHP is currency0 and `[-1920, 0]` when BossHP is currency1. The summary records both pool keys and IDs, stage configuration, and actual custody balances.
 
 The same deployment script supports two guarded environments:
 

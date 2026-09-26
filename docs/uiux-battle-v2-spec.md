@@ -1,5 +1,7 @@
 # Battle 畫面 v2 改版規格（UI/UX Battle v2 Spec）
 
+Historical scope: this specification describes the mock's visual implementation. The [live battle requirements](requirements.md#live-battle-page) and [SDK integration context](technical-spec.md#live-battle-page-context) govern its conversion to a live page. The mock-preservation constraints below apply to the historical v2 work only.
+
 - 分支：`feat/uiux-battle`｜品質模式：standard（threshold 85）｜PLAN Round 1
 - 讀者：edison-ui-designer（EXECUTE）｜驗收：smith（實作）+ Neo（截圖）
 - 上游依據：設計母本 §6（三形態/狀態集）、§7（動效）、§9（a11y）、§10（微文案）；v1 已驗收（smith 94）
@@ -58,9 +60,9 @@
 | Zone | 位置/尺寸 | 內容 | 資料來源 | 互動 |
 | --- | --- | --- | --- | --- |
 | STATUS | 左上 `left 2% / top 2.5%`，寬 `min(320px, 32vw)` | ① BOSS HP 綠條＋`{remaining}/{cap} ({pct}%)`；② 其下 YOUR SHARE % 淺藍條；③ chip 列：`STAGE n / 3`（三點，stage 色）、`ROUND DEADLINE mm:ss`（urgent<10min 轉 danger）、`MOCK · NO CHAIN` | `state.stageCapacity/currentStage/stageSold`（`BattleView.tsx:42-45` 既有算法）、`deadlineAt` prop、`MockBadge` 複用 | 無（純資訊） |
-| NAME PLATE | 右上 `right 2% / top 2.5%` | `ROY`＋`LV {stage}` 小牌；其下/其側 `EXIT BATTLE · ESC` 按鈕 | `stage`（同 `BattleView.tsx:42`）；名字沿用 header 文案（`BattleView.tsx:71`） | EXIT 可點/focusable（≥44px）；ESC 等價 |
+| NAME PLATE | 右上 `right 2% / top 2.5%` | `Attack Token`＋`LV {stage}` 小牌；其下/其側 `EXIT BATTLE · ESC` 按鈕 | `stage`（同 `BattleView.tsx:42`）；名字沿用 header 文案（`BattleView.tsx:71`） | EXIT 可點/focusable（≥44px）；ESC 等價 |
 | BOSS | 右中偏下 `right 26% / bottom 26%`，高 `min(34vh, 340px)` | Boss 立於石板台（CSS 梯形＋橢圓陰影模擬 `arena-lake-background.png` 的石板平台視覺）；stage glow 光暈保留 | `BossStage stage/state` | 無 |
-| HERO + COMMAND | 左下 `left 2% / bottom 3%`；hero 高 `~26vh` | hero CSS-crop sprite（§4.1）＋ COMMAND 視窗 2×2 四指令：`BURN ROY`／`MAGIC`／`ITEM`／`RUN` | `phase/canAttack`（同 `BattleView.tsx:41`） | 見 §4.2 |
+| HERO + COMMAND | 左下 `left 2% / bottom 3%`；hero 高 `~26vh` | hero CSS-crop sprite（§4.1）＋ COMMAND 視窗 2×2 四指令：`ATTACK`／`MAGIC`／`ITEM`／`RUN` | `phase/canAttack`（同 `BattleView.tsx:41`） | 見 §4.2 |
 | DIALOG | 右下 `right 2% / bottom 3%`，寬 `min(46vw, 520px)`，固定 2 行 | 訊息窗，`aria-live="polite"`；文案狀態機 §4.3 | `phase/state/damage` | 無 |
 | VICTORY | 置中覆蓋（`inset-0 grid place-items-center`，卡寬 `min(420px, 90vw)`） | 勝利像素窗：`BOSS DEFEATED`＋YOUR REWARD RIGHTS / YOUR CONTRIBUTION 分列＋`CLAIM REWARD` disabled＋`REWARD PREVIEW · MOCK` | `state.victory` 分支（`BattleView.tsx:93-99` 現有結構） | CLAIM 維持 disabled |
 | STAGE CLEARED | 置中覆蓋（沿用 `BattleView.tsx:112-116`） | 改為像素窗樣式 `STAGE {n} CLEARED!`；**時序不動**（600ms/100ms reduced，`useMockBattle.ts:67-74`） | `state.status === 2` | 無 |
@@ -75,12 +77,12 @@
 
 | 指令 | 行為 | disabled 條件 | title |
 | --- | --- | --- | --- |
-| BURN ROY | `onAttack()`（唯一 functional） | `phase !== "idle" \|\| state.status !== 1 \|\| state.victory`（同 `BattleView.tsx:46`） |
+| ATTACK | `onAttack()`（唯一 functional） | `phase !== "idle" \|\| state.status !== 1 \|\| state.victory`（同 `BattleView.tsx:46`） |
 | `MAGIC` | 無 | 恆 disabled | `Not in the mock build` |
 | `ITEM` | 無 | 恆 disabled | `Inventory is a later milestone` |
 | `RUN` | `onClose()`，與 ESC 等價 | 永不 disabled | 無 |
 
-- 開啟時 `autoFocus` 移至 `BURN ROY`（承接 `AttackPanel.tsx:39`）。
+- 開啟時 `autoFocus` 移至 `ATTACK`（承接 `AttackPanel.tsx:39`）。
 - 四顆按鈕均 ≥44px 觸控目標、focus ring `#8ab4ff`（母本 §9.2）。
 - 四相位進度（SIMULATE→SIGN→SUBMIT→CONFIRM）不再以 stepper 呈現，改由 DIALOG 文案承接（§4.3）；**相位時序本身不動**（§6）。
 
@@ -88,7 +90,7 @@
 
 | 狀態 | 行 1 | 行 2 |
 | --- | --- | --- |
-| `idle` | `WILD ROY APPEARED!` | `Choose a command.` |
+| `idle` | `Attack Token appeared!` | `Choose a command.` |
 | `simulate` | `SIMULATING…` | `Checking the attack against the stage.` |
 | `sign` | `AWAITING SIGNATURE…` | `Confirm in your wallet.`（mock 無錢包，屬情境演出） |
 | `submit` | `SUBMITTED…` | `Waiting for the receipt…` |
@@ -153,7 +155,7 @@
 | reducer 純函數 | `mockBattle.ts:95-132` | 不動 |
 | MOCK 標示恆在 | `MockBadge`（header，`BattleView.tsx:69`） | 移入 STATUS chip 列，任何相位/victory 都顯示 |
 | ESC 單層 | BattleView 自掛（`BattleView.tsx:35-39`）；panel 在 `battleOpen` 時忽略（`BossEntryPanel.tsx:39-47`） | 兩層機制原樣保留 |
-| 焦點往返 | 開啟 `autoFocus`（`AttackPanel.tsx:39`）；關閉回 ENTER BATTLE（`BossEntryPanel.tsx:26-29`） | 開啟→`BURN ROY`；關閉→ENTER BATTLE |
+| 焦點往返 | 開啟 `autoFocus`（`AttackPanel.tsx:39`）；關閉回 ENTER BATTLE（`BossEntryPanel.tsx:26-29`） | 開啟→`ATTACK`；關閉→ENTER BATTLE |
 | reduced-motion 雙軌 | 全域 CSS override（`globals.css:63-73`）＋ JS 分支 | 保留；新增動效都要有降級 |
 | 無假鏈上數據 | BattleView 僅收 props（`BattleView.tsx:17-26` 簽章） | 不變；`deadlineAt` 仍為 demo 值 |
 | StrictMode timer cleanup | 所有 effect 有 cleanup（`useMockBattle.ts` 慣例） | 新元件任何 `setTimeout/setInterval` 皆須 cleanup |
@@ -162,7 +164,7 @@
 
 **新增（`apps/web/src/components/battle/`）**
 - `StatusPanel.tsx` — BOSS HP＋YOUR SHARE 雙條＋三 chip（吸收 HPBar/StageIndicator/DeadlineCountdown 內容，複用 MockBadge）
-- `NamePlate.tsx` — `ROY`＋`LV {stage}`
+- `NamePlate.tsx` — `Attack Token`＋`LV {stage}`
 - `CommandWindow.tsx` — 四指令（吸收 AttackPanel 主按鈕）
 - `DialogWindow.tsx` — 2 行訊息窗＋文案狀態機
 - `CroppedSprite.tsx` — hero CSS-crop（§4.1）
@@ -209,7 +211,7 @@
 2. 三階截圖：stage1=form-b、stage2=form-a、stage3=form-c，glow hue 依 `STAGE_HUES` 不變。
 3. 相位文字：simulate/sign/submit/confirmed 四段 dialog 文案＋`−{dmg} HP` 數字正確。
 4. victory：置中像素窗、兩分列、CLAIM REWARD disabled、`REWARD PREVIEW · MOCK`。
-5. 鍵盤：開啟 focus 在 BURN ROY；ESC 關一層；關閉後 focus 回 ENTER BATTLE；EXIT 按鈕可 focus。
+5. 鍵盤：開啟 focus 在 ATTACK；ESC 關一層；關閉後 focus 回 ENTER BATTLE；EXIT 按鈕可 focus。
 6. a11y 抽查：cream/navy 文字對比、DIALOG `aria-live="polite"`、focus ring `#8ab4ff`、reduced-motion 下 Boss 直接跳終態。
 7. 無紅線檔案：4 個刪除檔不存在、`bun run typecheck` 綠、`bun run web:build` 綠。
 

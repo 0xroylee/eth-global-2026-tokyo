@@ -38,6 +38,7 @@ export type {
 } from "./deployment";
 export { readPlayer, readRound, readState } from "./reads";
 export type { BossPoolSnapshot, PlayerSnapshot, RoundSnapshot } from "./reads";
+export type { ActivityCursor, ActivityEntry, ActivityPage, ReadActivityOptions } from "./activity";
 export {
   BossPoolSdkError,
   RequoteRequiredError,
