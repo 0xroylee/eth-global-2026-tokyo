@@ -4,6 +4,34 @@
 
 Use `createLocalPublicClient` and `fetchLocalDeployment` for Anvil. Use `createBaseSepoliaPublicClient` and `fetchBaseSepoliaDeployment` for Base Sepolia. Use the corresponding `createRobinhoodPublicClient` and `fetchRobinhoodDeployment` exports only to inspect the historical Robinhood deployment. Public deployment manifests omit RPC URLs. Pass the endpoint separately to the client.
 
+## Coverage
+
+The SDK wraps the agreed player journey. It does not provide a helper for every Solidity function.
+
+| SDK method | Purpose |
+| --- | --- |
+| `readRound()` | Read round status, stage HP, reserves, prize and redemption totals |
+| `readPlayer(account)` | Read balances, allowances, participation and claim eligibility |
+| `readState(account?)` | Read round and optional player state at the same block |
+| `quoteAttack({ maxMockUSD, ... })` | Public quote before wallet connection or approval |
+| `getApproval(action, account)` | Inspect the fixed token/spender pair and allowance |
+| `approve(action)` | Request unlimited allowance when the existing allowance is insufficient |
+| `prepareAttack(quote)` | Validate and simulate the accepted quote without submitting |
+| `attack(quote)` | Revalidate, simulate and submit the two-hop attack |
+| `previewReward(hpAmount, account?)` | Calculate the post-defeat MockUSD payout |
+| `claimReward(hpAmount)` | Surrender BossHP and claim the payout |
+| `transferBossHP(recipient, amount)` | Transfer held reward rights |
+| `claimVictoryNFT()` | Claim the separate participation NFT after defeat |
+| `faucetMockUSD(amount)` | Mint test MockUSD to the connected account |
+| `resumePending(request)` | Recover a receipt without resubmitting a transaction |
+| `withWallet(walletClient)` | Bind a wallet to the verified deployment |
+
+Deployment verification and network/manifest helpers are package exports rather than SDK instance methods. The complete argument and return types are exported from [the package entry point](src/index.ts).
+
+Maker setup (`setHook`, `setMinter`, `seedSupplyPool`, `fundPrize`, `activate`), lifecycle calls (`expire`, `refundExpiredPrize`), and other standard ERC-20/ERC-721 operations have no dedicated player SDK wrapper. Use the existing deployment scripts or the exported generated ABIs with viem; caller permissions still apply. Hook callbacks and stage transitions are invoked by the protocol, not by the frontend. See the [contract usage guide](../../docs/contract-usage.md) for those boundaries.
+
+Amounts use token base units as `bigint`: MockUSD has 6 decimals; ROY and BossHP have 18. Stage indices are zero-based. There is no enrollment or entry-NFT action in the current contracts.
+
 ## Verify a deployment and read state
 
 Choose the RPC endpoint separately from the address manifest. The public testnet manifest intentionally contains no RPC URL.
@@ -31,7 +59,7 @@ console.log(round.status, round.currentStage, round.bossCurrentSqrtPriceX96, pla
 
 ## Public quote before approval
 
-The Router quote uses the real two-hop route and any reserve-funded stage transition inside a reverting simulation frame. It requires neither an account nor enrollment, allowance, or player balance. It does not change pool state.
+The Router quote uses the real two-hop route and any reserve-funded stage transition inside a reverting simulation frame. It requires no account, allowance, or player balance. It does not change pool state.
 
 ```ts
 const quote = await sdk.quoteAttack({
@@ -57,21 +85,27 @@ The app creates a viem `WalletClient` from its selected EIP-1193 account and bin
 
 ```ts
 const playerSdk = sdk.withWallet(walletClient);
-const approval = await playerSdk.getApproval(
-  { kind: "attack", maxMockUSD: quote.maxMockUSD },
-  selectedAccount,
-);
-// Show approval.token and approval.spender before prompting the wallet.
-const approvalTx = await playerSdk.approve({ kind: "attack", maxMockUSD: quote.maxMockUSD });
-if ("request" in approvalTx) {
-  const result = await approvalTx.wait();
-  if (result.status === "unresolved") {
-    // Keep the request and resume read-only receipt checking after refresh.
+
+async function submitQuotedAttack() {
+  const approval = await playerSdk.getApproval(
+    { kind: "attack", maxMockUSD: quote.maxMockUSD },
+    selectedAccount,
+  );
+  // Show approval.tokenAddress and approval.spenderAddress before prompting.
+  const approvalTx = await playerSdk.approve({ kind: "attack", maxMockUSD: quote.maxMockUSD });
+  if ("request" in approvalTx) {
+    // Persist approvalTx.request before waiting so it can be recovered.
+    const result = await approvalTx.wait();
+    if (result.status === "unresolved") return result;
   }
+  const attackTx = await playerSdk.attack(quote);
+  // Persist attackTx.hash and attackTx.request before waiting.
+  return attackTx.wait();
 }
-const attackTx = await playerSdk.attack(quote);
-// Persist attackTx.hash and attackTx.request before waiting.
-const attackReceipt = await attackTx.wait();
+
+const result = await submitQuotedAttack();
+// If unresolved, keep the saved request and resume receipt checking later.
+
 ```
 
 Approvals use the fixed map and request unlimited allowances: attack MockUSD to Router and reward BossHP to Hook. Existing sufficient allowance skips the write. Attacks have no Hook approval, entry fee, starter-ROY grant, or entry NFT. `attack` performs an authenticated Router simulation after approval and before sending the unchanged accepted floors.
@@ -82,7 +116,7 @@ Each pending operation exposes a JSON-safe `request` with transaction hash, chai
 
 Use `DecodedContractEvent` results instead of decoding receipt logs in UI code. Logs are filtered to verified contract emitters and include the transaction hash and log index for effect deduplication. Broad contract errors remain unchanged; the SDK only maps known stale quote, stage, expiry, and slippage conditions to requote results.
 
-`faucetMockUSD` mints the configured deployment's test-only MockUSD. The current local and historical Robinhood deployments expose it. Base Sepolia has no Boss Pool manifest yet. MockUSD is not a real asset. Never place private keys, Bun/Node imports, or environment loading in browser imports.
+`faucetMockUSD` mints the configured deployment's test-only MockUSD. It is usable on the current local deployment. The historical Robinhood contracts expose a faucet, but SDK writes on that network are disabled. Base Sepolia has no Boss Pool manifest yet. MockUSD is not a real asset. Never place private keys, Bun/Node imports, or environment loading in browser imports.
 
 ## Compatibility exports
 
