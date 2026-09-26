@@ -2,6 +2,8 @@
 
 `BossFactory` launches funded EVM rounds that sell a creator-selected ERC-20 as HP. Each boss gets a new attack-token/MEME pool and its own prize escrow, volume counters, stages, and router. Players buy and keep the actual MEME. There is no wrapper token or mint.
 
+See the [interactive contract diagram](boss-factory-contract.html) and its [Archify source](boss-factory-contract.architecture.json).
+
 The attack route is `MockUSD → attack token → MEME`. The MockUSD/attack-token supply market must already be initialized with the factory's canonical zero-hook pool key, a 3,000 fee, 60 tick spacing, and zero protocol fee. The factory creates the hooked attack-token/MEME pool for each launch. It rejects quotes when the supply market is missing or has no active liquidity.
 
 Each launch creates a `BossHook`, `BossRouter`, and optional-claim `BossCollectibles` contract. It pulls the complete MEME allocation from the creator, escrows the prize portion in the hook, funds the battle router, initializes stage one, and transfers router ownership to the creator. A revert rolls the entire launch back.
