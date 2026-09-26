@@ -30,15 +30,15 @@ const SAGE = {
   crop: { x: 233, y: 83, w: 697, h: 960, targetHeight: 30 },
 } as const;
 /**
- * The hub's one roaming body: ROO, the roster gate whose tagline is "it does not
- * stay put". Waypoints are hand-picked tile centres on ROO's own stone spur
- * (`generate-hub-map.ts` reserves cols 11-13, rows 4-14), all of them below that
- * gate's approach zone. `buildRoamer` still drops any point that lands in a gate
- * approach or the sage's zone, so a future map redraw cannot park it in a doorway.
- * There is no pathfinding: each leg is one quadratic curve.
+ * The hub's one roaming body: SOL, the roster gate whose tagline is "it wandered
+ * onto Base and never left". Waypoints are hand-picked tile centres on SOL's own
+ * stone spur (`generate-hub-map.ts` reserves cols 11-13, rows 4-14), all of them
+ * below that gate's approach zone. `buildRoamer` still drops any point that lands
+ * in a gate approach or the sage's zone, so a future map redraw cannot park it in
+ * a doorway. There is no pathfinding: each leg is one quadratic curve.
  */
 const ROAMER = {
-  bossId: "roo",
+  bossId: "sol",
   /** Patrol loop in order; index 0 is also where reduced motion parks it. */
   waypoints: [
     { col: 12, row: 8 },
@@ -737,7 +737,7 @@ export class HubScene extends Phaser.Scene {
   }
 
   /**
-   * ROO leaves its own gate and walks the stone spur below it. The shrine stays
+   * SOL leaves its own gate and walks the stone spur below it. The shrine stays
    * built and interactive: it is the roamer's home, not its body, and it is the
    * only way to open the gate.
    */
@@ -746,7 +746,7 @@ export class HubScene extends Phaser.Scene {
     if (!gate) return;
 
     const tile = HUB_TILESET.tileSize;
-    // A gate approach or the sage's talk zone would leave ROO hovering in a doorway.
+    // A gate approach or the sage's talk zone would leave SOL hovering in a doorway.
     const sageZone = this.sageZone;
     const forbidden: Phaser.Geom.Rectangle[] = [
       ...this.gates.map((candidate) => candidate.zone),
@@ -762,7 +762,7 @@ export class HubScene extends Phaser.Scene {
     }
 
     const accent = accentColor(gate.boss.accent);
-    // A small ghost in ROO's accent: the shape says "not a gate", the accent says which one.
+    // A small ghost in SOL's accent: the shape says "not a gate", the accent says which one.
     this.roamer = this.add.container(start.x, start.y, [
       this.add.circle(0, 0, ROAMER.radius, 0x1b1f2e, 0.92).setStrokeStyle(1, accent, 0.95),
       this.add.circle(-1.6, -0.9, 0.9, accent, 0.95),
@@ -792,7 +792,7 @@ export class HubScene extends Phaser.Scene {
   }
 
   /**
-   * Reduced motion parks ROO at the gate-front waypoint: the marker stays, the
+   * Reduced motion parks SOL at the gate-front waypoint: the marker stays, the
    * loop does not. Same deal as the sage's bob, one level up (it travels).
    */
   private applyRoamerMotion() {
