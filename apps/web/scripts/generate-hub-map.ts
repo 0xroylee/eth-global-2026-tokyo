@@ -11,18 +11,18 @@ const SPAWN = { col: 20, row: 25 };
 const SAGE = { col: 18, row: 21 };
 /** Nine gates across the north, two down the west edge, one on the south-east approach. */
 const GATES = [
-  { bossId: "hoodcats", col: 3, row: 2, width: 3, height: 2 },
-  { bossId: "talis", col: 7, row: 2, width: 3, height: 2 },
-  { bossId: "roo", col: 11, row: 2, width: 3, height: 2 },
-  { bossId: "agrippa", col: 15, row: 2, width: 3, height: 2 },
+  { bossId: "aero", col: 3, row: 2, width: 3, height: 2 },
+  { bossId: "brett", col: 7, row: 2, width: 3, height: 2 },
+  { bossId: "sol", col: 11, row: 2, width: 3, height: 2 },
+  { bossId: "vvv", col: 15, row: 2, width: 3, height: 2 },
   { bossId: "cat", col: 19, row: 2, width: 3, height: 2 },
-  { bossId: "robinpepe", col: 23, row: 2, width: 3, height: 2 },
-  { bossId: "aeva", col: 27, row: 2, width: 3, height: 2 },
+  { bossId: "tibbir", col: 23, row: 2, width: 3, height: 2 },
+  { bossId: "morpho", col: 27, row: 2, width: 3, height: 2 },
   { bossId: "macro-whale", col: 31, row: 2, width: 3, height: 2 },
-  { bossId: "pons", col: 35, row: 2, width: 3, height: 2 },
-  { bossId: "ad", col: 4, row: 10, width: 3, height: 2 },
-  { bossId: "musebook", col: 4, row: 18, width: 3, height: 2 },
-  { bossId: "robin", col: 35, row: 18, width: 3, height: 2 },
+  { bossId: "avnt", col: 35, row: 2, width: 3, height: 2 },
+  { bossId: "bnkr", col: 4, row: 10, width: 3, height: 2 },
+  { bossId: "drb", col: 4, row: 18, width: 3, height: 2 },
+  { bossId: "b3", col: 35, row: 18, width: 3, height: 2 },
 ] as const;
 const OUT_PATH = new URL("../public/game/hub.json", import.meta.url);
 
@@ -94,20 +94,20 @@ reserveRoute(25, 12, 9, 3); // east trunk, cols 25..33
 reserveRoute(33, 12, 6, 3); // cols 33..38, rows 12..14
 // One spur per north gate: three wide, centred on the gate, down to the trunk. A
 // three-wide route is one corridor, so it reserves its shoulders as well.
-reserveSpur(7, 4, 3, 11); // talis, cols 7..9
-reserveSpur(11, 4, 3, 11); // roo, cols 11..13
-reserveSpur(15, 4, 3, 11); // agrippa, cols 15..17
+reserveSpur(7, 4, 3, 11); // brett, cols 7..9
+reserveSpur(11, 4, 3, 11); // sol, cols 11..13
+reserveSpur(15, 4, 3, 11); // vvv, cols 15..17
 reserveSpur(19, 4, 3, 11); // cat, cols 19..21
-reserveSpur(23, 4, 3, 11); // robinpepe, cols 23..25
-reserveSpur(27, 4, 3, 11); // aeva, cols 27..29
+reserveSpur(23, 4, 3, 11); // tibbir, cols 23..25
+reserveSpur(27, 4, 3, 11); // morpho, cols 27..29
 reserveSpur(31, 4, 3, 11); // macro-whale, cols 31..33
-reserveSpur(35, 4, 3, 11); // pons, cols 35..37
-// hoodcats sits west of the west trunk, so its spur steps south then east into talis's.
+reserveSpur(35, 4, 3, 11); // avnt, cols 35..37
+// aero sits west of the west trunk, so its spur steps south then east into brett's.
 reserveSpur(3, 4, 3, 5); // cols 3..5, rows 4..8
 reserveRoute(5, 8, 5, 3); // cols 5..9, rows 8..10
-// ad opens straight onto the trunk. musebook drops south of it to its own approach.
+// bnkr opens straight onto the trunk. drb drops south of it to its own approach.
 reserveSpur(7, 14, 3, 7); // cols 7..9, rows 14..20
-// robin's approach sits below its own base, so its spur passes west of the gate footprint.
+// b3's approach sits below its own base, so its spur passes west of the gate footprint.
 reserveSpur(33, 15, 3, 6); // cols 33..35, rows 15..20
 
 const isStone = (c: number, r: number) => inBounds(c, r) && stone[index(c, r)] === 1;
@@ -243,7 +243,7 @@ for (const gate of GATES) {
   for (const c of [gate.col - 1, gate.col + gate.width]) {
     const r = gate.row + gate.height - 1;
     if (layers.collision[index(c, r)] !== 0) continue;
-    // talis, musebook and robin each put one torch on their own spur before this guard.
+    // brett, drb and b3 each put one torch on their own spur before this guard.
     if (isStone(c, r) || isShoulder(c, r)) continue;
     setTile("props", c, r, G.torchA);
     block(c, r, G.torchA);
