@@ -58,10 +58,8 @@ function factoryMap() {
     at(ground, COLS - 1, y, G.post);
   }
   for (const [x, y] of [[3, 7], [12, 7], [4, 9], [11, 8]] as const) at(ground, x, y, G.worn);
-  for (const [x, y] of [[8, 5], [8, 6]] as const) at(ground, x, y, G.mat);
   at(props, 6, 2, G.furnace);
   at(props, 4, 3, G.coal);
-  at(props, 8, 5, G.anvil);
   at(props, 11, 3, G.bench);
   at(props, 12, 3, G.bench);
   at(props, 14, 1, G.tools);
@@ -146,6 +144,7 @@ export class FactoryScene extends Phaser.Scene {
     this.load.image("tiles", "/game/workshop-tiles.png");
     this.load.image("furnace-glow", "/game/workshop-glow.png");
     this.load.spritesheet("player-walk", "/game/player-compact-walk.png", { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet("workshop", "/game/workshop-tiles.png", { frameWidth: 16, frameHeight: 16 });
     this.load.spritesheet("blacksmith", "/game/blacksmith.png", { frameWidth: 32, frameHeight: 32 });
     this.load.tilemapTiledJSON("factory", factoryMap());
   }
@@ -167,15 +166,18 @@ export class FactoryScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(BACKDROP);
 
     const smithX = 8 * TILE + 8;
-    const smithY = 4 * TILE;
-    this.smithZone = new Phaser.Geom.Rectangle(7 * TILE, 6 * TILE, 3 * TILE, 2 * TILE);
+    const smithY = 7 * TILE;
+    this.smithZone = new Phaser.Geom.Rectangle(smithX - 36, smithY - 20, 72, 64);
     this.highlight = this.add.ellipse(smithX, smithY, 18, 6, 0xffc56a, 0).setDepth(smithY - 1);
     this.smith = this.physics.add.sprite(smithX, smithY, "blacksmith", 0);
     this.smith.setOrigin(0.5, FOOT_ROW / 32).setDepth(smithY).setImmovable(true);
     const smithBody = this.smith.body as Phaser.Physics.Arcade.Body;
-    smithBody.setSize(14, 10).setOffset((this.smith.width - 14) / 2, FOOT_ROW - 10);
+    smithBody.setSize(12, 8).setOffset((this.smith.width - 12) / 2, FOOT_ROW - 8);
+    const anvilX = smithX - 11;
+    const anvilY = smithY - 7;
+    this.add.image(anvilX, anvilY, "workshop", 8).setDepth(smithY - 1);
     this.nameLabel = this.add
-      .text(smithX, smithY - 26, "BLACKSMITH", {
+      .text(smithX, smithY - 40, "BLACKSMITH", {
         fontFamily: "var(--font-dm-mono), monospace",
         fontSize: "5px",
         color: "#f3e2c4",
@@ -184,7 +186,7 @@ export class FactoryScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(10_000);
     this.namePlate = this.add
-      .rectangle(smithX, smithY - 26 - this.nameLabel.height / 2, this.nameLabel.width + 6, this.nameLabel.height + 3, 0x2a2118, 0.92)
+      .rectangle(smithX, smithY - 40 - this.nameLabel.height / 2, this.nameLabel.width + 6, this.nameLabel.height + 3, 0x2a2118, 0.92)
       .setStrokeStyle(1, 0xc48a45)
       .setDepth(9_999);
 
@@ -206,14 +208,14 @@ export class FactoryScene extends Phaser.Scene {
       glow.setAlpha(0.85);
       this.smith.play("smith-hammer");
       this.smith.on("animationupdate", (_anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
-        if (frame.index !== 2) return;
-        this.burstSparks(8 * TILE + 8, 5 * TILE + 8);
+        if (frame.index !== 1) return;
+        this.burstSparks(anvilX, anvilY);
         this.hooks.onStrike();
       });
     }
 
     const spawnX = 8 * TILE + 8;
-    const spawnY = 9 * TILE;
+    const spawnY = 10 * TILE;
     this.facing = "up";
     this.lastX = spawnX;
     this.lastY = spawnY;
@@ -237,9 +239,10 @@ export class FactoryScene extends Phaser.Scene {
       block(0, y);
       block(COLS - 1, y);
     }
-    for (const [tx, ty] of [[6, 2], [4, 3], [8, 5], [11, 3], [12, 3], [14, 1], [14, 4], [1, 8], [2, 9], [13, 8]] as const) {
+    for (const [tx, ty] of [[6, 2], [4, 3], [11, 3], [12, 3], [14, 1], [14, 4], [1, 8], [2, 9], [13, 8]] as const) {
       block(tx, ty);
     }
+    blocks.add(this.add.rectangle(anvilX, anvilY, 14, 10).setVisible(false));
     this.physics.add.collider(this.player, blocks);
 
     this.cameras.main.stopFollow();
@@ -319,7 +322,7 @@ export class FactoryScene extends Phaser.Scene {
     const inDoor =
       this.player.x >= DOOR.left * TILE &&
       this.player.x <= DOOR.right * TILE &&
-      this.player.y >= (ROWS - 2) * TILE;
+      this.player.y >= (ROWS - 1) * TILE - 6;
     if (inDoor !== this.nearDoor) {
       this.nearDoor = inDoor;
       this.hooks.onDoor(inDoor);
@@ -347,8 +350,7 @@ export class FactoryScene extends Phaser.Scene {
         key: "smith-hammer",
         frames: [
           { key: "blacksmith", frame: 0, duration: 980 },
-          { key: "blacksmith", frame: 1, duration: 260 },
-          { key: "blacksmith", frame: 2, duration: 110 },
+          { key: "blacksmith", frame: 1, duration: 140 },
         ],
         repeat: -1,
       });

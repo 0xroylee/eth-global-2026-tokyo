@@ -1,5 +1,5 @@
-import { deflateSync } from "node:zlib";
-import { writeFileSync } from "node:fs";
+import { deflateSync, inflateSync } from "node:zlib";
+import { readFileSync, writeFileSync } from "node:fs";
 
 const crcTable = new Uint32Array(256);
 for (let n = 0; n < 256; n += 1) {
@@ -202,66 +202,103 @@ tiles.forEach((paint, index) => {
       sheet.data[to] = tile[from];
       sheet.data[to + 1] = tile[from + 1];
       sheet.data[to + 2] = tile[from + 2];
-      sheet.data[to + 3] = tile[from + 3] || 255;
+      sheet.data[to + 3] = tile[from + 3];
     }
   }
 });
 
-function smithFrame(frame) {
-  const board = canvas(32, 32);
-  const { fill, set } = board;
-  fill(10, 28, 5, 3, C.boot);
-  fill(17, 28, 5, 3, C.boot);
-  fill(11, 22, 4, 6, C.apronDark);
-  fill(17, 22, 4, 6, C.apronDark);
-  fill(9, 16, 14, 8, C.apron);
-  fill(9, 16, 14, 2, C.apronDark);
-  fill(15, 18, 2, 6, C.apronDark);
-  fill(6, 17, 3, 5, C.shirt);
-  fill(23, 17, 3, 5, C.shirt);
-  fill(11, 8, 10, 8, C.skin);
-  fill(11, 7, 10, 2, C.hair);
-  fill(10, 9, 2, 5, C.hair);
-  fill(20, 9, 2, 4, C.hair);
-  fill(13, 11, 2, 2, C.hair);
-  fill(17, 11, 2, 2, C.hair);
-  fill(12, 15, 8, 3, C.beard);
-  set(14, 14, C.hair);
-  if (frame === 0) {
-    fill(22, 12, 2, 8, C.handle);
-    fill(20, 10, 6, 3, C.iron);
-    fill(20, 10, 6, 1, C.ironDark);
-  } else if (frame === 1) {
-    fill(14, 2, 2, 7, C.handle);
-    fill(11, 1, 8, 3, C.iron);
-    fill(11, 1, 8, 1, C.ironDark);
-    fill(22, 14, 3, 3, C.shirt);
-  } else {
-    fill(18, 20, 2, 6, C.handle);
-    fill(15, 24, 8, 3, C.iron);
-    fill(15, 26, 8, 1, C.ironDark);
-    set(14, 25, C.emberHot);
-    set(23, 24, C.ember);
+function decodeRgb(path) {
+  const file = readFileSync(path);
+  let cursor = 8;
+  let width = 0;
+  let height = 0;
+  const idat = [];
+  while (cursor < file.length) {
+    const length = file.readUInt32BE(cursor);
+    const type = file.subarray(cursor + 4, cursor + 8).toString();
+    const chunk = file.subarray(cursor + 8, cursor + 8 + length);
+    if (type === "IHDR") {
+      width = chunk.readUInt32BE(0);
+      height = chunk.readUInt32BE(4);
+    } else if (type === "IDAT") idat.push(chunk);
+    else if (type === "IEND") break;
+    cursor += 12 + length;
   }
-  return board.data;
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * 3;
+  const rows = [];
+  let offset = 0;
+  const prev = Buffer.alloc(stride);
+  const paeth = (a, b, c) => {
+    const p = a + b - c;
+    const pa = Math.abs(p - a);
+    const pb = Math.abs(p - b);
+    const pc = Math.abs(p - c);
+    if (pa <= pb && pa <= pc) return a;
+    return pb <= pc ? b : c;
+  };
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[offset];
+    offset += 1;
+    const row = Buffer.from(raw.subarray(offset, offset + stride));
+    offset += stride;
+    if (filter === 1) for (let x = 0; x < stride; x += 1) row[x] = (row[x] + (x >= 3 ? row[x - 3] : 0)) & 255;
+    else if (filter === 2) for (let x = 0; x < stride; x += 1) row[x] = (row[x] + prev[x]) & 255;
+    else if (filter === 3) for (let x = 0; x < stride; x += 1) row[x] = (row[x] + (((x >= 3 ? row[x - 3] : 0) + prev[x]) >> 1)) & 255;
+    else if (filter === 4) for (let x = 0; x < stride; x += 1) row[x] = (row[x] + paeth(x >= 3 ? row[x - 3] : 0, prev[x], x >= 3 ? prev[x - 3] : 0)) & 255;
+    prev.set(row);
+    rows.push(row);
+  }
+  return rows;
 }
 
-const smith = canvas(96, 32);
-for (let frame = 0; frame < 3; frame += 1) {
-  const part = smithFrame(frame);
-  for (let y = 0; y < 32; y += 1) {
-    for (let x = 0; x < 32; x += 1) {
-      const from = (y * 32 + x) * 4;
-      const to = (y * 96 + frame * 32 + x) * 4;
-      smith.data[to] = part[from];
-      smith.data[to + 1] = part[from + 1];
-      smith.data[to + 2] = part[from + 2];
-      smith.data[to + 3] = part[from + 3];
+/** Front-facing frames from the supplied sheet, scaled to the player's 32px cell. */
+function blacksmithSheet() {
+  const source = decodeRgb(new URL("../public/images/black-smith-sprite.png", import.meta.url));
+  const columns = [[89, 253], [399, 561], [690, 851], [1005, 1162]];
+  const top = 71;
+  const bottom = 309;
+  const cell = 32;
+  const board = canvas(cell * columns.length, cell);
+  const step = 8;
+  columns.forEach(([x0, x1], frame) => {
+    let minX = x1;
+    let maxX = x0;
+    let minY = bottom;
+    let maxY = top;
+    for (let y = top; y <= bottom; y += 1) {
+      for (let x = x0; x <= x1; x += 1) {
+        const i = x * 3;
+        if (source[y][i] + source[y][i + 1] + source[y][i + 2] < 36) continue;
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
     }
-  }
+    const sw = maxX - minX + 1;
+    const sh = maxY - minY + 1;
+    const dw = Math.max(1, Math.floor(sw / step));
+    const dh = Math.max(1, Math.floor(sh / step));
+    const originX = frame * cell + Math.floor((cell - dw) / 2);
+    const originY = cell - dh - 1;
+    for (let y = 0; y < dh; y += 1) {
+      const sy = minY + Math.min(sh - 1, y * step);
+      for (let x = 0; x < dw; x += 1) {
+        const sx = minX + Math.min(sw - 1, x * step);
+        const i = sx * 3;
+        const red = source[sy][i];
+        const green = source[sy][i + 1];
+        const blue = source[sy][i + 2];
+        if (red + green + blue < 36) continue;
+        board.set(originX + x, originY + y, [red, green, blue, 255]);
+      }
+    }
+  });
+  return board.data;
 }
 
 const root = new URL("../public/game/", import.meta.url);
 writeFileSync(new URL("workshop-tiles.png", root), png(128, 32, sheet.data));
-writeFileSync(new URL("blacksmith.png", root), png(96, 32, smith.data));
+writeFileSync(new URL("blacksmith.png", root), png(128, 32, blacksmithSheet()));
 writeFileSync(new URL("workshop-glow.png", root), png(16, 16, tileOf(tiles[7])));
