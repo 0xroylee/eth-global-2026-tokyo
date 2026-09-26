@@ -216,4 +216,81 @@
 
 所有內容層面主張（3 boss、神社繪製、cat 特判、crop 硬編碼、markers 對位、guide 狀態機、24 motes、6 layers、未使用 npc-* 圖、無打字機程式碼）均與源碼一致。
 
-<!-- APPEND -->
+## 5. 研究結論（餵給 PLAN Round 2）
+
+- **可行的實作路線雛形**：老智者 = Elderbug 骨架 + BotW 量化目標，站在出生點附近（zone 感應 + 對話 modal + 打字機，重用 WelcomeDialog 模式）；10 Boss = curated `bosses.json`（Robinhood Chain 榜、snapshot 註記）＋混合呈現（多數定點神社/雕像 + 0–1 隻狀態機巡邏）＋狀態錨（擊敗後熄滅）；資料層擴充 `bosses.ts`（presentation metadata，位置續留 hub.json markers）；3-gate 假設全面 data-driven 化。
+- **最大風險（依序）**：① 本方向與 art-direction／completion-pass 兩份規格的明文 out-of-scope 衝突——Round 2 必須先取得規格變更同意（§4.5）；② `BossEntryPanel` 的 cat 特判踩 partner（battle entry）界線，10 boss 的「解鎖→戰鬥」語義需與 partner 協調；③ live fetch 的 demo 穩定性（已決定 snapshot 為主，風險可控）；④ 10 gate 的地圖空間與 `check-hub-map.ts` 斷言同步改（§4.6 第 10 條）。
+- **待答問題（留給 Round 2）**：① 10 隻 Boss 的 id 命名與解鎖三態模型（有合約／未部署／未開放）；② cat-only stage label 與 `round:state` 的多 boss 語義——擴充 schema 或維持 hub presentation-only；③ NPC 對話走純腳本或雙軌 LLM（建議腳本優先、LLM 為加分項）；④ `npc-thesis-wizard.png` 的授權與尺寸確認；⑤ 10 Boss 最終選角（敘事型 PONS/CASHCAT/SI/ROBINPEPE/HOODCATS/TALIS vs 熱度型）。
+
+## 6. 來源清單
+
+### 6.1 外部來源（URL，轉錄自 A1／A2，未增刪）
+
+**A1 — Uniswap Launch Boost／資料源**
+
+- Uniswap Blog《Launch Aggregator: Explore Top Uniswap Launchpads in One Place》2026-07-30 — https://blog.uniswap.org/launch-aggregator-explore-top-uniswap-launchpads-in-one-place
+- Lookonchain 轉述（2026-07-30）— https://www.lookonchain.com/feeds/66207
+- Robinlaunch Docs（Boost / Direct / BondingCurve 機制）— https://robinlaunch.fun/docs
+- Robinlaunch Trending 頁 — https://robinlaunch.fun/trending
+- Pump.fun BOOST mode 報導（對照組）— CryptoBriefing 2026-07-21 ／ KuCoin News 2026-07-22
+- GeckoTerminal Public API 實測（2026-09-26）— https://api.geckoterminal.com/api/v2/networks/robinhood/trending_pools
+- DEX Screener API 實測（2026-09-26）— https://api.dexscreener.com/token-boosts/top/v1
+- Uniswap Developers：Subgraphs Overview — https://developers.uniswap.org/docs/ecosystem/subgraphs/overview
+- The Graph《Sunsetting the Hosted Service》— https://thegraph.com/blog/sunsetting-hosted-service/
+- GeckoTerminal API FAQ／Docs（rate limit）— https://apiguide.geckoterminal.com/faq
+- CoinGecko Support《Does GeckoTerminal have an API?》2025-10-01 — https://support.coingecko.com/hc/en-us/articles/22612838274841
+- DEX Screener API Reference（token-profiles 60 req/min）— https://docs.dexscreener.com/api/reference
+
+**A2 — 遊戲設計／效能／AI NPC**
+
+1. IGN — Breath of the Wild Old Man: https://www.ign.com/wikis/the-legend-of-zelda-breath-of-the-wild/Old_Man
+2. Zelda Dungeon — Old Man: https://www.zeldadungeon.net/wiki/Old_Man_(Breath_of_the_Wild)
+3. GameFAQs — BotW 對話統計討論: https://gamefaqs.gamespot.com/boards/189707-the-legend-of-zelda-breath-of-the-wild/75299060?page=1
+4. Wikipedia — Professor Samuel Oak: https://en.wikipedia.org/wiki/Professor_Samuel_Oak
+5. GB Studio Central — Pokemon and the RPG introduction: https://gbstudiocentral.com/spotlight/pokemon-and-the-rpg-introduction/
+6. Bulbapedia — Old man (Kanto): https://bulbapedia.bulbagarden.net/wiki/Old_man_(Kanto)
+7. Wikibooks — Stardew Valley/Getting Started: https://en.wikibooks.org/wiki/Stardew_Valley/Getting_Started
+8. Game Rant — Stardew Introductions Quest: https://gamerant.com/stardew-valley-introductions-quest-guide/
+9. Hollow Knight Wiki — Elderbug: https://hollowknight.wiki/w/Elderbug
+10. Hollow Knight Wiki — Dirtmouth: https://hollowknight.wiki/w/Dirtmouth
+11. Pixel Crushers — Dialogue System for Unity 手冊: https://pixelcrushers.com/dialogue_system/manual2x/html/dialogue_u_is.html
+12. GitHub — blocking-dialog-box (Godot): https://github.com/r2d2meuleu/blocking-dialog-box
+13. Game8 — Pokemon SV Gym Leader Order: https://game8.co/games/Pokemon-Scarlet-Violet/archives/384362
+14. Serebii — Pokemon SV Gyms: https://www.serebii.net/scarletviolet/gyms.shtml
+15. RPG Site — Pokemon SV Gym Order: https://staging.rpgsite.net/feature/13490-pokemon-scarlet-violet-gym-order-best-progression-for-each-gym-base-and-titan
+16. Zelda Dungeon — Stone Talus: https://www.zeldadungeon.net/wiki/Stone_Talus
+17. IGN — BotW Minibosses: https://www.ign.com/wikis/the-legend-of-zelda-breath-of-the-wild/Minibosses
+18. TheGamer — BotW Every Miniboss: https://www.thegamer.com/breath-wild-every-miniboss-where-find-them/
+19. Fextralife — Night's Cavalry（含漫遊改定點的開發史）: https://eldenring.wiki.fextralife.com/Night%27s+Cavalry
+20. Eurogamer — Night's Cavalry locations: https://www.eurogamer.net/elden-ring-nights-cavalry-locations-how-to-beat-8042
+21. DualShockers — Night's Cavalry Locations & Rewards: https://www.dualshockers.com/elden-ring-nights-cavalry-locations-rewards/
+22. IGN — Demon's Souls Nexus: https://www.ign.com/wikis/demons-souls/Nexus
+23. DIVA Portal 學位論文 — Souls 系列關卡設計: http://www.diva-portal.org/smash/get/diva2:935733/FULLTEXT01.pdf
+24. Game Developer — Demon's Souls world building: https://www.gamedeveloper.com/design/using-game-systems-to-enhance-world-building-in-demon-s-souls
+25. ewanjams — SM64 Level Design: https://ewanjams.com/pages/blog/SM64/SM64.html
+26. Design Doc — Hub worlds 影片: https://www.youtube.com/watch?v=hHguwARMcY8
+27. Trace Dressen — Home Sweet Home (hub 設計): https://tracedressen.wordpress.com/2019/02/21/home-sweet-home/
+28. DualShockers — 10 Best Hub Worlds: https://www.dualshockers.com/best-hub-worlds/
+29. DEV Community — CursorCamp Sandbox 架構（55 NPC 漫遊）: https://dev.to/dundunup/building-a-game-with-zero-game-libraries-the-architecture-behind-cursorcamp-sandbox-20hn
+30. Stack Overflow 6986843 — canvas 渲染效能: https://stackoverflow.com/questions/6986843/how-to-properly-render-a-html5-canvas-game-with-best-performance-results
+31. HTML5GameDevs — drawing performance 討論: https://www.html5gamedevs.com/topic/23839-how-to-increase-drawing-performance/
+32. brunops.org — Zombies canvas 遊戲實作: http://brunops.org/zombies-html5-canvas-game
+33. GameDev SE 160244 — tile-based canvas 效能: https://gamedev.stackexchange.com/questions/160244/performance-problems-with-scrolling-html5-canvas-for-large-tile-based-game
+34. arXiv 2304.03442 — Generative Agents: https://arxiv.org/abs/2304.03442
+35. Generative Agents GitHub: https://github.com/joonspk-research/generative_agents
+36. Ars Technica — 25 AI agents in RPG town: https://arstechnica.com/information-technology/2023/04/surprising-things-happen-when-you-put-25-ai-agents-together-in-an-rpg-town/
+37. Springer — LLM-Powered NPCs（Skyrim Mantella 研究）: https://link.springer.com/chapter/10.1007/978-3-032-12405-0_10
+38. NVIDIA GeForce News — ACE GDC 2024: https://www.nvidia.com/en-us/geforce/news/nvidia-ace-gdc-gtc-2024-ai-character-game-and-app-demo-videos/
+39. NVIDIA Blog — ACE microservices: https://blogs.nvidia.com/blog/ai-decoded-ace-microservices-digital-humans/
+40. CONVERSATIONS'23 — Vaudeville 個案研究: https://www.samcox.eu/files/CONVERSATIONS%2723%20Paper.pdf
+41. arXiv 2504.13928 — LLM-Driven NPCs cross-platform: https://arxiv.org/html/2504.13928v1
+
+### 6.2 Repo 文件與源碼（本報告實讀／實證）
+
+**實讀文件**：`AGENTS.md`、`CONTEXT.md`、`docs/superpowers/specs/2026-09-26-rpg-hub-art-direction-design.md`、`docs/uiux-battle-v2-spec.md`（metadata 格式參考）、`docs/superpowers/plans/2026-09-26-hub-completion-pass.md`（§4.5 約束行號已驗證）。
+
+**實讀源碼（§4 的 file:line 依據）**：`apps/web/src/game/HubScene.ts`、`apps/web/src/game/bosses.ts`、`apps/web/src/game/createGame.ts`、`apps/web/src/game/textures.ts`、`apps/web/src/game/bridge.ts`、`apps/web/src/game/HubAtmosphere.ts`、`apps/web/src/lib/hubGuide.ts`、`apps/web/src/lib/useHubGuide.ts`、`apps/web/src/components/BossEntryPanel.tsx`、`apps/web/src/components/GameShell.tsx`、`apps/web/scripts/generate-hub-map.ts`、`apps/web/scripts/check-hub-map.ts`、`apps/web/public/game/hub.json`、`apps/web/package.json`、`apps/web/AGENTS.md`。
+
+**資產實證**（`ls`，未讀 binary）：`apps/web/public/images/`（`npc-*.png`、`little-roy-*`、`player-compact-walk-master.txt` 存在；`npc-*` 無伴隨 txt）、`apps/web/public/game/`（`hub.json`、`tiles.png`、`player-compact-walk.png`、`TILESET-LICENSE.txt`）。
+
+**存在性確認（未實讀內容）**：`docs/superpowers/plans/2026-09-26-hub-beginner-guide.md`（guide 落地狀態為 Explore 報告轉述，其落地內容以 §4.3 實讀源碼為準）。
