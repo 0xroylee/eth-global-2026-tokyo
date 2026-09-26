@@ -7,7 +7,8 @@ function nonBlankString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function isProvider(value: unknown): value is EIP1193Provider {
+/** Structural check for an EIP-1193 provider: must expose request, on, and removeListener. */
+export function isEip1193Provider(value: unknown): value is EIP1193Provider {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
   return ["request", "on", "removeListener"].every((key) => typeof candidate[key] === "function");
@@ -17,7 +18,7 @@ function isProvider(value: unknown): value is EIP1193Provider {
 export function normalizeProviderDetail(value: unknown): DiscoveredWallet | null {
   if (!value || typeof value !== "object") return null;
   const { info, provider } = value as { info?: unknown; provider?: unknown };
-  if (!info || typeof info !== "object" || !isProvider(provider)) return null;
+  if (!info || typeof info !== "object" || !isEip1193Provider(provider)) return null;
   const { uuid, name, icon, rdns } = info as Record<string, unknown>;
   if (!nonBlankString(uuid) || !nonBlankString(name) || !nonBlankString(rdns)) return null;
   const iconText = typeof icon === "string" ? icon : "";
