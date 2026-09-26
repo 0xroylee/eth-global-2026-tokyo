@@ -105,9 +105,11 @@ Keep the shared E2E and focused accounting checks. Optional held-Attack Token at
 
 `/battle/<hook-address>?network=base-sepolia` opens one verified Boss encounter using `@boss-pool/chain`; `network=local` selects the local chain. The path contains the Boss Hook address, not a Uniswap pool ID or Factory boss ID. Bare `/battle` and old `/mock-battle` links lead to the selected network's standalone demo. Explicit addresses never fall back to a different Boss.
 
-Boss names and stage artwork are configured in code by network and Hook address. The existing Base Sepolia demo and configured local demo use **Pool Unis**. Other addresses need an explicit presentation mapping. A verified Factory boss without a mapping shows **Boss appearance not configured**, while its real token data and actions remain available. The mapping does not authorize an unverified contract. **SWAP ATTACK** remains the attack command.
+Boss names and stage artwork are configured in code by network and Hook address. The existing Base Sepolia demo and configured local demo use **Pool Unis**. A verified perpetual Factory boss uses Pool Unis when no explicit mapping exists. Other encounters without a mapping show **Boss appearance not configured**, while their real token data and actions remain available. Appearance does not authorize an unverified contract. **SWAP ATTACK** remains the attack command.
 
 The desktop visual baseline is John Ku's Pool Unis design in commit `c5b11b3`: lake background, upper-left HUD, upper-right nameplate, large boss on the right, lower-left command menu, and lower-right dialogue. SDK integration must preserve this composition, pixel typography, and cream/navy windows. Shorter desktop windows may reduce spacing and sprite size to prevent overlap.
+
+The [game design standard](../design.md) defines shared window styling, automatic quotes, approval steps, and interaction feedback.
 
 Players can inspect a boss without connecting a wallet. A wallet is required for approvals, attacks, and claims. Boss progress, stage, deadline, and rewards come from the selected verified Hook and its contracts. An unavailable deployment shows an unavailable state. Entering or refreshing the page does not start a new round. Switching bosses clears the previous quote and displayed state; pending transactions remain bound to their originating boss.
 
@@ -115,11 +117,11 @@ The hub boss gate shows boss health and **ENTER BATTLE**. Quotes, token approval
 
 In the hub, WASD returns keyboard focus from toolbar buttons to the game. Pressing WASD closes an ordinary game panel and resumes movement. Text fields, native select controls, and wallet prompts keep their keyboard input. Closing a game panel with its button or Escape also returns focus to the canvas.
 
-**SWAP ATTACK** leads to a quote review before any transaction. The player sees the maximum MockUSD spend, expected spend and refunds, expected damage, and minimum accepted output. Approval and attack remain distinct wallet actions. Damage appears after confirmation. Other players' confirmed attacks also update the shared boss.
+An active battle loads and refreshes its public attack quote automatically. Before choosing **SWAP ATTACK**, the player sees the maximum MockUSD spend, expected spend and refunds, expected damage, and minimum accepted output. The command opens an approval dialog only when MockUSD allowance is insufficient. With sufficient allowance and a fresh quote, it requests the attack directly in the wallet. Approval and attack remain distinct wallet actions: confirmed approval closes the dialog, and the player chooses **SWAP ATTACK** again. Damage appears after confirmation. Other players' confirmed attacks also update the shared boss.
 
 Each attack uses a fixed input cap of **1 MockUSD**. The player does not enter an amount or choose a preset. The fixed cap appears in the quote review before confirmation. Damage varies with the live quote. A stage-clearing attack can spend less than 1 MockUSD and returns unused input.
 
-**RUN**, **EXIT BATTLE**, and Escape close the battle view. Escape closes the quote or claim dialog first when it is open. Leaving does not refund purchases or cancel a submitted transaction. The saved transaction remains recoverable on return through **CHECK TRANSACTION**. **MAGIC** and **ITEM** retain their original disabled menu slots and do not trigger transactions.
+**RUN**, **EXIT BATTLE**, and Escape close the battle view. Escape closes an approval, details, or claim dialog first when it is open. Leaving does not refund purchases or cancel a submitted transaction. The saved transaction remains recoverable on return through **CHECK TRANSACTION**. **MAGIC** and **ITEM** retain their original disabled menu slots and do not trigger transactions.
 
 For the standalone demo, reward rights follow the connected wallet's eligible BossHP. The HUD shows **YOUR HP** during the fight and **YOUR SHARE** after defeat, when the denominator is frozen. Historical damage remains separate from current token holdings; the victory card does not invent a contribution total from the wallet balance.
 

@@ -105,7 +105,7 @@ Preserve the existing approval, simulation, receipt, and stale-stage rules. Atta
 
 `/battle/[pool_id]` consumes the live SDK. `pool_id` is the Boss Hook address; the `network` query selects Local or Base Sepolia. Bare `/battle` and legacy `/mock-battle` links lead to the selected network's standalone demo. [Live battle page requirements](requirements.md#live-battle-page) owns the user flow. An explicit Hook address selects only that encounter and has no default-boss or simulated-damage fallback.
 
-The page represents the shared on-chain encounter selected by network and Hook address. A checked-in mapping selects the Boss name and stage images. The standalone demo maps to Pool Unis; verified Factory bosses without an entry show an unconfigured-appearance message. Appearance does not determine contract addresses, rewards, or progress. The lake arena, player sprite, pixel windows, command menu, and dialogue preserve the existing desktop composition. On-chain stage indices are zero-based; labels and artwork use stages 1 through 3.
+The page represents the shared on-chain encounter selected by network and Hook address. A checked-in mapping selects the Boss name and stage images. The standalone demo maps to Pool Unis. A verified Factory boss with `deadline === 0n` also uses Pool Unis when no mapping exists; other unmapped encounters show an unconfigured-appearance message. Appearance does not determine contract addresses, rewards, or progress. The lake arena, player sprite, pixel windows, command menu, and dialogue preserve the existing desktop composition. On-chain stage indices are zero-based; labels and artwork use stages 1 through 3.
 
 The existing integration code provides the starting points:
 
@@ -148,11 +148,11 @@ The action flow reuses these SDK operations:
 | Player step | Existing operation | Page result |
 | --- | --- | --- |
 | Open battle | `arena.deployment` from `sdk.readState(account?)` | Public round state renders before wallet connection. |
-| Review attack | `sdk.quoteAttack({ maxMockUSD: 1_000_000n, stage, account, slippageBps })` | Uses the agreed 1 MockUSD cap in six-decimal base units. Shows `AttackQuote` spend, intermediate Attack Token, refunds, BossHP output, output floors, expiry, and predicted stage result. |
+| Preview attack automatically | `sdk.quoteAttack({ maxMockUSD: 1_000_000n, stage, account, slippageBps })` | Loads without a quote button or connected wallet. Uses the agreed 1 MockUSD cap and shows spend, refunds, output, floors, and fees before the attack command. Details retain exact values and intermediate Attack Token amounts. |
 | Connect or switch network | `arena.connect()` or `arena.switchToSelectedNetwork()` | Refreshes wallet data and invalidates quotes bound to an earlier account or network. |
 | Check attack allowance | `sdk.getApproval({ kind: "attack", maxMockUSD }, account)` | Shows whether MockUSD approval to BossRouter is required. |
-| Approve MockUSD | `arena.runPending(label, () => sdk.approve(action))` | Separate wallet action. The SDK currently requests an unlimited allowance; the UI identifies the token, spender, and scope. |
-| Confirm attack | `arena.runPending("Attack", () => sdk.attack(quote))` | The SDK simulates the authenticated call, then submits the accepted bounds. A confirmed result supplies the actual attack amounts. |
+| Approve MockUSD | `arena.runPending(label, () => sdk.approve(action))` | The attack command opens the approval dialog only when allowance is insufficient. It identifies the token, spender, and unlimited scope, then closes after sufficient allowance is confirmed. Approval does not submit an attack. |
+| Confirm attack | `arena.runPending("Attack", () => sdk.attack(quote))` | With sufficient allowance and a fresh displayed quote, SWAP ATTACK goes directly to authenticated simulation and the wallet. A confirmed result supplies the actual attack amounts. |
 | Recover receipt | `arena.resumePending()` | Checks the saved request against its original deployment without resubmitting the attack. |
 | Redeem reward | `previewReward`, any required claim approval, then `claimReward(hpAmount)` through `runPending` | Standalone claims surrender BossHP for MockUSD. Factory claims consume reward credit for MEME while purchased MEME remains with the player. |
 | Claim optional NFT | `sdk.claimVictoryNFT()` through `runPending` | Separate action subject to `hasAttacked` and `victoryClaimed`. Holding transferred BossHP alone does not establish NFT eligibility. |
@@ -161,9 +161,9 @@ The live battle uses a fixed cap of 1 MockUSD per attack, with no amount editor 
 
 The player UI has no faucet. `sdk.faucetMockUSD(amount)` remains available to test scripts, and the shared transaction controller can recover previously submitted faucet requests.
 
-Quote freshness follows the existing checks in `BossActions`. Configured cap, account, wallet chain, selected deployment, stage, observed stage sales or boss price, and elapsed quote lifetime can invalidate the preview. `sdk.attack` then enforces the accepted output floors with a fresh authenticated simulation. A changed quote requires another review; a failed simulation never authorizes looser output floors automatically.
+Quote freshness covers the configured cap, account, wallet chain, selected deployment, stage, observed stage sales or volume, boss price, and elapsed quote lifetime. Invalidation triggers an automatic refresh, with stale responses ignored and submission disabled until the preview is fresh. `sdk.attack` enforces the accepted output floors with an authenticated simulation. A changed quote requires another player click; a failed simulation never authorizes looser output floors automatically.
 
-Transaction progress drives the dialog. Local timers can dismiss a hit message or animate a confirmed stage change, but they do not create confirmation or mutate round state:
+Transaction progress drives the battle dialogue, with receipt details available on request. Local timers can dismiss a hit message or animate a confirmed stage change, but they do not create confirmation or mutate round state:
 
 | State | Page behavior |
 | --- | --- |
@@ -180,7 +180,7 @@ Transaction progress drives the dialog. Local timers can dismiss a hit message o
 
 One confirmed attack can clear a stage and activate the next stage atomically. Polling may see stage 1 followed directly by stage 2 without ever observing status 2. `StageCleared`, `StageActivated`, and `BossDefeated` events in the receipt provide the animation sequence. The attack's `stage` identifies where its damage belongs; a refreshed `currentStage` may already refer to the next form. The controller never applies damage twice or spills it into the next stage. Fresh snapshots also reflect attacks from other wallets, without claiming that the local player caused them.
 
-Leaving the page changes navigation only. Once a hash is saved, the existing pending record supports receipt recovery after refresh or return. Escape closes an inner quote or claim panel before closing the battle. Focus returns to the initiating control, transaction results use accessible live messages, and the countdown does not announce every second. Existing reduced-motion handling applies to battle effects.
+Leaving the page changes navigation only. Once a hash is saved, the existing pending record supports receipt recovery after refresh or return. Escape closes an inner approval, details, or claim panel before closing the battle. Focus returns to the initiating control, transaction results use accessible live messages, and the countdown does not announce every second. Existing reduced-motion handling applies to battle effects.
 
 The mock reducer, timer-driven attack hook, and mock badge are removed. [`battle.ts`](../apps/web/src/lib/battle.ts) contains the shared receipt-effect filter and deadline calculation. Confirmed receipts keep their original stage and exact damage, even when the refreshed round has already advanced. Quote, signature, and receipt timing follows the actual SDK operations. Repeated reads of an unchanged block timestamp retain their clock anchor so the countdown continues between polls.
 
