@@ -28,7 +28,7 @@ export function PoolFlow({ round, quote }: { round: RoundSnapshot; quote: Attack
         </div>
 
         <div className="flex min-w-0 flex-col items-center gap-2 sm:flex-col-reverse">
-          <PoolBasin name="2 · BOSS POOL" tokenIn="Attack Token" tokenOut={symbol} fee={round.bossPoolFee} />
+          <PoolBasin name="2 · BOSS POOL" tokenIn="Attack Token" tokenOut={symbol} fee={quote?.bossPoolFee ?? round.bossPoolFee} />
           <FlowArrow className="sm:rotate-180" />
           <div className="w-full text-center">
             <p className="text-[10px] font-semibold tracking-wider">TO YOUR WALLET</p>
@@ -59,7 +59,7 @@ export function PoolFlow({ round, quote }: { round: RoundSnapshot; quote: Attack
   );
 }
 
-function PoolBasin({ name, tokenIn, tokenOut, fee }: { name: string; tokenIn: string; tokenOut: string; fee: number }) {
+function PoolBasin({ name, tokenIn, tokenOut, fee }: { name: string; tokenIn: string; tokenOut: string; fee: number | null }) {
   return (
     <div className="relative flex h-[196px] w-full min-w-0 flex-col items-center px-4 pb-5 pt-[62px]">
       <svg aria-hidden="true" viewBox="0 0 300 196" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 size-full fill-none stroke-[#2b4a8b] stroke-2">
@@ -79,7 +79,7 @@ function PoolBasin({ name, tokenIn, tokenOut, fee }: { name: string; tokenIn: st
           <p className="mt-2 truncate text-xs font-semibold">{tokenOut}</p>
         </div>
       </div>
-      <p className="relative mt-auto text-[11px]">{fee / 10_000}% pool fee</p>
+      <p className="relative mt-auto text-[11px]">{fee === null ? "Dynamic fee · see live quote" : `${fee / 10_000}% pool fee`}</p>
     </div>
   );
 }

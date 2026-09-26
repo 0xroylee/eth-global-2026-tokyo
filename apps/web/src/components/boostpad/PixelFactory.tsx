@@ -105,9 +105,10 @@ export function PixelFactory({ pad }: { pad: BoostPadForm }) {
                 ))}
               </div>
             </div>
-            <p className="border-t-2 border-[#092B61]/20 pt-3 text-[14px]">This boss stays open until defeated. You cannot cancel it or withdraw deposited funds, even after victory. Players can claim earned prizes without a time limit.</p>
+            <p className="border-t-2 border-[#092B61]/20 pt-3 text-[14px]">This boss stays open until defeated. The initial pool position and prize stay locked. You can add and remove a separate owner liquidity position. Players can claim earned prizes without a time limit.</p>
 
             {pad.factoryBuild.status === "checking" ? <Notice>Checking the Factory…</Notice> : null}
+            {pad.factoryBuild.status === "compatible" && pad.factoryBuild.demoToken && <Notice>TESTNET MOCK PRICE: this demo Factory supports only token {pad.factoryBuild.demoToken}. Its price reference is controlled by the demo owner.</Notice>}
             {pad.factoryBuild.status === "unconfigured" ? <Notice>Boss creation is unavailable on Base Sepolia. You can still read token details.</Notice> : null}
             {pad.factoryBuild.status === "not-deployed" || pad.factoryBuild.status === "incompatible" ? <Notice error>Boss creation is temporarily unavailable. No funds have been requested.</Notice> : null}
             {pad.factoryBuild.status === "error" ? <Notice error>Could not reach the Factory. Check your connection and reload.</Notice> : null}

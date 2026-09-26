@@ -8,9 +8,9 @@ Demo: https://web-smoky-tau-35.vercel.app/
 
 **Short:** Boss BoostPad turns a token pool into a boss raid. Fighters swap to attack and share the prize.
 
-**Description:** A token sitting in a normal pool gives traders nothing to defeat and no shared prize. Boss BoostPad creates a pool for a token the creator already holds and turns that pool into a boss raid on Uniswap v4. The creator sets the pool in the blacksmith: pool size, a volume target, a prize share, and three fixed boss stages. Fighters attack by swapping through the pools, so each attack adds to that token's swap volume. Swaps outside the fight do not count. Clearing a stage unlocks the next liquidity. After the final stage, eligible fighters share the creator-funded prize. The garden hub, workshop, and battle run in the browser.
+**Description:** A token sitting in a normal pool gives traders nothing to defeat and no shared prize. Boss BoostPad creates a pool for a token the creator already holds and turns that pool into a boss raid on Uniswap v4. The creator sets the pool in the blacksmith: pool size, a volume target, a prize share, and three fixed boss stages. Fighters attack by swapping through the pools, so each attack adds to that token's swap volume. Swaps outside the fight do not count. Clearing a stage starts a shared cooldown before the next attack. After the final stage, eligible fighters share the creator-funded prize. The garden hub, workshop, and battle run in the browser.
 
-**How it's made:** The boss is a Uniswap v4 hook. An attack is one routed swap, from MockUSD through Attack Token into the creator's existing token, and the hook counts that swap as damage and volume. The Boss Factory contract creates the pool, escrows the creator-funded prize, and releases the next stage's liquidity when the current stage is cleared. The browser app is Next.js and Phaser: a walkable garden hub, a blacksmith workshop where the creator sets the pool, and a turn-based battle. Wallet calls use viem on Base Sepolia. The hook is the notable part: swap output is the attack, with no token burn and no separate damage ledger.
+**How it's made:** The boss is a Uniswap v4 hook. An attack is one routed swap, from MockUSD through Attack Token into the creator's existing token, and the hook counts that swap as damage and volume. The Boss Factory contract creates the pool, escrows the creator-funded prize, and enforces a 60-second or 120-second stage cooldown when the current volume goal is reached. The browser app is Next.js and Phaser: a walkable garden hub, a blacksmith workshop where the creator sets the pool, and a turn-based battle. Wallet calls use viem on Base Sepolia. The hook is the notable part: swap output is the attack, with no token burn and no separate damage ledger.
 
 Status: attacks count purchases without burns, and reward shares follow eligible BossHP rather than a per-wallet damage total. The worked claim default is transferable tokens surrendered into permanent custody; the frozen-balance alternative remains available. [BP01](bp01-foundation.md) records the local no-burn contract foundation. The browser battle consumes the live SDK and Base Sepolia has a verified deployment manifest. A manual browser-wallet transaction journey remains unverified; the earlier Robinhood deployment is historical.
 
@@ -21,12 +21,14 @@ Status: attacks count purchases without burns, and reward shares follow eligible
 - A creator enters the address of an existing MEME token held in their wallet, their own token allocation, a prize percentage, a MockUSD volume target. New Factory bosses have no expiry or creator cancellation. The launch form reads token metadata and the connected wallet balance.
 - The route uses the established MockUSD / Attack Token supply pool and creates an isolated Attack Token / MEME boss pool for each launch. Players pay MockUSD through both swaps to buy the actual MEME token.
 - The launch quote derives a supported starting price and estimates the required Attack Token from the active supply pool. It does not depend on an external MEME market price.
-- The creator deposits the full MEME allocation. A chosen percentage funds the victory prize in MEME; the remaining inventory funds the boss pool and its stage transitions.
+- The creator deposits the full MEME allocation. A chosen percentage funds the victory prize in MEME; the full remaining inventory funds the initial boss pool. Stages do not release more inventory.
 - Eligible MockUSD purchase volume counts once per attack and only in proportion to Attack Token spent on the MEME purchase. Refunded MockUSD, returned Attack Token, transfers, outside-market activity, refills, and liquidity changes earn no progress.
-- The target defines three minimum additional volumes in a 1:2:3 ratio: `floor(V / 6)`, `floor(V / 3)`, and the remainder. The caller's input cap and current-stage terminal price bound purchases. Actual eligible volume may exceed a minimum, preventing impossible rounding tails; extra volume stays in the starting stage. A clearing attack settles the purchase and performs its refill and next-stage LP addition atomically. A failed transition reverts the purchase and volume credit.
+- The target defines three additional volume goals in a 1:2:3 ratio. Each attack credits only its starting stage and is bounded to the remaining goal plus one MockUSD base unit, or a terminal purchase that delivers exactly one Boss token base unit. Credit always records actual spend. Clearing stage one starts a shared 60-second cooldown; stage two starts a 120-second cooldown. No attack credits a future stage. Standard AMM price and the full initial liquidity continue through all stages.
 - The accepted attack-token rate is frozen before mining the Hook address. Launching separately checks that the live supply spot remains inside that rate, so an ordinary within-bound price change does not invalidate the mined address.
-- Each Factory boss records untransferable prize credit from actual MEME output. Claims consume that credit after victory while players keep their purchased tokens. Existing balances and transfers do not grant credit. Creators cannot withdraw committed prizes, LP assets, fees, or unused battle reserves, including after victory. Player claims have no expiry. The allocation, funding, and custody rules are defined in [Boss Factory](boss-factory.md).
+- Each Factory boss records untransferable prize credit from actual MEME output. Claims consume that credit after victory while players keep their purchased tokens. Existing balances and transfers do not grant credit. Creators cannot withdraw committed prizes, the initial LP position, initial-position fees, or Router residue. Owners can add and remove a separate proportional position above the locked initial liquidity floor, including after victory. Player claims have no expiry. The allocation, funding, and custody rules are defined in [Boss Factory](boss-factory.md).
 - The creator form is at `/boostpad`, using the Blacksmith UI; `/launch` redirects there. It uses a pasted token address because ERC-20 does not enumerate wallet holdings. It reads the Factory address from the Base Sepolia manifest. The configured Base Sepolia Factory must match the bundled Router/Hook build. The earlier timed Factory has a funded demo boss that retains its original rules. Quotes, approvals, and launches check that build compatibility. Verified Factory battles are available through Hook-address routes.
+
+- An optional owner-controlled testnet mock reference adjusts Boss pool fees, including 0%. It is labelled as a demo reference rather than a market price. The supply pool fee remains 0.3%. Stale or invalid references reject attacks; claims and owner liquidity remain available.
 
 ### Standalone BossHP demo
 
@@ -41,7 +43,7 @@ Status: attacks count purchases without burns, and reward shares follow eligible
 
 There is one attack currency, Attack Token. MROY, two attack types, the 3x magic multiplier, and the 5x magic price are removed. Attacks burn neither Attack Token nor BossHP.
 
-## Bounded defaults
+## Standalone bounded defaults
 
 | Topic | Default |
 | --- | --- |
@@ -61,7 +63,7 @@ There is one attack currency, Attack Token. MROY, two attack types, the 3x magic
 
 These default quantities are demo choices, not real-value commitments. The supply and stage-reserve amounts are defined only after the [economy proof](economy.md).
 
-## Trading and identity rules
+## Standalone trading and identity rules
 
 The supply pool can support ordinary trading. A BossHP purchase in the canonical Boss pool must pass through the authenticated attack path. Player BossHP-to-Attack Token sell-backs are disabled in this pool, so an attacker cannot recycle purchased HP into another credited purchase. The controller-only reverse refill uses the frozen stage reserve during transition and earns zero contribution.
 
@@ -69,7 +71,7 @@ Direct token transfers, wallet balances, token supply, liquidity changes, and do
 
 Held BossHP cannot be submitted again for damage. After victory, the worked proposal allows its holder to surrender tokens for a proportional reward. The same tokens cannot remain spendable after redemption. The prize denominator excludes protocol reserve and HP fees. See [reward math](refill-math.md#rewards-follow-eligible-bosshp) for the formula, custody requirements, and rounding.
 
-## Stage release behavior
+## Standalone stage release behavior
 
 The clearing attack buys only current-stage HP. The hook marks that stage cleared. After that swap returns, the router settles the player's trade and delivers its BossHP. The controller then refills the same pool to the lower price and adds the incremental liquidity before opening the next stage. The maintenance swap does not count as an attack; a second player attack within this transaction is prohibited.
 
@@ -93,7 +95,7 @@ HP budgets are nominal stage allocations, not PoolManager's raw ERC-20 balance. 
 | US10 | Observe expiry and the separate prize/reserve/LP fund outcomes. |
 | US11 | Trace the demo to public code, transactions, a focused E2E run, and sponsor feedback. |
 
-## Core acceptance
+## Standalone core acceptance
 
 Two fresh wallets execute the full two-hop route without enrollment or an entry NFT, receive real BossHP, clear all three stages, trigger exactly two reserve-funded refills and next-stage LP activations, and claim the prize. No NFT is minted during attacks or token claims; victory NFTs are optional separate claims. BossHP supply stays unchanged. Future-stage liquidity is unavailable before its gate. Failed stage activation rolls back all swaps, token deliveries, contribution, and stage changes.
 

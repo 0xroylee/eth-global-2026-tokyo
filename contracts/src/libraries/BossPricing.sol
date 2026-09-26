@@ -69,6 +69,14 @@ library BossPricing {
             : SqrtPriceMath.getAmount1Delta(sqrtLowerX96, sqrtUpperX96, liquidity, true);
     }
 
+    function initialBattleTokenFunding(uint256 saleBudget, int24 startTick, bool bossIsCurrency0)
+        internal pure returns (uint256)
+    {
+        uint160 lower = TickMath.getSqrtPriceAtTick(bossIsCurrency0 ? startTick : -(startTick + 1_920));
+        uint160 upper = TickMath.getSqrtPriceAtTick(bossIsCurrency0 ? startTick + 1_920 : -startTick);
+        return hpAmountForLiquidity(lower, upper, liquidityForHP(saleBudget, lower, upper, bossIsCurrency0), bossIsCurrency0);
+    }
+
     function minimumBattleTokenFunding(uint256 stageOneHP, int24 startTick, bool bossIsCurrency0)
         internal
         pure

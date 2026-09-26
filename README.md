@@ -1,12 +1,12 @@
 # Boss BoostPad
 
-Boss BoostPad turns a token pool into a boss raid on Uniswap v4. Creators commit tokens and a prize. Fighters swap to attack, unlock the next stage's liquidity, and share the prize after victory.
+Boss BoostPad turns a token pool into a boss raid on Uniswap v4. Creators commit tokens and a prize. Fighters swap to attack, advance through volume goals and stage cooldowns, and share the prize after victory.
 
 [Live demo](https://web-smoky-tau-35.vercel.app/) · [Create a boss](https://web-smoky-tau-35.vercel.app/boostpad) · [Play the demo battle](https://web-smoky-tau-35.vercel.app/battle/0xc11D07448948AC4757592E91D8f5155907Ef6AC0?network=base-sepolia) · [Uniswap feedback](FEEDBACK.md)
 
-廣東話 pitch：Boss BoostPad 為已有代幣開一個池，再變成 Boss 戰。攻擊就係 swap，所以每一下攻擊都增加該幣嘅成交量。打贏之後戰士分創建者放嘅獎。清一階先放下一階流動性。
+廣東話 pitch：Boss BoostPad 為已有代幣開一個池，再變成 Boss 戰。攻擊就係 swap，所以每一下攻擊都增加該幣嘅成交量。打贏之後戰士分創建者放嘅獎。開戰時全部售賣流動性已經啟用。清第一階等 60 秒，清第二階等 120 秒，再繼續攻擊。
 
-[Background](#background-and-the-problem) · [How it works](#how-it-works) · [Components](#components) · [Contract addresses](#contract-addresses) · [Integration code](#uniswap-v4-integration-code) · [Run](#run-the-project) · [Build](#build-and-check) · [Evidence](#verification-and-current-status)
+[Background](#background-and-the-problem) · [How it works](#how-it-works) · [Components](#components) · [Contract addresses](#contract-addresses) · [Integration code](#uniswap-v4-integration-code) · [Run](#run-the-project) · [Build](#build-and-check) · [Evidence](#verification-and-current-status) · [Milestones](#planned-milestones)
 
 ## Background and the problem
 
@@ -18,7 +18,7 @@ The project addresses three concrete needs:
 
 - Creators can start a community event using an existing ERC-20 and a defined token budget.
 - Players can see a shared goal and a funded prize while receiving the tokens they buy.
-- Stage progress, liquidity release, and reward accounting follow contract execution, so the game state can be checked against transactions.
+- Stage progress, cooldowns, and reward accounting follow contract execution, so the game state can be checked against transactions.
 
 Eligible volume comes from purchases through that boss's own pool. Transfers, unrelated markets, and reserve maintenance do not earn progress.
 
@@ -38,11 +38,11 @@ The project uses a two-person ownership split:
 1. Open the Blacksmith at `/boostpad` and connect a wallet on Base Sepolia.
 2. Enter an existing ERC-20 address, the amount to commit, the prize percentage, and a MockUSD volume target. The form reads token metadata and the wallet's balance.
 3. Review the launch quote and approve the token deposit. The SDK calculates the pool configuration and mines a valid Uniswap v4 hook address.
-4. Launch the boss. `BossFactory` deploys a dedicated Router, Hook, and collectible contract. It funds the prize in the Hook, funds the battle inventory in the Router, and activates the first stage.
+4. Launch the boss. `BossFactory` deploys a dedicated Router, Hook, and collectible contract. It funds the prize in the Hook, funds the battle inventory in the Router, and activates the full sale position and first stage.
 
-New Factory bosses have three fixed stages and default cat portraits. Their deposits are permanent: creators cannot cancel a boss or withdraw its prize, liquidity, fees, or remaining battle reserves. These bosses have no expiry.
+New Factory bosses have three fixed stages and default cat portraits. The prize, initial LP position, initial-position fees, and Router residue stay locked. Owners can add and remove a separate proportional liquidity position. These bosses have no expiry or creator cancellation. Public Factory deployments retain their original rules and require a matching build for new launches.
 
-### Fight and unlock liquidity
+### Fight through stage cooldowns
 
 A fighter approves MockUSD to the boss's Router when needed, then submits an attack with a spend cap and minimum output.
 
@@ -62,9 +62,11 @@ Both swaps execute in one transaction and one Uniswap v4 `PoolManager.unlock` ca
 eligible volume = floor(MockUSD spent × Attack Token spent / Attack Token bought)
 ```
 
-Unused MockUSD and Attack Token are refunded. The three stages require additional volume in a 1:2:3 ratio. For example, a 60 MockUSD target gives stage minimums of 10, 20, and 30 MockUSD. An attack can exceed its starting stage's minimum, but the extra volume stays in that stage.
+Unused MockUSD and Attack Token are refunded. The three stages require additional volume in a 1:2:3 ratio. For example, a 60 MockUSD target gives stage minimums of 10, 20, and 30 MockUSD. Each attack is bounded to its stage's remaining goal plus one MockUSD base unit, or a terminal purchase of exactly one Boss token base unit. All actual volume stays in that stage and never advances a future stage.
 
-Clearing either of the first two stages triggers a reserve-funded price reset and the next liquidity addition inside the same transaction. A failed transition reverts the attack and its progress. Clearing the final stage defeats the boss.
+Clearing stage one starts a shared 60-second cooldown; clearing stage two starts a 120-second cooldown. The full sale inventory is active from launch. Stage changes preserve the standard AMM price curve and LP position. Quotes and attacks reject during the cooldown, and failed swaps roll back all purchase credit. Clearing the final stage defeats the boss.
+
+The testnet demo can use an owner-controlled mock reference to make Boss fees more expensive or cheaper, including 0%. The supply pool fee stays 0.3%. This reference is labelled TESTNET MOCK PRICE and does not report a live market price. See the [mock price and fee reference](docs/boss-factory.md#testnet-mock-price-and-fees).
 
 ### Claim the prize
 
@@ -79,7 +81,7 @@ The local deployment script also supports the earlier standalone BossHP game. It
 | Rule | New Factory boss | Standalone BossHP fixture |
 | --- | --- | --- |
 | Token sold | Creator-selected ERC-20 | Dedicated BossHP token |
-| Stage gates | Eligible MockUSD volume, split 1:2:3 | Sellable BossHP allocations, nominally 300, 600, and 900 |
+| Stage gates | Eligible MockUSD volume, split 1:2:3, with 60/120-second cooldowns | Sellable BossHP allocations, nominally 300, 600, and 900 |
 | Prize | Creator-selected token | MockUSD |
 | Reward right | Per-player attack credit | Eligible BossHP ownership |
 | Claim | Consume credit and keep purchased tokens | Surrender BossHP into permanent Hook custody |
@@ -117,7 +119,7 @@ The main browser routes are:
 | `/boostpad` | Create a boss in the Blacksmith |
 | `/battle` | Open the network's configured default boss |
 | `/battle/<hook-address>?network=base-sepolia` | Open a specific verified Factory encounter |
-| `/battle?network=local` | Open the local standalone fixture |
+| `/battle?network=local` | Open the local manifest's default boss |
 
 The address in a battle URL is a BossHook address. `/launch` redirects to `/boostpad`, and `/mock-battle` redirects to the live battle route. The browser supports Base Sepolia and Local Anvil; the SDK retains historical Robinhood reads.
 
@@ -127,7 +129,9 @@ The address in a battle URL is a BossHook address. `/launch` redirects to `/boos
 | --- | --- |
 | [BossFactory](contracts/src/BossFactory.sol) | Quotes creator deposits, pins accepted Router/Hook builds, and deploys and funds isolated bosses |
 | [BossHook](contracts/src/BossHook.sol) | Authenticates v4 callbacks, tracks damage and volume, gates stages, holds the prize, and processes claims |
-| [BossRouter](contracts/src/BossRouter.sol) | Executes swaps and settlement, owns the LP positions, refunds unused input, and performs stage refills and liquidity additions |
+| [BossRouter](contracts/src/BossRouter.sol) | Executes swaps and settlement, owns the LP positions, refunds unused input, and manages a separate Factory owner position. Standalone mode retains stage refills and LP additions |
+| [BossFeeController](contracts/src/BossFeeController.sol) | Pair-bound demo fee calculation with stale-source and maximum-fee checks |
+| [MockBossPriceSource](contracts/src/MockBossPriceSource.sol) | Owner-controlled testnet reference, presets, and timestamp refreshes |
 | [MockUSD](contracts/src/MockUSD.sol) | Six-decimal test payment token with an unrestricted test faucet |
 | [RoyToken](contracts/src/RoyToken.sol) | Fixed-supply, 18-decimal Attack Token used between the two pools |
 | [BossHP](contracts/src/BossHP.sol) | Fixed-supply, 18-decimal token for the standalone fixture and the supplied Factory demo token |
@@ -150,7 +154,7 @@ The following addresses come from the [app manifest](apps/web/public/deployments
 
 | Contract | Address | Use |
 | --- | --- | --- |
-| BossFactory | [0x353749ffa9640c4152dd28068c416adfc2eb168e](https://sepolia.basescan.org/address/0x353749ffa9640c4152dd28068c416adfc2eb168e) | Current Factory for new bosses without expiry |
+| BossFactory | [0x353749ffa9640c4152dd28068c416adfc2eb168e](https://sepolia.basescan.org/address/0x353749ffa9640c4152dd28068c416adfc2eb168e) | Published earlier perpetual build; new launches require the bundled build |
 | PoolManager | [0x1EF1e7e79B14AFB530d9671A79B7B173FE41a1c3](https://sepolia.basescan.org/address/0x1EF1e7e79B14AFB530d9671A79B7B173FE41a1c3) | Shared v4 infrastructure |
 | MockUSD | [0x184B037F95A8E7a6E956AACad2244E5ded40d487](https://sepolia.basescan.org/address/0x184B037F95A8E7a6E956AACad2244E5ded40d487) | Test payment token |
 | Attack Token | [0x6e5390D3231beb061c1E49916806F2f26B3Feb22](https://sepolia.basescan.org/address/0x6e5390D3231beb061c1E49916806F2f26B3Feb22) | Shared intermediate token |
@@ -234,7 +238,7 @@ Sources: [foundation manifest](docs/evidence/robinhood-foundation-deployment.jso
 
 ## Uniswap v4 integration code
 
-These links are pinned to source commit `6dd9c8e` so the line references stay stable. The earlier deployed demo retains its original build; its source commit is recorded in the launch evidence.
+This historical integration table is pinned to source commit `6dd9c8e` so the line references stay stable. The earlier deployed demo retains its original build; its source commit is recorded in the launch evidence.
 
 | Integration | Contract and lines |
 | --- | --- |
@@ -247,7 +251,7 @@ These links are pinned to source commit `6dd9c8e` so the line references stay st
 | ERC-20 settlement through PoolManager | [BossRouter.sol, lines 556–562](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossRouter.sol#L556-L562) |
 | Prize and victory-NFT claims | [BossHook.sol, lines 465–494](https://github.com/0xroylee/eth-global-2026-tokyo/blob/6dd9c8ecd6630ecb92b3cbdfc54b62b792d38500/contracts/src/BossHook.sol#L465-L494) |
 
-Both pools use a 0.30% fee and tick spacing 60. The Hook uses ordinary v4 output settlement with zero hook return deltas. The integration calls v4-core directly through viem and the custom Router.
+That historical build uses a 0.30% fee for both pools and tick spacing 60. The current demo can use dynamic Boss fees while keeping the supply fee at 0.30%. The Hook uses ordinary v4 output settlement with zero hook return deltas. The integration calls v4-core directly through viem and the custom Router.
 
 ## Run the project
 
@@ -363,6 +367,22 @@ The repository records the following evidence:
 The recorded Base Sepolia demo verification covers deployment and a read-only attack quote. It does not record a completed player attack-and-claim journey for that boss. The manual browser-wallet popup journey remains a separate verification item.
 
 This is a testnet prototype using MockUSD and a team-deployed PoolManager. Factory token accounting expects ordinary ERC-20 transfers with stable balances; taxed or rebasing transfers are outside the supported model.
+
+## Planned milestones
+
+### Price oracle integration and volatility controls
+
+Status: live external feeds and volatility controls are planned. The owner-controlled testnet mock reference and dynamic Boss fees are implemented.
+
+Integrate price oracles to limit exposure to large price increases and crashes in both the Boss token's external market and the shared Attack Token market. The current contracts use a frozen upper bound on Attack Token received per MockUSD. The demo mock reference is configurable on chain, but does not track the Boss token's external market price. See the [current Factory pricing rules](docs/boss-factory.md#launch-inputs-and-quote).
+
+- [ ] Select supported oracle feeds or sufficiently liquid time-weighted average price (TWAP) sources. Define the quote asset, decimal conversion, freshness requirements, and behavior for tokens without a reliable source.
+- [ ] Check launch pricing and attack execution against limits for both upward and downward price deviations. Reject affected operations when price data is missing, stale, or outside those limits. Retain player minimum-output checks.
+- [ ] Define how battles pause and resume after temporary or sustained price changes. Any future repricing policy must validate the remaining inventory and liquidity in a separately approved contract version. Preserve the committed volume target, earned reward credit, and prize custody.
+- [ ] Show the reference price, deviation, and reason an attack is unavailable in the SDK and battle UI.
+- [ ] Extend the shared contract scenario with an external price move from `1 MockUSD = 2 Boss tokens` to `1 MockUSD = 0.5 Boss token`, a fourfold increase in the Boss token price, and the reverse crash. Cover Attack Token price swings, stale feeds, insufficient oracle liquidity, stage cooldowns, and recovery. Rejected operations must leave game token balances, progress, and reward credit unchanged.
+
+This milestone requires a new contract version; existing deployed bosses retain their original rules. Oracle checks limit execution risk but cannot guarantee token or prize value.
 
 ## Documentation and submission
 

@@ -3,7 +3,10 @@ import {
   decodeErrorResult,
   decodeFunctionData,
   encodeFunctionData,
+  encodeAbiParameters,
+  keccak256,
   maxUint256,
+  parseAbi,
   WaitForTransactionReceiptTimeoutError,
   type Abi,
   type Account,
@@ -18,9 +21,11 @@ import {
 } from "viem";
 import {
   bossHpAbi,
+  bossFeeControllerAbi,
   bossPoolHookAbi,
   bossRouterAbi,
   mockUsdAbi,
+  mockBossPriceSourceAbi,
 } from "./generated/abi";
 import {
   isVerifiedDeployment,
@@ -43,11 +48,12 @@ const QUOTE_SIMULATOR = "0x000000000000000000000000000000000000dEaD" as Address;
 
 export type ApprovalAction =
   | { kind: "attack"; maxMockUSD: bigint }
-  | { kind: "claimReward"; hpAmount: bigint };
+  | { kind: "claimReward"; hpAmount: bigint }
+  | { kind: "ownerLiquidity"; token: "BossHP" | "ROY"; amount: bigint };
 
 export type ApprovalStatus = {
   action: ApprovalAction["kind"];
-  token: "MockUSD" | "BossHP";
+  token: "MockUSD" | "BossHP" | "ROY";
   tokenAddress: Address;
   spender: "BossHook" | "BossRouter";
   spenderAddress: Address;
@@ -59,6 +65,8 @@ export type ApprovalStatus = {
 };
 
 export type AttackQuote = {
+  /** Button/request cap; maxMockUSD is the exact smaller cap accepted by the quote. */
+  requestedMaxMockUSD?: bigint;
   chainId: number;
   deploymentTxHash: Hex;
   router: Address;
@@ -100,8 +108,10 @@ type DecodedEventBase<Name extends string, Args extends object> = {
   logIndex: number;
 };
 export type DecodedContractEvent =
+  | DecodedEventBase<"MockPriceUpdated", { owner: Address; priceX128: bigint; updatedAt: bigint }>
   | DecodedEventBase<"Approval", { owner: Address; spender: Address; value: bigint }>
   | DecodedEventBase<"Transfer", { from: Address; to: Address; value: bigint }>
+  | DecodedEventBase<"OwnerLiquidityModified", { owner: Address; liquidityDelta: bigint; bossHPDelta: bigint; royDelta: bigint }>
   | DecodedEventBase<"AttackExecuted", { player: Address; stage: number; mockUSDSpent: bigint; royBought: bigint; roySpent: bigint; bossHPReceived: bigint; mockUSDRefunded: bigint; royRefunded: bigint }>
   | DecodedEventBase<"AttackRecorded", { player: Address; stage: number; bossHPOut: bigint; cumulativeSold: bigint }>
   | DecodedEventBase<"StageCleared", { stage: number; sold: bigint; capacity: bigint; roundingDust: bigint }>
@@ -111,7 +121,7 @@ export type DecodedContractEvent =
   | DecodedEventBase<"RewardClaimed", { player: Address; bossHPIn: bigint; mockUSDOut: bigint }>
   | DecodedEventBase<"VictoryNFTClaimed", { player: Address; tokenId: bigint }>;
 
-export type PendingActionKind = "approval" | "attack" | "transferBossHP" | "claimReward" | "claimVictoryNFT" | "faucetMockUSD";
+export type PendingActionKind = "approval" | "attack" | "transferBossHP" | "claimReward" | "claimVictoryNFT" | "faucetMockUSD" | "ownerLiquidity" | "mockPrice";
 export type PendingRequest = {
   hash: Hex;
   kind: PendingActionKind;
@@ -346,7 +356,7 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     }
     const amount = approvalAmount(action);
     const result = await readApproval(action, account);
-    return { ...result, requiredAllowance: amount, approvalNeeded: result.currentAllowance < amount, approvalAmount: maxUint256 };
+    return { ...result, requiredAllowance: amount, approvalNeeded: result.currentAllowance < amount, approvalAmount: action.kind === "ownerLiquidity" ? (result.currentAllowance > 0n ? 0n : amount) : maxUint256 };
   }
 
   async function approve(action: ApprovalAction): Promise<PendingOperation<ApprovalResult> | SkippedApproval> {
@@ -357,7 +367,7 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
       address: approval.tokenAddress,
       abi: approval.token === "MockUSD" ? mockUsdAbi : bossHpAbi,
       functionName: "approve",
-      args: [approval.spenderAddress, maxUint256],
+      args: [approval.spenderAddress, approval.approvalAmount],
       account,
     });
     const checkedWallet = await requireWalletAccount(account);
@@ -365,13 +375,13 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     const calldata = encodeFunctionData({
       abi,
       functionName: "approve",
-      args: [approval.spenderAddress, maxUint256],
+      args: [approval.spenderAddress, approval.approvalAmount],
     });
     const hash = await checkedWallet.wallet.writeContract({
       address: approval.tokenAddress,
       abi,
       functionName: "approve",
-      args: [approval.spenderAddress, maxUint256],
+      args: [approval.spenderAddress, approval.approvalAmount],
       account: checkedWallet.writeAccount,
       chain: deployment.chain,
     });
@@ -387,13 +397,13 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
         const event = onlyEvent(events, "Approval");
         assertEventAddress(event.args.owner, account, "Approval event owner does not match the selected wallet.");
         assertEventAddress(event.args.spender, approval.spenderAddress, "Approval event spender does not match the fixed action map.");
-        if (event.args.value !== maxUint256) throw new BossPoolSdkError("RECEIPT_EVENT_MISMATCH", "Approval event is not the requested unlimited allowance.");
+        if (event.args.value !== approval.approvalAmount) throw new BossPoolSdkError("RECEIPT_EVENT_MISMATCH", "Approval event amount differs from the requested allowance.");
         return {
           action: action.kind,
           account,
           token: approval.tokenAddress,
           spender: approval.spenderAddress,
-          amount: maxUint256,
+          amount: approval.approvalAmount,
           events,
         };
       },
@@ -415,26 +425,56 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     const snapshot = await readState(publicClient, deployment);
     const round = snapshot.round;
     assertActiveBeforeDeadline(round);
+    if (round.continuousLiquidity && round.blockTimestamp < round.continuousLiquidity.nextAttackAt) {
+      throw new BossPoolSdkError("STAGE_COOLDOWN", `Stage cooldown ends at ${round.continuousLiquidity.nextAttackAt}.`);
+    }
     const stage = input.stage ?? round.currentStage;
     if (stage !== round.currentStage) throw new RequoteRequiredError("stage-changed", "The requested stage is no longer active; get a fresh quote.");
-    const result = await publicClient.simulateContract({
-      address: router,
-      abi: bossRouterAbi,
-      functionName: "quoteAttackWithMockUSD",
-      args: [input.maxMockUSD, stage],
-      account: QUOTE_SIMULATOR,
-      blockNumber: round.blockNumber,
-    });
-    const quote = normalizeQuoteResult(result.result);
+    let executionCap = input.maxMockUSD;
+    if (round.continuousLiquidity) {
+      const remaining = round.stageVolumeTarget[stage]! - round.stageVolume[stage]! + 1n;
+      if (remaining < executionCap) executionCap = remaining;
+    }
+    const simulate = async (amount: bigint) => normalizeQuoteResult((await publicClient.simulateContract({
+      address: router, abi: bossRouterAbi, functionName: "quoteAttackWithMockUSD",
+      args: [amount, stage], account: QUOTE_SIMULATOR, blockNumber: round.blockNumber,
+    })).result);
+    let quote: ReturnType<typeof normalizeQuoteResult>;
+    try { quote = await simulate(executionCap); }
+    catch (error) {
+      if (!round.continuousLiquidity || !["NoDamage", "SlippageExceeded", "SwapAmountCannotBeZero", "StageVolumeExceeded"].includes(findContractErrorName(error) ?? "")) throw error;
+      // Search the exact signed input cap for an indivisible terminal output.
+      // The Hook permits only one raw token unit to overshoot this stage's volume.
+      let low = executionCap;
+      let high = input.maxMockUSD;
+      let found: { amount: bigint; quote: ReturnType<typeof normalizeQuoteResult> } | undefined;
+      for (let attempt = 0; low < high && attempt < 64; attempt++) {
+        const amount = low + (high - low + 1n) / 2n;
+        try { found = { amount, quote: await simulate(amount) }; break; }
+        catch (failure) {
+          const name = findContractErrorName(failure);
+          if (name === "StageVolumeExceeded") high = amount - 1n;
+          else if (name === "NoDamage" || name === "SlippageExceeded" || name === "SwapAmountCannotBeZero") low = amount;
+          else throw failure;
+        }
+      }
+      if (!found) throw new BossPoolSdkError("UNQUOTABLE_STAGE_TAIL", "No token purchase can finish this stage within the selected cap. Choose a larger attack cap; this token's precision may not support the remaining volume.");
+      executionCap = found.amount; quote = found.quote;
+    }
     if (quote.mockUSDSpent <= 0n || quote.royBought <= 0n || quote.roySpent <= 0n || quote.bossHPOut <= 0n) {
       throw new BossPoolSdkError("EMPTY_ATTACK_QUOTE", "The current route produced no usable attack output.");
     }
+    const bossPoolFee = round.mockOracle ? await publicClient.readContract({
+      address: round.mockOracle.controller, abi: bossFeeControllerAbi, functionName: "feeForSwap",
+      args: [round.bossCurrentSqrtPriceX96, quote.mockUSDSpent, quote.royBought], blockNumber: round.blockNumber,
+    }) : round.bossPoolFee!;
     const ttl = input.validitySeconds ?? DEFAULT_QUOTE_TTL_SECONDS;
     if (ttl <= 0n) throw new BossPoolSdkError("INVALID_QUOTE_TTL", "Quote validity must be positive.");
     const requestedExpiry = round.blockTimestamp + ttl;
     const expiresAt = round.deadline === 0n || requestedExpiry < round.deadline ? requestedExpiry : round.deadline - 1n;
     if (expiresAt <= round.blockTimestamp) throw new RequoteRequiredError("expired", "The round deadline is too close to quote an attack.");
     return {
+      requestedMaxMockUSD: input.maxMockUSD,
       chainId: deployment.chainId,
       deploymentTxHash: manifest.deploymentTxHash,
       router,
@@ -444,9 +484,9 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
       quotedAt: round.blockTimestamp,
       expiresAt,
       stage,
-      maxMockUSD: input.maxMockUSD,
+      maxMockUSD: executionCap,
       mockUSDSpent: quote.mockUSDSpent,
-      mockUSDRefunded: input.maxMockUSD - quote.mockUSDSpent,
+      mockUSDRefunded: executionCap - quote.mockUSDSpent,
       royBought: quote.royBought,
       roySpent: quote.roySpent,
       royRefunded: quote.royBought - quote.roySpent,
@@ -455,7 +495,7 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
       minBossHPOut: minimumOutput(quote.bossHPOut, slippageBps),
       slippageBps,
       supplyPoolFee: round.supplyPoolFee,
-      bossPoolFee: round.bossPoolFee,
+      bossPoolFee,
       stageCleared: quote.stageCleared,
       bossDefeated: quote.bossDefeated,
       nextStage: quote.nextStage,
@@ -757,6 +797,70 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     });
   }
 
+  async function quoteOwnerLiquidity(delta: bigint, slippageBps = 100) {
+    const round = await readRound(publicClient, deployment);
+    if (!round.continuousLiquidity || delta === 0n || delta <= -(1n << 127n) || delta >= 1n << 127n || !Number.isInteger(slippageBps) || slippageBps < 0 || slippageBps >= 10_000) {
+      throw new BossPoolSdkError("INVALID_LIQUIDITY", "Choose a supported, nonzero liquidity amount and a valid slippage tolerance.");
+    }
+    if (delta < 0n && -delta > round.continuousLiquidity.ownerLiquidity) throw new BossPoolSdkError("LIQUIDITY_FLOOR", "Only the separate owner position can be removed.");
+    const amounts = liquidityPrincipal(delta, round);
+    const maxIn = (amount: bigint) => (amount * BigInt(10_000 + slippageBps) + 9_999n) / 10_000n;
+    const minOut = (amount: bigint) => amount * BigInt(10_000 - slippageBps) / 10_000n;
+    return { chainId: deployment.chainId, hook, router, owner: round.continuousLiquidity.owner, delta, maxBossHPIn: delta > 0n ? maxIn(amounts.bossHP) : 0n, maxRoyIn: delta > 0n ? maxIn(amounts.roy) : 0n,
+      minBossHPOut: delta < 0n ? minOut(amounts.bossHP) : 0n, minRoyOut: delta < 0n ? minOut(amounts.roy) : 0n,
+      deadline: round.blockTimestamp + 300n, quotedBlock: round.blockNumber, bossHP: amounts.bossHP, roy: amounts.roy };
+  }
+
+  async function modifyOwnerLiquidity(request: Awaited<ReturnType<typeof quoteOwnerLiquidity>>) {
+    if (request.chainId !== deployment.chainId || !sameAddress(request.hook, hook) || !sameAddress(request.router, router)) throw new BossPoolSdkError("LIQUIDITY_QUOTE_MISMATCH", "Liquidity quote belongs to a different pool or chain.");
+    const { account } = await requireWalletAccount();
+    const round = await readRound(publicClient, deployment);
+    if (!round.continuousLiquidity || !sameAddress(round.continuousLiquidity.owner, account) || !sameAddress(request.owner, account)) throw new BossPoolSdkError("NOT_LIQUIDITY_OWNER", "Only the quoted current Router owner can manage its surplus position.");
+    const args = [{ delta: request.delta, maxBossHPIn: request.maxBossHPIn, maxRoyIn: request.maxRoyIn, minBossHPOut: request.minBossHPOut, minRoyOut: request.minRoyOut, deadline: request.deadline }] as const;
+    await publicClient.simulateContract({ address: router, abi: bossRouterAbi, functionName: "modifyOwnerLiquidity", args, account });
+    const checked = await requireWalletAccount(account);
+    const calldata = encodeFunctionData({ abi: bossRouterAbi, functionName: "modifyOwnerLiquidity", args });
+    const hash = await checked.wallet.writeContract({ address: router, abi: bossRouterAbi, functionName: "modifyOwnerLiquidity", args, account: checked.writeAccount, chain: deployment.chain });
+    return makePending({ hash, kind: "ownerLiquidity", action: request.delta > 0n ? "Add owner liquidity" : "Remove owner liquidity", account, target: router, calldata,
+      expectedEvents: [{ address: router, abi: bossRouterAbi, eventName: "OwnerLiquidityModified" }],
+      buildResult: (events) => { const event = onlyEvent(events, "OwnerLiquidityModified"); assertEventAddress(event.args.owner, account, "Liquidity receipt belongs to a different owner.");
+        if (event.args.liquidityDelta !== request.delta) throw new BossPoolSdkError("RECEIPT_EVENT_MISMATCH", "Liquidity delta differs from the request."); return event.args; } });
+  }
+
+  async function quoteMockInitialPrice() {
+    const round = await readRound(publicClient, deployment);
+    if (!deployment.mockOracle || round.currentStage !== 0 || round.totalVolume !== 0n) throw new BossPoolSdkError("MOCK_INITIAL_PRICE_UNAVAILABLE", "Initialize the demo reference before the first attack.");
+    const supplyId = await publicClient.readContract({ address: router, abi: bossRouterAbi, functionName: "supplyPoolId", blockNumber: round.blockNumber });
+    // Pinned v4 StateLibrary.POOLS_SLOT = 6. Slot0 stores sqrtPriceX96 in its low 160 bits.
+    const slot = keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "uint256" }], [supplyId, 6n]));
+    const stored = await publicClient.getStorageAt({ address: manifest.addresses.poolManager, slot, blockNumber: round.blockNumber });
+    const supplySqrt = BigInt(stored ?? "0x0") & ((1n << 160n) - 1n);
+    const ratio = supplySqrt ** 2n / (1n << 64n);
+    if (ratio === 0n) throw new BossPoolSdkError("SUPPLY_PRICE_UNAVAILABLE", "The verified supply pool has no starting price.");
+    const royPerUSD = BigInt(mockUSD) < BigInt(roy) ? ratio : (1n << 256n) / ratio;
+    const netRoyPerUSD = royPerUSD * 997_000n / 1_000_000n;
+    const bossRatio = round.bossCurrentSqrtPriceX96 ** 2n / (1n << 64n);
+    const royPerBoss = round.bossHPCurrency0 ? bossRatio : (1n << 256n) / bossRatio;
+    const priceX128 = royPerBoss * (1n << 128n) / netRoyPerUSD;
+    if (priceX128 <= 0n) throw new BossPoolSdkError("INVALID_MOCK_PRICE", "Initial demo price cannot be represented.");
+    return { priceX128, quotedBlock: round.blockNumber, hook, source: deployment.mockOracle.source };
+  }
+
+  async function setMockPrice(priceX128: bigint, initialize = false) {
+    const binding = deployment.mockOracle;
+    const { account } = await requireWalletAccount();
+    if (!binding || priceX128 <= 0n) throw new BossPoolSdkError("INVALID_MOCK_PRICE", "Select a positive price for this verified demo source.");
+    const args = [priceX128] as const;
+    const functionName = initialize ? "setInitialPrice" : "setPrice";
+    await publicClient.simulateContract({ address: binding.source, abi: mockBossPriceSourceAbi, functionName, args, account });
+    const checked = await requireWalletAccount(account);
+    const calldata = encodeFunctionData({ abi: mockBossPriceSourceAbi, functionName, args });
+    const hash = await checked.wallet.writeContract({ address: binding.source, abi: mockBossPriceSourceAbi, functionName, args, account: checked.writeAccount, chain: deployment.chain });
+    return makePending({ hash, kind: "mockPrice", action: "Update testnet mock price", account, target: binding.source, calldata,
+      expectedEvents: [{ address: binding.source, abi: mockBossPriceSourceAbi, eventName: "MockPriceUpdated" }],
+      buildResult: (events) => { const event = onlyEvent(events, "MockPriceUpdated"); assertEventAddress(event.args.owner, account, "Mock price update belongs to another owner."); if (event.args.priceX128 !== priceX128) throw new BossPoolSdkError("RECEIPT_EVENT_MISMATCH", "Mock price differs from the request."); return event.args; } });
+  }
+
   function resumePending(request: PendingRequest): PendingOperation<RecoveryResult> {
     if (request.chainId !== deployment.chainId) {
       throw new BossPoolSdkError("RECOVERY_CHAIN_MISMATCH", "Pending transaction belongs to another chain.");
@@ -772,12 +876,21 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     let expectedTransfer: { to: Address; value: bigint } | undefined;
     let expectedAttackStage: number | undefined;
     let expectedClaimAmount: bigint | undefined;
+    let expectedLiquidityDelta: bigint | undefined;
+    let expectedMockPrice: bigint | undefined;
     switch (request.kind) {
+      case "mockPrice": {
+        if (!deployment.mockOracle || !sameAddress(request.target, deployment.mockOracle.source)) throw new BossPoolSdkError("RECOVERY_TARGET_MISMATCH", "Mock price target is not the verified demo source.");
+        abi = mockBossPriceSourceAbi;
+        const call = decodeFunctionData({ abi: mockBossPriceSourceAbi, data: request.calldata });
+        if ((call.functionName !== "setPrice" && call.functionName !== "setInitialPrice") || call.args[0] <= 0n) throw new BossPoolSdkError("RECOVERY_CALL_MISMATCH", "Saved mock price calldata is invalid.");
+        expectedMockPrice = call.args[0]; eventSpecs = [{ address: request.target, abi, eventName: "MockPriceUpdated" }]; break;
+      }
       case "approval": {
         if (sameAddress(request.target, mockUSD)) abi = mockUsdAbi;
-        else if (sameAddress(request.target, bossHP)) abi = bossHpAbi;
+        else if (sameAddress(request.target, bossHP) || (deployment.liquidityMode === "continuous" && sameAddress(request.target, roy))) abi = bossHpAbi;
         else throw new BossPoolSdkError("RECOVERY_TARGET_MISMATCH", "Approval target is not a configured token.");
-        if (deployment.encounterMode === "factory" && sameAddress(request.target, bossHP)) {
+        if (deployment.encounterMode === "factory" && deployment.liquidityMode !== "continuous" && sameAddress(request.target, bossHP)) {
           throw new BossPoolSdkError("RECOVERY_TARGET_MISMATCH", "Factory reward credit never requires a MEME token approval.");
         }
         const call = decodeFunctionData({ abi, data: request.calldata });
@@ -789,13 +902,22 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
         const [spenderValue, value] = args;
         const spender = spenderValue as Address;
         const allowedSpender = sameAddress(request.target, bossHP)
-          ? sameAddress(spender, hook)
+          ? sameAddress(spender, hook) || (deployment.liquidityMode === "continuous" && sameAddress(spender, router))
           : sameAddress(spender, router);
-        if (!allowedSpender || value !== maxUint256) {
+        if (!allowedSpender || (value !== maxUint256 && !(deployment.liquidityMode === "continuous" && sameAddress(spender, router) && !sameAddress(request.target, mockUSD)))) {
           throw new BossPoolSdkError("RECOVERY_CALL_MISMATCH", "Pending approval does not match the fixed spender map and unlimited allowance.");
         }
         expectedApproval = { spender, value };
         eventSpecs = [{ address: request.target, abi, eventName: "Approval" }];
+        break;
+      }
+      case "ownerLiquidity": {
+        if (deployment.liquidityMode !== "continuous" || !sameAddress(request.target, router)) throw new BossPoolSdkError("RECOVERY_TARGET_MISMATCH", "Liquidity target is not a supported Router.");
+        abi = bossRouterAbi;
+        const call = decodeFunctionData({ abi: bossRouterAbi, data: request.calldata });
+        if (call.functionName !== "modifyOwnerLiquidity") throw new BossPoolSdkError("RECOVERY_CALL_MISMATCH", "Saved liquidity calldata is invalid.");
+        expectedLiquidityDelta = call.args[0].delta;
+        eventSpecs = [{ address: router, abi, eventName: "OwnerLiquidityModified" }];
         break;
       }
       case "attack": {
@@ -876,6 +998,14 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
       expectedEvents: eventSpecs,
       buildResult: (events) => {
         for (const event of events) {
+          if (event.eventName === "MockPriceUpdated") {
+            assertEventAddress(event.args.owner, request.account, "Recovered mock update belongs to another owner.");
+            if (event.args.priceX128 !== expectedMockPrice) throw new BossPoolSdkError("RECEIPT_EVENT_MISMATCH", "Recovered mock price differs from calldata.");
+          }
+          if (event.eventName === "OwnerLiquidityModified") {
+            assertEventAddress(event.args.owner, request.account, "Liquidity receipt belongs to a different owner.");
+            if (event.args.liquidityDelta !== expectedLiquidityDelta) throw new BossPoolSdkError("RECEIPT_EVENT_MISMATCH", "Liquidity delta differs from saved calldata.");
+          }
           if (event.eventName === "AttackExecuted" || event.eventName === "AttackRecorded" ||
               event.eventName === "RewardClaimed" || event.eventName === "VictoryNFTClaimed") {
             assertEventAddress(event.args.player, request.account, `Recovered ${request.kind} event belongs to a different account.`);
@@ -928,6 +1058,10 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     claimVictoryNFT,
     faucetMockUSD,
     resumePending,
+    quoteOwnerLiquidity,
+    modifyOwnerLiquidity,
+    setMockPrice,
+    quoteMockInitialPrice,
     withWallet: (walletClient: WalletClient<Transport, Chain | undefined, Account | undefined>) => createBossPoolSdk({ ...options, walletClient }),
   };
 
@@ -935,11 +1069,14 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     switch (action.kind) {
       case "attack": return action.maxMockUSD;
       case "claimReward": return action.hpAmount;
+      case "ownerLiquidity": return action.amount;
     }
   }
 
   async function readApproval(action: ApprovalAction, account: Address): Promise<Omit<ApprovalStatus, "requiredAllowance" | "approvalNeeded" | "approvalAmount">> {
-    const mapping = action.kind === "claimReward"
+    const mapping = action.kind === "ownerLiquidity"
+      ? { token: action.token, tokenAddress: action.token === "BossHP" ? bossHP : roy, spender: "BossRouter" as const, spenderAddress: router, abi: bossHpAbi }
+      : action.kind === "claimReward"
       ? { token: "BossHP" as const, tokenAddress: bossHP, spender: "BossHook" as const, spenderAddress: hook, abi: bossHpAbi }
       : { token: "MockUSD" as const, tokenAddress: mockUSD, spender: "BossRouter" as const, spenderAddress: router, abi: mockUsdAbi };
     const currentAllowance = await publicClient.readContract({
@@ -1121,7 +1258,12 @@ function findContractErrorName(error: unknown): string | undefined {
     const rawData = typeof data === "string" ? data : data && typeof data === "object" ? (data as { data?: unknown }).data : record.raw;
     if (typeof rawData === "string" && /^0x[\da-fA-F]{8,}$/.test(rawData)) {
       try {
-        return decodeErrorResult({ abi: bossRouterAbi, data: rawData as Hex }).errorName;
+        let encoded = rawData as Hex;
+        for (let depth = 0; depth < 4; depth++) {
+          const decoded = decodeErrorResult({ abi: [...bossRouterAbi, ...bossPoolHookAbi, ...bossFeeControllerAbi, ...parseAbi(["error WrappedError(address target, bytes4 selector, bytes reason, bytes details)", "error SwapAmountCannotBeZero()"])], data: encoded });
+          if (decoded.errorName !== "WrappedError") return decoded.errorName;
+          encoded = (decoded.args as readonly unknown[])[2] as Hex;
+        }
       } catch {
         // The current cause may carry a different contract's custom error.
       }
@@ -1164,3 +1306,16 @@ function sameHex(left: Hex, right: Hex): boolean {
 }
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+
+/** v4 SqrtPriceMath rounding: additions round inputs up, removals round principal down. */
+function liquidityPrincipal(delta: bigint, round: RoundSnapshot) {
+  const lower = round.bossSqrtLowerX96;
+  const upper = round.bossSqrtUpperX96;
+  const spot = round.bossCurrentSqrtPriceX96;
+  const price = spot < lower ? lower : spot > upper ? upper : spot;
+  const liquidity = delta < 0n ? -delta : delta;
+  const div = (a: bigint, b: bigint) => delta > 0n ? (a + b - 1n) / b : a / b;
+  const amount0 = div(div((liquidity << 96n) * (upper - price), upper), price);
+  const amount1 = div(liquidity * (price - lower), 1n << 96n);
+  return round.bossHPCurrency0 ? { bossHP: amount0, roy: amount1 } : { bossHP: amount1, roy: amount0 };
+}
