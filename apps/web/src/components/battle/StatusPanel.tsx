@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { displayAmount, displayEstimate, roundStatusLabel } from "@/lib/format";
-import { roundSecondsLeft } from "@/lib/battle";
+import { displayAmount, displayEstimate } from "@/lib/format";
 import type { DeploymentState } from "@/lib/useBossPool";
 import { BattleFrame } from "./BattleFrame";
 
@@ -51,23 +50,6 @@ export function StatusPanel({ deployment }: { deployment: DeploymentState }) {
           </div>
         </div>
       </BattleFrame>
-    </div>
-  );
-}
-
-export function BattleMeta({ deployment, now }: { deployment: DeploymentState; now: number }) {
-  const live = deployment.kind === "live" ? deployment : null;
-  const round = live?.round;
-  const seconds = live ? roundSecondsLeft(live.round, live.readAt, now) : null;
-  const time = round?.deadline === 0n ? "NO LIMIT" : seconds === null ? "—" : `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
-  const network = deployment.network === "local" ? "LOCAL CHAIN" : deployment.network === "base-sepolia" ? "BASE SEPOLIA" : "HISTORICAL · READ ONLY";
-  const status = round ? roundStatusLabel(round.status) : deployment.kind === "loading" ? "CHECKING" : deployment.kind === "not-deployed" ? "NOT DEPLOYED" : "DATA UNAVAILABLE";
-  const hookAddress = deployment.hookAddress;
-  return (
-    <div className="bg-[#092B61] px-3 py-2 font-pixel text-[10px] leading-relaxed text-white shadow-[3px_3px_0_#041833] sm:text-xs lg:flex lg:gap-2 lg:py-1 lg:text-[16px] lg:leading-none">
-      <p>STAGE {round ? round.currentStage + 1 : "—"}/3 · ROUND <span className={seconds !== null && seconds < 600 && round?.status !== 3 ? "text-[#ffb4a8]" : ""}>{round?.status === 3 ? "VICTORY" : time}</span></p>
-      <p title={`${status}${round ? ` · BLOCK ${round.blockNumber}` : ""}`}>{network}</p>
-      {hookAddress && <p title={hookAddress}>HOOK {hookAddress.slice(0, 6)}…{hookAddress.slice(-4)}</p>}
     </div>
   );
 }

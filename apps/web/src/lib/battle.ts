@@ -1,8 +1,30 @@
-import type { Address, DecodedContractEvent, DeploymentManifest, RoundSnapshot } from "@boss-pool/chain";
+import type { ActivityEntry, ActivityPage, Address, DecodedContractEvent, DeploymentManifest, RoundSnapshot } from "@boss-pool/chain";
 import type { NetworkKey, WriteState } from "./useBossPool";
 
 export type BossVisualState = "idle" | "hit" | "transition" | "defeated";
 export const STAGE_HUES = ["#95a7f6", "#b685ff", "#f08cff"] as const;
+
+export type BattleAttack = Extract<ActivityEntry, { kind: "attack" }>;
+
+/** Replace rescanned blocks so overlapping polls and reorganized logs cannot duplicate attacks. */
+export function mergeBattleAttacks(
+  current: readonly BattleAttack[],
+  page: ActivityPage,
+  manifest: DeploymentManifest,
+): BattleAttack[] {
+  const belongsToBoss = (entry: ActivityEntry) => entry.chainId === manifest.chainId &&
+    entry.deploymentTxHash.toLowerCase() === manifest.deploymentTxHash.toLowerCase() &&
+    entry.address.toLowerCase() === manifest.addresses.router.toLowerCase();
+  const entries = new Map(current.filter((entry) => belongsToBoss(entry) &&
+    (entry.blockNumber < page.scannedFromBlock || entry.blockNumber > page.scannedToBlock))
+    .map((entry) => [entry.id, entry]));
+  for (const entry of page.entries) {
+    if (entry.kind === "attack" && belongsToBoss(entry)) entries.set(entry.id, entry);
+  }
+  return [...entries.values()].sort((left, right) => left.blockNumber !== right.blockNumber
+    ? left.blockNumber > right.blockNumber ? -1 : 1
+    : right.transactionIndex - left.transactionIndex || right.logIndex - left.logIndex);
+}
 
 export function roundSecondsLeft(round: Pick<RoundSnapshot, "deadline" | "blockTimestamp">, readAt: number, now: number): number | null {
   if (round.deadline === 0n) return null;
