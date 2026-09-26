@@ -4,6 +4,9 @@ pragma solidity ^0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {BossFactory} from "../src/BossFactory.sol";
 import {BossHP} from "../src/BossHP.sol";
 import {BossHook} from "../src/BossHook.sol";
 import {BossRouter} from "../src/BossRouter.sol";
@@ -54,6 +57,41 @@ contract UnauthorizedSwapProbe is IUnlockCallback {
     }
 }
 
+contract TaxedMemeToken is ERC20 {
+    constructor() ERC20("Taxed meme", "TAX") { _mint(msg.sender, 10_000e18); }
+
+    function _update(address from, address to, uint256 value) internal override {
+        if (from != address(0) && to != address(0)) {
+            uint256 fee = value / 100;
+            super._update(from, address(0), fee);
+            value -= fee;
+        }
+        super._update(from, to, value);
+    }
+}
+
+contract SixDecimalMeme is ERC20 {
+    constructor(address initialHolder, uint256 supply) ERC20("Six decimal meme", "M6") {
+        _mint(initialHolder, supply);
+    }
+
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
+}
+
+contract TestMemeToken is ERC20 {
+    constructor(address initialHolder, uint256 supply) ERC20("CREATE2 meme", "C2M") {
+        _mint(initialHolder, supply);
+    }
+}
+
+contract TestMemeDeployer {
+    function deploy(bytes32 salt, address holder, uint256 supply) external returns (IERC20) {
+        return IERC20(address(new TestMemeToken{salt: salt}(holder, supply)));
+    }
+}
+
 contract BossPoolCoreTest is Test {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
@@ -63,7 +101,7 @@ contract BossPoolCoreTest is Test {
         IPoolManager manager;
         MockUSD mockUSD;
         RoyToken roy;
-        BossHP bossHP;
+        IERC20 bossHP;
         BossCollectibles collectibles;
         BossRouter router;
         BossHook hook;
@@ -123,8 +161,7 @@ contract BossPoolCoreTest is Test {
             bossHP,
             collectibles,
             address(this),
-            PRIZE,
-            uint256(roundDeadline)
+            BossHook.RoundConfig(PRIZE, uint256(roundDeadline), 300e18, 0, false, false, 0, 0, 0)
         );
         bytes memory initCode = abi.encodePacked(vm.getCode("out/BossHook.sol/BossHook.json"), constructorArgs);
         TestCreate2Deployer create2Deployer = new TestCreate2Deployer();
@@ -158,6 +195,270 @@ contract BossPoolCoreTest is Test {
         _clearAllStagesWithTwoRefills();
         _transferAndRedeemEligibleHP();
         _claimVictoryNFTs();
+    }
+
+    function test_FactoryMemePurchasesKeepTokensAndIsolateBossRewards() public {
+        _seedSupplyPool();
+        BossFactory factory = _factory();
+        RoyToken meme = new RoyToken(address(this), 10_000e18);
+        // Existing supply is held outside the game and is never reward credit.
+        meme.transfer(BOB, 3_000e18);
+        BossFactory.LaunchConfig memory launchConfig =
+            BossFactory.LaunchConfig(meme, 1_800e18, 1_000, 24e6, roundDeadline);
+        assertLt(factory.quoteLaunch(launchConfig).hpPriceTick, 0, "18-decimal quote exercises negative-tick search");
+        HP1Round memory first = _launch(factory, meme, 1_800e18, 1_000, 24e6, bytes32(uint256(1)), address(this));
+        HP1Round memory second = _launch(factory, meme, 1_800e18, 1_000, 24e6, bytes32(uint256(1)), BOB);
+        assertEq(factory.bossCount(), 2);
+        assertTrue(first.hook.bossPoolId() != second.hook.bossPoolId());
+        assertEq(first.router.owner(), address(this));
+        assertEq(first.hook.maker(), address(this));
+        assertEq(first.hook.rewardCredit(BOB), 0);
+        assertGt(meme.balanceOf(address(this)), 0, "launch needs only funded allocation, not all token supply");
+        assertEq(second.hook.totalVolume(), 0, "wallet transfers do not advance the volume target");
+        vm.expectRevert(BossRouter.InvalidAttack.selector);
+        first.router.attackWithRoy(1e18, 1, 0, block.timestamp + 1 hours);
+
+        _attackForRound(first, ALICE, 1e6, 0);
+        assertEq(first.hook.stageVolume(0), 1e6);
+        assertGt(first.hook.remainingSellableHP(), 0, "volume gates advance before the current HP position empties");
+        uint256 volumeBeforeQuote = first.hook.totalVolume();
+        uint256 soldBeforeQuote = first.hook.stageSold(0);
+        BossRouter.QuoteResult memory stageQuote = first.router.quoteAttackWithMockUSD(3e6, 0);
+        assertTrue(stageQuote.stageCleared);
+        assertFalse(stageQuote.bossDefeated);
+        assertEq(stageQuote.nextStage, 1);
+        assertEq(first.hook.totalVolume(), volumeBeforeQuote, "Factory quote does not persist volume");
+        assertEq(first.hook.stageSold(0), soldBeforeQuote, "Factory quote does not persist MEME output");
+
+        uint256 refillReserve = meme.balanceOf(address(first.router));
+        vm.prank(address(first.router));
+        meme.transfer(address(this), refillReserve);
+        uint256 bobUSDBeforeFailedClear = mockUSD.balanceOf(BOB);
+        uint256 volumeBeforeFailedClear = first.hook.totalVolume();
+        uint256 stageSoldBeforeFailedClear = first.hook.stageSold(0);
+        vm.startPrank(BOB);
+        mockUSD.approve(address(first.router), type(uint256).max);
+        vm.expectRevert();
+        first.router.attackWithMockUSD(3e6, 1, 1, 0, block.timestamp + 1 hours);
+        vm.stopPrank();
+        assertEq(mockUSD.balanceOf(BOB), bobUSDBeforeFailedClear, "failed stage release rolls back player input");
+        assertEq(first.hook.totalVolume(), volumeBeforeFailedClear, "failed stage release rolls back volume");
+        assertEq(first.hook.stageSold(0), stageSoldBeforeFailedClear, "failed stage release rolls back HP credit");
+        meme.transfer(address(first.router), refillReserve);
+
+        AttackAmounts memory clearAttack = _attackForRound(first, BOB, 1_000e6, 0);
+        assertEq(first.hook.stageVolume(0), first.hook.stageVolumeTarget(0));
+        assertEq(clearAttack.usdSpent, stageQuote.mockUSDSpent);
+        assertEq(clearAttack.royBought, stageQuote.royBought);
+        assertEq(clearAttack.roySpent, stageQuote.roySpent);
+        assertEq(clearAttack.hpOut, stageQuote.bossHPOut);
+        _attackForRound(first, ALICE, 1_000e6, 1);
+        assertEq(first.hook.stageVolume(1), first.hook.stageVolumeTarget(1));
+        _attackForRound(first, BOB, 1_000e6, 2);
+        assertEq(uint8(first.hook.status()), uint8(BossHook.RoundStatus.Defeated));
+        assertEq(first.hook.totalVolume(), first.hook.volumeTargetMockUSD());
+        assertEq(first.hook.rewardCredit(ALICE) + first.hook.rewardCredit(BOB), first.hook.finalEligibleHP());
+        assertEq(second.hook.stageSold(0), 0);
+        assertEq(second.hook.rewardCredit(ALICE), 0);
+
+        uint256 aliceCredit = first.hook.rewardCredit(ALICE);
+        uint256 aliceTokens = meme.balanceOf(ALICE);
+        address outsider = address(0xCAFE);
+        vm.prank(ALICE);
+        meme.transfer(outsider, aliceTokens);
+        vm.expectRevert(BossHook.ClaimUnavailable.selector);
+        vm.prank(outsider);
+        first.hook.claimReward(aliceCredit);
+
+        uint256 memeBeforeClaim = meme.balanceOf(ALICE);
+        vm.prank(ALICE);
+        uint256 alicePrize = first.hook.claimReward(aliceCredit);
+        assertEq(alicePrize, Math.mulDiv(180e18, aliceCredit, first.hook.finalEligibleHP()));
+        assertEq(meme.balanceOf(ALICE) - memeBeforeClaim, alicePrize);
+        assertEq(meme.balanceOf(outsider), aliceTokens, "claim does not consume or burn meme tokens");
+        assertEq(first.hook.rewardCredit(ALICE), 0);
+        vm.expectRevert(BossHook.ClaimUnavailable.selector);
+        vm.prank(ALICE);
+        first.hook.claimReward(aliceCredit);
+        assertEq(first.collectibles.nextTokenId(), 1, "purchases and prize claims do not mint NFTs");
+        vm.prank(ALICE);
+        first.hook.claimVictoryNFT();
+        assertEq(first.collectibles.balanceOf(ALICE), 1);
+
+        vm.expectRevert(BossRouter.InvalidSetup.selector);
+        first.router.recoverAfterDeadline();
+        vm.warp(first.deadline);
+        uint256 prizeBalance = meme.balanceOf(address(first.hook));
+        first.router.recoverAfterDeadline();
+        assertEq(meme.balanceOf(address(first.hook)), prizeBalance, "LP recovery cannot withdraw outstanding prizes");
+        assertEq(meme.balanceOf(address(first.router)), 0);
+        assertEq(roy.balanceOf(address(first.router)), 0);
+        uint256 bobCredit = first.hook.rewardCredit(BOB);
+        vm.prank(BOB);
+        first.hook.claimReward(bobCredit);
+        second.hook.expire();
+        vm.prank(BOB);
+        second.hook.refundExpiredPrize();
+        vm.prank(BOB);
+        second.router.recoverAfterDeadline();
+        assertEq(meme.balanceOf(address(second.hook)), 0);
+        assertEq(meme.totalSupply(), 10_000e18);
+        assertEq(manager.getNonzeroDeltaCount(), 0);
+    }
+
+    function test_FactorySixDecimalVolumePurchasesAndAtomicFunding() public {
+        _seedSupplyPool();
+        BossFactory factory = _factory();
+        SixDecimalMeme meme = new SixDecimalMeme(address(this), 10_000e6);
+        BossFactory.LaunchConfig memory config = BossFactory.LaunchConfig(meme, 10_000e6, 1_000, 24e6, roundDeadline);
+        bytes32 userSalt = bytes32(uint256(3));
+        vm.expectRevert(BossFactory.InvalidLaunch.selector);
+        factory.quoteLaunch(BossFactory.LaunchConfig(meme, 10_000e6, 1_000, 5, roundDeadline));
+        BossFactory.LaunchQuote memory quote = factory.quoteLaunch(config);
+        assertEq(quote.prizeAmount, 1_000e6);
+        assertEq(quote.battleTokenBudget, 9_000e6);
+        assertEq(int256(quote.hpPriceTick) % 60, 0);
+        bytes memory code = factory.hookInitCode(address(this), userSalt, config, _routerCode(), _hookCode());
+        (, bytes32 hookSalt) = HookMiner.find(address(factory), HOOK_FLAGS, code, bytes(""));
+        mockUSD.approve(address(factory), type(uint256).max);
+        meme.approve(address(factory), type(uint256).max);
+        (BossHook volumeHook, BossRouter volumeRouter) =
+            factory.launchBoss(config, userSalt, hookSalt, _routerCode(), _hookCode());
+        HP1Round memory round = _round(volumeHook, volumeRouter, meme);
+        assertEq(address(round.hook.rewardToken()), address(meme));
+        assertEq(round.hook.volumeTargetMockUSD(), 24e6);
+        for (uint8 stage; stage < 3; stage++) {
+            uint256 volumeBefore = round.hook.totalVolume();
+            AttackAmounts memory amounts = _attackForRound(round, ALICE, round.hook.stageVolumeTarget(stage), stage);
+            uint256 spent = round.hook.totalVolume() - volumeBefore;
+            uint256 out = amounts.hpOut;
+            assertGt(out, 0);
+            assertEq(round.hook.stageSold(stage), out);
+            assertEq(spent, round.hook.stageVolumeTarget(stage));
+        }
+        assertEq(meme.balanceOf(ALICE), round.hook.finalEligibleHP());
+        assertEq(round.hook.rewardCredit(ALICE), meme.balanceOf(ALICE));
+        uint256 credit = round.hook.rewardCredit(ALICE);
+        vm.prank(ALICE);
+        assertEq(round.hook.claimReward(credit), 1_000e6);
+        assertEq(manager.getNonzeroDeltaCount(), 0);
+    }
+
+    function test_FactoryVolumeStagesWithMemeAsCurrency0() public {
+        _seedSupplyPool();
+        BossFactory factory = _factory();
+        TestMemeDeployer deployer = new TestMemeDeployer();
+        IERC20 meme;
+        for (uint256 i; i < 8; i++) {
+            IERC20 candidate = deployer.deploy(bytes32(i), address(this), 10_000e18);
+            if (address(candidate) < address(roy)) {
+                meme = candidate;
+                break;
+            }
+        }
+        assertTrue(address(meme) != address(0), "fixture finds MEME below the attack-token address");
+        assertLt(uint160(address(meme)), uint160(address(roy)));
+
+        HP1Round memory round =
+            _launch(factory, meme, 1_800e18, 1_000, 24e6, bytes32(uint256(4)), address(this));
+        assertTrue(round.hook.bossIsCurrency0());
+        for (uint8 stage; stage < 3; stage++) {
+            _attackForRound(round, ALICE, round.hook.stageVolumeTarget(stage), stage);
+            assertEq(round.hook.stageVolume(stage), round.hook.stageVolumeTarget(stage));
+        }
+        assertEq(round.hook.totalVolume(), 24e6);
+        assertEq(uint8(round.hook.status()), uint8(BossHook.RoundStatus.Defeated));
+        assertEq(manager.getNonzeroDeltaCount(), 0);
+    }
+
+    function test_FactoryRejectsInvalidLaunchesAtomically() public {
+        _seedSupplyPool();
+        BossFactory factory = _factory();
+        TaxedMemeToken meme = new TaxedMemeToken();
+        meme.approve(address(factory), type(uint256).max);
+        BossFactory.LaunchConfig memory config =
+            BossFactory.LaunchConfig(meme, 2_000e18, 1_000, 24e6, roundDeadline);
+        bytes memory routerCode = _routerCode();
+        bytes memory hookCode = _hookCode();
+        vm.expectRevert(BossFactory.InvalidLaunch.selector);
+        factory.launchBoss(config, bytes32(0), bytes32(0), hex"00", hookCode);
+        bytes memory code = factory.hookInitCode(address(this), bytes32(0), config, routerCode, hookCode);
+        (, bytes32 salt) = HookMiner.find(address(factory), HOOK_FLAGS, code, bytes(""));
+        vm.expectRevert(BossFactory.TokenFundingMismatch.selector);
+        factory.launchBoss(config, bytes32(0), salt, routerCode, hookCode);
+        assertEq(meme.balanceOf(address(this)), 10_000e18);
+        assertEq(meme.totalSupply(), 10_000e18, "failed transfer tax is rolled back");
+        assertEq(factory.bossCount(), 0);
+        (address predictedRouter, address predictedCollectibles) = factory.predictAddresses(address(this), bytes32(0), meme, routerCode);
+        assertEq(predictedRouter.code.length, 0);
+        assertEq(predictedCollectibles.code.length, 0);
+
+        // Reject a target too small to split across all three stage gates.
+        RoyToken tiny = new RoyToken(address(this), 100);
+        config.token = tiny;
+        config.tokenAllocation = 100;
+        config.volumeTargetMockUSD = 5;
+        tiny.approve(address(factory), 100);
+        vm.expectRevert(BossFactory.InvalidLaunch.selector);
+        factory.quoteLaunch(config);
+        assertEq(tiny.balanceOf(address(this)), 100);
+        assertEq(factory.bossCount(), 0);
+    }
+
+    function _factory() private returns (BossFactory) {
+        return BossFactory(vm.deployCode("out/BossFactory.sol/BossFactory.json", abi.encode(manager, mockUSD, roy, keccak256(_routerCode()), keccak256(_hookCode()))));
+    }
+
+    function _routerCode() private view returns (bytes memory) {
+        return vm.getCode("out/BossRouter.sol/BossRouter.json");
+    }
+
+    function _hookCode() private view returns (bytes memory) {
+        return vm.getCode("out/BossHook.sol/BossHook.json");
+    }
+
+    function _launch(
+        BossFactory factory,
+        IERC20 token,
+        uint256 tokenAllocation,
+        uint16 prizeBps,
+        uint256 targetVolume,
+        bytes32 userSalt,
+        address maker
+    )
+        private returns (HP1Round memory round)
+    {
+        BossFactory.LaunchConfig memory config =
+            BossFactory.LaunchConfig(token, tokenAllocation, prizeBps, targetVolume, roundDeadline);
+        bytes memory code = factory.hookInitCode(maker, userSalt, config, _routerCode(), _hookCode());
+        (address expectedHook, bytes32 salt) = HookMiner.find(address(factory), HOOK_FLAGS, code, bytes(""));
+        mockUSD.faucet(maker, targetVolume + 1e6);
+        vm.startPrank(maker);
+        mockUSD.approve(address(factory), type(uint256).max);
+        token.approve(address(factory), type(uint256).max);
+        (round.hook, round.router) = factory.launchBoss(config, userSalt, salt, _routerCode(), _hookCode());
+        vm.stopPrank();
+        round.manager = manager;
+        round.mockUSD = mockUSD;
+        round.roy = roy;
+        round.bossHP = token;
+        round.deadline = roundDeadline;
+        round.collectibles = round.hook.collectibles();
+        assertEq(address(round.hook), expectedHook);
+        assertEq(address(factory.bosses(keccak256(abi.encode(maker, userSalt)))), expectedHook);
+        assertTrue(round.hook.externalHP());
+        assertEq(uint8(round.hook.status()), uint8(BossHook.RoundStatus.Active));
+    }
+
+    function _round(BossHook hook_, BossRouter router_, IERC20 token) private view returns (HP1Round memory round) {
+        round.manager = manager;
+        round.mockUSD = mockUSD;
+        round.roy = roy;
+        round.bossHP = token;
+        round.hook = hook_;
+        round.router = router_;
+        round.deadline = roundDeadline;
+        round.collectibles = hook_.collectibles();
     }
 
     function test_PublicQuoteNeedsNoFundingOrAllowanceAndMatchesDirectAttackWithoutEffects() public {
@@ -598,8 +899,7 @@ contract BossPoolCoreTest is Test {
             round.bossHP,
             round.collectibles,
             address(this),
-            PRIZE,
-            uint256(round.deadline)
+            BossHook.RoundConfig(PRIZE, uint256(round.deadline), 300e18, 0, false, false, 0, 0, 0)
         );
         bytes memory initCode = abi.encodePacked(vm.getCode("out/BossHook.sol/BossHook.json"), constructorArgs);
         TestCreate2Deployer create2Deployer = new TestCreate2Deployer();

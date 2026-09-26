@@ -4,6 +4,12 @@ Status: the two-hop BossHP design now counts purchases without burning tokens. T
 
 ## What moves
 
+For factory bosses, BossHP is the existing meme token selected by the creator. Funding requires only the round's allocation, not the token's entire supply. The prize denominator is still actual authorized purchase output, but claims consume per-player credit. Players keep their purchased meme tokens. This avoids assigning prize rights to unrelated circulating supply.
+
+Factory creators enter a total meme-token allocation, a prize percentage, and a MockUSD volume target. The prize stays in MEME escrow. The contract derives the starting tick from the active MockUSD/ROY price and the 99% sell budget. The other 1% funds refill fees and LP rounding. It releases attack-token/MEME liquidity at volume thresholds split 1:2:3. Players must spend MockUSD through both swaps, so returned ROY does not count toward the target. After the deadline, creators can recover unused LP assets and reserves without withdrawing unpaid prizes. See the [factory accounting reference](boss-factory.md).
+
+The quantities and transferable BossHP model below remain the standalone demo defaults.
+
 ```text
 MockUSD → supply pool → Attack Token → Boss pool → BossHP delivered to player
                                       → hook purchase counters

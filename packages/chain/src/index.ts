@@ -72,6 +72,7 @@ export type {
   VictoryClaimResult,
 } from "./sdk";
 export {
+  bossFactoryAbi,
   bossCollectiblesAbi,
   bossHpAbi,
   bossPoolHookAbi,
@@ -79,8 +80,23 @@ export {
   mockUsdAbi,
   royTokenAbi,
 } from "./generated/abi";
-export { formatUnits, isAddress } from "viem";
-export type { Address, EIP1193Provider } from "viem";
+export { bossHookCreationCode, bossRouterCreationCode } from "./generated/bytecode";
+export {
+  BossFactorySdkError,
+  createBossFactorySdk,
+  readErc20TokenInfo,
+} from "./factory-sdk";
+export type {
+  BossFactorySdk,
+  BossFactorySdkOptions,
+  Erc20TokenInfo,
+  FactoryLaunchConfig,
+  FactoryLaunchProgress,
+  FactoryLaunchQuote,
+  FactoryLaunchResult,
+} from "./factory-sdk";
+export { formatUnits, isAddress, parseUnits } from "viem";
+export type { Address, EIP1193Provider, Hex } from "viem";
 export {
   BASE_SEPOLIA_CHAIN,
   BASE_SEPOLIA_CHAIN_HEX,

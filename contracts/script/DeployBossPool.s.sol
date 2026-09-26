@@ -132,8 +132,7 @@ contract DeployBossPool is Script {
             deployment.bossHP,
             deployment.collectibles,
             maker,
-            PRIZE_AMOUNT,
-            deadline
+            BossHook.RoundConfig(PRIZE_AMOUNT, deadline, 300e18, 0, false, false, 0, 0, 0)
         );
         (address expectedAddress, bytes32 salt) = HookMiner.find(
             address(create2Deployer), flags, type(BossHook).creationCode, constructorArgs

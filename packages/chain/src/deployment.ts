@@ -8,6 +8,7 @@ import {
   type PublicClient,
 } from "viem";
 import {
+  bossFactoryAbi,
   bossCollectiblesAbi,
   bossPoolHookAbi,
   bossRouterAbi,
@@ -35,6 +36,7 @@ type ManifestBase = {
   deployedAtBlock: number;
   deploymentTxHash: `0x${string}`;
   deployer?: Address;
+  bossFactory?: Address;
   addresses: DeploymentAddresses;
   [key: string]: unknown;
 };
@@ -77,6 +79,9 @@ export function parseDeployment(value: unknown): DeploymentManifest {
     typeof manifest.deploymentTxHash !== "string" || !/^0x[\da-fA-F]{64}$/.test(manifest.deploymentTxHash) ||
     !addresses || names.some((name) => !isAddressValue(addresses[name]))
   ) throw new Error("Deployment manifest is missing a valid chain receipt or contract address.");
+  if (manifest.bossFactory !== undefined && !isAddressValue(manifest.bossFactory)) {
+    throw new Error("Deployment manifest has an invalid Boss Factory address.");
+  }
 
   const checkedAddresses = addresses as unknown as DeploymentAddresses;
   if (manifest.chainId === LOCAL_CHAIN_ID) {
@@ -225,6 +230,7 @@ export async function verifyDeployment(
 
   const block = await client.getBlock({ blockNumber: latestBlock });
   const { hook, router, bossHP, roy, mockUSD, collectibles, poolManager } = manifest.addresses;
+  const codeAddresses = [...Object.values(manifest.addresses), ...(manifest.bossFactory ? [manifest.bossFactory] : [])];
   const [
     hookManager, hookRouter, hookBossHP, hookRoy, hookMockUSD, hookCollectibles,
     routerManager, routerBossHP, routerRoy, routerMockUSD, routerHook, collectibleMinter,
@@ -242,7 +248,7 @@ export async function verifyDeployment(
     client.readContract({ address: router, abi: bossRouterAbi, functionName: "mockUSD", blockNumber: latestBlock }),
     client.readContract({ address: router, abi: bossRouterAbi, functionName: "bossHook", blockNumber: latestBlock }),
     client.readContract({ address: collectibles, abi: bossCollectiblesAbi, functionName: "minter", blockNumber: latestBlock }),
-    ...Object.values(manifest.addresses).map((address) => client.getCode({ address, blockNumber: latestBlock })),
+    ...codeAddresses.map((address) => client.getCode({ address, blockNumber: latestBlock })),
   ]);
   const expected = [managerAddress(manifest), router, bossHP, roy, mockUSD, collectibles, managerAddress(manifest), bossHP, roy, mockUSD, hook, hook];
   const actual = [hookManager, hookRouter, hookBossHP, hookRoy, hookMockUSD, hookCollectibles,
@@ -251,6 +257,18 @@ export async function verifyDeployment(
     actual.some((address, index) => address.toLowerCase() !== expected[index].toLowerCase()) ||
     code.some((bytecode) => !bytecode || bytecode === "0x")
   ) throw new Error("Deployment code or immutable contract wiring failed verification.");
+  if (manifest.bossFactory) {
+    const [factoryManager, factoryMockUSD, factoryAttackToken] = await Promise.all([
+      client.readContract({ address: manifest.bossFactory, abi: bossFactoryAbi, functionName: "manager", blockNumber: latestBlock }),
+      client.readContract({ address: manifest.bossFactory, abi: bossFactoryAbi, functionName: "mockUSD", blockNumber: latestBlock }),
+      client.readContract({ address: manifest.bossFactory, abi: bossFactoryAbi, functionName: "attackToken", blockNumber: latestBlock }),
+    ]);
+    if (
+      factoryManager.toLowerCase() !== poolManager.toLowerCase() ||
+      factoryMockUSD.toLowerCase() !== mockUSD.toLowerCase() ||
+      factoryAttackToken.toLowerCase() !== roy.toLowerCase()
+    ) throw new Error("Boss Factory wiring does not match the verified Base deployment.");
+  }
 
   const chain = client.chain ?? defineChain({
     id: manifest.chainId,

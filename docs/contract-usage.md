@@ -2,6 +2,8 @@
 
 This guide covers the no-entry contracts in `contracts/src` and the player operations in `@boss-pool/chain`. A fresh wallet attacks directly after approving MockUSD to BossRouter when needed. The local deployment script creates an active round on Anvil. The Foundry fixture exercises a separate two-wallet round through all three stages and claims. The browser app reads public state and quotes without a wallet, then sends player transactions only through the selected wallet.
 
+For creator-selected MEME launches, MockUSD volume tracking, MEME prizes, stage gates, price quotes, and creator recovery, see [Boss Factory](boss-factory.md). The creator form and launch SDK are available at `/launch`; the page reads the Factory address from the Base Sepolia deployment manifest. The player battle page still targets the standalone BossHP deployment.
+
 ## Run the local deployment
 
 From the repository root, initialize the pinned submodules and install the workspace once:
@@ -271,7 +273,7 @@ The local Foundry suite runs the full two-wallet fresh-wallet HP0 flow against a
 
 ## Base Sepolia testnet target
 
-Base Sepolia is the active target, chain `84532`, with RPC `https://sepolia.base.org`. The verified team deployment is recorded in `apps/web/public/deployments/base-sepolia.json` at block `47325823`. It includes a team-owned PoolManager deployed from pinned v4-core source; it is not an official Base PoolManager. The deployment transaction is [`0x276c66f030f5ba647abcbb40a1ce6350d06d01606dc38116793f607746122298`](https://sepolia.basescan.org/tx/0x276c66f030f5ba647abcbb40a1ce6350d06d01606dc38116793f607746122298). Never use an Anvil development key on any public testnet.
+Base Sepolia is the active target, chain `84532`, with RPC `https://sepolia.base.org`. The verified team deployment is recorded in `apps/web/public/deployments/base-sepolia.json` at block `47325823`. It includes a team-owned PoolManager deployed from pinned v4-core source; it is not an official Base PoolManager. The Boss Factory is recorded in the same manifest and was deployed at block `47330324`; see [its deployment receipt](https://sepolia.basescan.org/tx/0xf9f15e3858636914ace7b23da41eefe1c9cf2476b1a717cc26e2f9530b4535d5). Never use an Anvil development key on any public testnet.
 
 The repository provides three Base Sepolia commands. `testnet:preflight` checks chain ID, Cancun transient-storage support, signer balances, and a pinned Forge deployment dry run. It sends no transaction. `testnet:deploy` repeats those checks, broadcasts only after an exclusive pending intent is saved, verifies every receipt and the final active stage-0 state, then writes the Base Sepolia manifest. `testnet:exercise` requires that verified manifest before it can send player transactions.
 

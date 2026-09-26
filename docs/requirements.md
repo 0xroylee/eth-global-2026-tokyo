@@ -4,6 +4,18 @@ Status: attacks count purchases without burns, and reward shares follow eligible
 
 ## Confirmed gameplay
 
+### Permissionless MEME Boss Factory
+
+- A creator enters the address of an existing MEME token held in their wallet, their own token allocation, a prize percentage, a MockUSD volume target, and a deadline. The launch form reads token metadata and the connected wallet balance.
+- The route uses the established MockUSD / Attack Token supply pool and creates an isolated Attack Token / MEME boss pool for each launch. Players pay MockUSD through both swaps to buy the actual MEME token.
+- The launch quote derives a supported starting price and estimates the required Attack Token from the active supply pool. It does not depend on an external MEME market price.
+- The creator deposits the full MEME allocation. A chosen percentage funds the victory prize in MEME; the remaining inventory funds the boss pool and its stage transitions.
+- Eligible MockUSD purchase volume counts once per attack and only in proportion to Attack Token spent on the MEME purchase. Refunded MockUSD, returned Attack Token, transfers, outside-market activity, refills, and liquidity changes earn no progress.
+- The target unlocks three stages in a 1:2:3 ratio. Each clearing attack settles the purchase, records volume, performs the bounded refill, and releases the next stage atomically. A failed transition reverts the purchase and volume credit.
+- The creator form is at `/launch`. It uses a pasted token address because ERC-20 does not enumerate wallet holdings. It reads the Factory address from the Base Sepolia deployment manifest. The player fight/claim UI for Factory rounds remains outstanding.
+
+### Standalone BossHP demo
+
 1. Use MockUSD / Attack Token as the supply pool and Attack Token / BossHP as a real second pool.
 2. Connect a wallet and press Attack. After any required MockUSD approval to the Router, one transaction buys Attack Token and then BossHP. No enrollment, entry fee, starter grant, or entry NFT is required.
 3. Attack Token is paid into the Boss pool. The hook adds actual BossHP output to the current stage's `stageSold`. One purchased BossHP equals one effective damage unit. The player receives the tokens, which represent reward rights; no burn occurs.

@@ -4,6 +4,15 @@ Boss Pool is a sponsor-funded fight where players spend Attack Token to buy Boss
 
 Attack Token is the name used in product copy and documentation. Existing compatibility identifiers such as `RoyToken`, `roy`, and `royBought` refer to this same token. ABI names, manifest keys, and historical deployment records retain those identifiers. New deployments use `Attack Token` for both the ERC-20 name and symbol; existing deployments retain their original metadata.
 
+**Boss Factory**:
+A permissionless launchpad that creates an isolated encounter for an existing creator-selected ERC-20. The creator deposits a chosen allocation, funds a prize, and sets a MockUSD volume target.
+
+**Meme-token HP**:
+The actual ERC-20 sold by a Factory boss and delivered to players. Attacks create per-boss reward credit; ordinary balances and transfers do not create that credit.
+
+**Reward credit**:
+An attacker's unclaimed MEME purchase amount for one Factory boss. After victory, it can be consumed for a proportional share of that boss's MEME prize while the player keeps purchased tokens.
+
 ## Language
 
 **Round**:

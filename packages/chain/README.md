@@ -1,6 +1,6 @@
 # Boss Pool chain SDK
 
-`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses the generated Foundry ABIs in `src/generated/abi.ts`. Deployment, round creation, and maker administration remain CLI operations. A verified Base Sepolia manifest is published under `apps/web/public/deployments/base-sepolia.json`.
+`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses generated Foundry ABIs and pinned Router/Hook creation bytecode. Standalone round deployment and maker administration remain CLI operations. The Base Sepolia deployment manifest includes the Boss Factory address.
 
 The attack currency is named **Attack Token** in the UI and documentation. SDK fields such as `royBought`, `roySpent`, `royRefunded`, `minRoyOut`, and `royBalance`, plus the manifest key `roy` and contract `RoyToken`, retain their existing names for deployment compatibility. All refer to Attack Token. See [domain language](../../CONTEXT.md).
 
@@ -32,6 +32,25 @@ The SDK wraps the agreed player journey. It does not provide a helper for every 
 Deployment verification and network/manifest helpers are package exports rather than SDK instance methods. The complete argument and return types are exported from [the package entry point](src/index.ts).
 
 Maker setup (`setHook`, `setMinter`, `seedSupplyPool`, `fundPrize`, `activate`), lifecycle calls (`expire`, `refundExpiredPrize`), and other standard ERC-20/ERC-721 operations have no dedicated player SDK wrapper. Use the existing deployment scripts or the exported generated ABIs with viem; caller permissions still apply. Hook callbacks and stage transitions are invoked by the protocol, not by the frontend. See the [contract usage guide](../../docs/contract-usage.md) for those boundaries.
+
+`createBossFactorySdk` supports token metadata and balance reads, launch quotes, exact token-allowance checks and approvals, and a simulated launch transaction. It verifies that the generated Router and Hook bytecode match the Factory's pinned hashes, mines the v4 Hook salt off chain, and validates the `BossLaunched` event from the confirmed receipt. The creator supplies the deployed Factory address.
+
+```ts
+import { createBossFactorySdk, parseUnits } from "@boss-pool/chain";
+
+const factorySdk = createBossFactorySdk({ publicClient, factory: factoryAddress });
+const config = {
+  token,
+  tokenAllocation: parseUnits("1000000", memeDecimals),
+  prizeBps: 1_000,
+  volumeTargetMockUSD: parseUnits("6000", 6),
+  deadline: BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60),
+};
+const quote = await factorySdk.quoteLaunch(config);
+const writer = factorySdk.withWallet(walletClient);
+await writer.approveToken(token, config.tokenAllocation);
+const launched = await writer.launchBoss(config);
+```
 
 Amounts use token base units as `bigint`: MockUSD has 6 decimals; ROY and BossHP have 18. Stage indices are zero-based. There is no enrollment or entry-NFT action in the current contracts.
 
