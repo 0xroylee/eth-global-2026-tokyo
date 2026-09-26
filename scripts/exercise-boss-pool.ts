@@ -765,8 +765,22 @@ function eventArgs<const TAbi extends readonly unknown[]>(
 }
 
 async function readSnapshot(runtime: Runtime) {
+  const blockNumber = await runtime.client.getBlockNumber({ cacheTime: 0 });
+  return readSnapshotAtBlock(runtime, blockNumber);
+}
+
+async function readSnapshotAtBlock(runtime: Runtime, blockNumber: bigint, retry = 0) {
+  try {
+    return await readSnapshotOnce(runtime, blockNumber);
+  } catch (error) {
+    if (retry >= 3 || !isUnsupportedBlockError(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return readSnapshotAtBlock(runtime, blockNumber, retry + 1);
+  }
+}
+
+async function readSnapshotOnce(runtime: Runtime, blockNumber: bigint) {
   const { addresses, client, wallets } = runtime;
-  const blockNumber = await client.getBlockNumber({ cacheTime: 0 });
   const read = { blockNumber };
   const [
     status,
@@ -880,6 +894,26 @@ async function readSnapshot(runtime: Runtime) {
     victoryClaimedA,
     victoryClaimedB,
   };
+}
+
+function isUnsupportedBlockError(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  const parts: string[] = [];
+  let current: unknown = error;
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    if (current instanceof Error) {
+      parts.push(current.message);
+      const details = current as Error & { shortMessage?: unknown; details?: unknown; cause?: unknown };
+      if (typeof details.shortMessage === "string") parts.push(details.shortMessage);
+      if (typeof details.details === "string") parts.push(details.details);
+      current = details.cause;
+    } else {
+      parts.push(String(current));
+      break;
+    }
+  }
+  return /unsupported block number/i.test(parts.join(" "));
 }
 
 function checkpoint(
