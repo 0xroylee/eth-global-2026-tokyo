@@ -7,6 +7,7 @@ import { useLocalRound, type DeploymentState } from "@/lib/useLocalRound";
 import { BossEntryPanel } from "./BossEntryPanel";
 import { GameCanvas } from "./GameCanvas";
 import { RoundStatePanel } from "./RoundStatePanel";
+import { HubSoundControl } from "./HubSoundControl";
 
 export function GameShell() {
   const bridge = useMemo(() => new GameBridge(), []);
@@ -21,7 +22,6 @@ export function GameShell() {
     return () => {
       offNear();
       offEnter();
-      bridge.clear();
     };
   }, [bridge]);
 
@@ -42,16 +42,14 @@ export function GameShell() {
           <span className="rounded-md border border-[#f5b04a]/40 bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-[#f5b04a]">
             HUB · FIXTURE MAP
           </span>
-          <span className="rounded-md bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.16em] text-dim">
-            HUB // 001
-          </span>
+          <HubSoundControl bridge={bridge} />
         </div>
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between p-3">
           <span className="rounded-md bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.14em] text-dim">
             WASD / ARROWS · MOVE
           </span>
-          <GatePrompt bossId={nearBoss} hidden={openBoss !== null} />
+          <GatePrompt bossId={nearBoss} hidden={openBoss !== null || showChain} />
         </div>
 
         {openBoss && <BossEntryPanel boss={findBoss(openBoss)} deployment={deployment} onClose={closeBoss} />}

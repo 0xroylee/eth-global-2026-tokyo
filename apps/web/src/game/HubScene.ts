@@ -3,6 +3,7 @@ import { BOSSES, findBoss, isBossId, type BossDefinition, type BossId } from "./
 import type { GameBridge } from "./bridge";
 import { HUB_LAYERS, HUB_TILESET } from "./hubTiles";
 import { makeCroppedTexture } from "./textures";
+import { HubAtmosphere } from "./HubAtmosphere";
 
 /** World units are map pixels; the camera zooms them for the viewport. */
 const ZOOM = 3;
@@ -33,6 +34,18 @@ const TILE_ANIMATIONS: { frames: readonly number[]; durations: readonly number[]
   { frames: [HUB_TILESET.gid.torchA, HUB_TILESET.gid.torchB, HUB_TILESET.gid.torchC], durations: [166, 167, 167] },
 ];
 const TILE_CLOCK_PERIOD = 1000;
+const WALK_ROWS = ["down", "left", "right", "up"] as const;
+type Facing = (typeof WALK_ROWS)[number];
+/** Neutral pose is the second cell of each direction row. */
+const IDLE_COLUMN = 1;
+/** Foot pixel row inside the 32×32 cell. Origin and the feet collider share it. */
+const FOOT_ROW = 31;
+const PAGE_CONTROL = "button, a, input, select, textarea, [contenteditable='true'], [role='button']";
+
+function isPageControlTarget(event: KeyboardEvent): boolean {
+  const target = event.target;
+  return target instanceof Element && target.closest(PAGE_CONTROL) !== null;
+}
 
 /** Shape of Phaser's per-tile data that `Tileset.getAnimatedTileId` reads. */
 type TileAnimationData = {
@@ -50,7 +63,11 @@ export class HubScene extends Phaser.Scene {
   private nearGate: Gate | null = null;
   private modalOpen = false;
   private reduceMotion = false;
+  private facing: Facing = "down";
+  private lastX = 0;
+  private lastY = 0;
   private unsubscribe: (() => void)[] = [];
+  private atmosphere!: HubAtmosphere;
 
   constructor() {
     super("hub");
@@ -63,15 +80,16 @@ export class HubScene extends Phaser.Scene {
   preload() {
     this.load.tilemapTiledJSON("hub", "/game/hub.json");
     this.load.image("tiles", "/game/tiles.png");
-    this.load.image("player-master", "/images/player-you-master.png");
+    this.load.spritesheet("player-walk", "/game/player-compact-walk.png", { frameWidth: 32, frameHeight: 32 });
     for (const boss of BOSSES) {
       if (boss.portrait) this.load.image(`portrait-master-${boss.id}`, boss.portrait);
     }
   }
 
   create() {
-    // Strip the embedded "YOU" label and size the player for the tile scale.
-    makeCroppedTexture(this, "player", "player-master", { x: 330, y: 40, w: 600, h: 1010 }, 32);
+    this.gates = [];
+    this.nearGate = null;
+    this.registerWalk();
     makeCroppedTexture(this, "portrait-cat", "portrait-master-cat", { x: 120, y: 60, w: 880, h: 1240 }, 28);
     makeCroppedTexture(this, "portrait-macro-whale", "portrait-master-macro-whale", { x: 160, y: 80, w: 940, h: 940 }, 28);
 
@@ -110,15 +128,19 @@ export class HubScene extends Phaser.Scene {
     this.cameras.main.setRoundPixels(true);
 
     this.setupInput();
+    this.atmosphere = new HubAtmosphere(this, map);
     // Sets reduceMotion and applies tile animation for the current preference.
     this.watchReducedMotion();
 
     this.unsubscribe.push(
       this.bridge.onCommand("ui:modal", ({ open }) => {
         this.modalOpen = open;
-        if (open) this.player.setVelocity(0, 0);
-        // Hand the keyboard to React while a panel or control owns focus.
-        if (this.input.keyboard) this.input.keyboard.enabled = !open;
+        this.player.setVelocity(0, 0);
+        if (open) this.showIdle();
+        if (!this.input.keyboard) return;
+        this.input.keyboard.enabled = !open;
+        // Drop keys that went up while Phaser was ignoring the keyboard, so closing a panel does not resume a drift.
+        if (!open) this.input.keyboard.resetKeys();
       }),
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -137,6 +159,9 @@ export class HubScene extends Phaser.Scene {
       playerX: this.player.x,
       playerY: this.player.y,
       playerScaleY: this.player.scaleY,
+      facing: this.facing,
+      frame: this.player.frame.name,
+      walking: this.player.anims.isPlaying,
       nearGate: this.nearGate?.boss.id ?? null,
       glowScale: this.nearGate?.glow.scaleX ?? null,
       glowAlpha: this.nearGate?.glow.alpha ?? null,
@@ -150,7 +175,8 @@ export class HubScene extends Phaser.Scene {
   }
 
   update(time: number) {
-    this.updateMovement(time);
+    this.atmosphere.update(time, this.reduceMotion);
+    this.updateMovement();
     this.updateGateProximity();
   }
 
@@ -220,12 +246,37 @@ export class HubScene extends Phaser.Scene {
     return bodies;
   }
 
+  private registerWalk() {
+    WALK_ROWS.forEach((facing, row) => {
+      const key = `player-walk-${facing}`;
+      if (this.anims.exists(key)) return;
+      this.anims.create({
+        key,
+        frames: this.anims.generateFrameNumbers("player-walk", { start: row * 4, end: row * 4 + 3 }),
+        frameRate: 8,
+        repeat: -1,
+      });
+    });
+  }
+
+  private idleFrame(facing: Facing = this.facing): number {
+    return WALK_ROWS.indexOf(facing) * 4 + IDLE_COLUMN;
+  }
+
+  private showIdle() {
+    if (this.player.anims.isPlaying) this.player.anims.stop();
+    this.player.setFrame(this.idleFrame());
+  }
+
   private buildPlayer(x: number, y: number) {
-    this.player = this.physics.add.sprite(x, y, "player");
-    this.player.setOrigin(0.5, 1).setDepth(y);
+    this.facing = "down";
+    this.lastX = x;
+    this.lastY = y;
+    this.player = this.physics.add.sprite(x, y, "player-walk", this.idleFrame());
+    this.player.setOrigin(0.5, FOOT_ROW / 32).setScale(1).setDepth(y);
     this.player.setCollideWorldBounds(true);
     const body = this.player.body as Phaser.Physics.Arcade.Body;
-    body.setSize(12, 8).setOffset((this.player.width - 12) / 2, this.player.height - 8);
+    body.setSize(12, 8).setOffset((this.player.width - 12) / 2, FOOT_ROW - 8);
     this.add.ellipse(0, 0, 14, 4, 0x000000, 0.3).setDepth(2).setName("player-shadow");
   }
 
@@ -238,13 +289,18 @@ export class HubScene extends Phaser.Scene {
     // swallows Space on focused React buttons. Read keys without capturing.
     keyboard.clearCaptures();
     // Event-driven so a quick tap registers regardless of frame timing.
-    const interact = () => {
-      if (this.modalOpen || !this.nearGate) return;
+    const interact = (event: KeyboardEvent) => {
+      if (event.repeat || isPageControlTarget(event) || this.modalOpen || !this.nearGate) return;
       this.bridge.emit("gate:enter", { bossId: this.nearGate.boss.id });
     };
     keyboard.on("keydown-E", interact);
     keyboard.on("keydown-ENTER", interact);
     keyboard.on("keydown-SPACE", interact);
+    this.unsubscribe.push(() => {
+      keyboard.off("keydown-E", interact);
+      keyboard.off("keydown-ENTER", interact);
+      keyboard.off("keydown-SPACE", interact);
+    });
   }
 
   /** Mirror prefers-reduced-motion inside the canvas; CSS cannot reach Phaser tweens. */
@@ -253,7 +309,8 @@ export class HubScene extends Phaser.Scene {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
     const apply = () => {
       this.reduceMotion = query.matches;
-      this.player.setScale(1, 1);
+      this.player.setScale(1);
+      this.showIdle();
       if (this.nearGate) this.startGatePulse(this.nearGate);
       this.applyTileAnimation();
     };
@@ -305,10 +362,11 @@ export class HubScene extends Phaser.Scene {
     });
   }
 
-  private updateMovement(time: number) {
+  private updateMovement() {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     if (this.modalOpen || !this.cursors) {
       body.setVelocity(0, 0);
+      this.showIdle();
       return;
     }
 
@@ -322,13 +380,23 @@ export class HubScene extends Phaser.Scene {
     const len = Math.hypot(vx, vy) || 1;
     body.setVelocity((vx / len) * PLAYER_SPEED, (vy / len) * PLAYER_SPEED);
 
-    if (vx !== 0) this.player.setFlipX(vx < 0);
+    const ax = Math.abs(vx);
+    const ay = Math.abs(vy);
+    if (ax > ay) this.facing = vx > 0 ? "right" : "left";
+    else if (ay > ax) this.facing = vy > 0 ? "down" : "up";
 
-    // Walk bob until a real walking sheet exists. Decorative, so it obeys reduced motion.
-    const moving = vx !== 0 || vy !== 0;
-    this.player.setScale(1, moving && !this.reduceMotion ? 1 + Math.sin(time / 70) * 0.03 : 1);
-    this.player.setDepth(this.player.y);
+    // Arcade resolves the previous frame's velocity before this update, so position delta is real movement.
+    const moved = Math.hypot(this.player.x - this.lastX, this.player.y - this.lastY) > 0.2;
+    this.lastX = this.player.x;
+    this.lastY = this.player.y;
+    const pushing = vx !== 0 || vy !== 0;
+    if (this.reduceMotion || !pushing || !moved) this.showIdle();
+    else {
+      const key = `player-walk-${this.facing}`;
+      if (!this.player.anims.isPlaying || this.player.anims.currentAnim?.key !== key) this.player.play(key);
+    }
 
+    this.player.setScale(1).setFlipX(false).setDepth(this.player.y);
     const shadow = this.children.getByName("player-shadow") as Phaser.GameObjects.Ellipse | null;
     shadow?.setPosition(this.player.x, this.player.y - 1);
   }
