@@ -3,24 +3,16 @@
 import { useEffect, useRef } from "react";
 
 const CONTROLS = [
-  ["WASD / arrow keys", "Move around the garden"],
+  ["WASD / arrow keys", "Move around the garden. WASD also closes game panels."],
   ["E", "Inspect a nearby boss pool or route"],
   ["Escape", "Close the current panel"],
   ["Sound / Music", "Optional audio controls above the map"],
 ] as const;
 
-function focusHubCanvas() {
-  const canvas = document.querySelector("section canvas");
-  if (!(canvas instanceof HTMLCanvasElement)) return;
-  canvas.tabIndex = -1;
-  canvas.focus();
-}
-
 /** Movement and audio help. Replay closes this dialog before Welcome opens. */
 export function HubHelp({ onClose, onReplay }: { onClose: () => void; onReplay: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
-  const skipRestore = useRef(false);
 
   useEffect(() => {
     backRef.current?.focus();
@@ -48,7 +40,6 @@ export function HubHelp({ onClose, onReplay }: { onClose: () => void; onReplay: 
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
-      if (!skipRestore.current) focusHubCanvas();
     };
   }, [onClose]);
 
@@ -88,10 +79,7 @@ export function HubHelp({ onClose, onReplay }: { onClose: () => void; onReplay: 
           </button>
           <button
             type="button"
-            onClick={() => {
-              skipRestore.current = true;
-              onReplay();
-            }}
+            onClick={onReplay}
             className="rounded-lg border border-[#f5b04a]/40 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-[#f5b04a] transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100"
           >
             REPLAY GUIDE

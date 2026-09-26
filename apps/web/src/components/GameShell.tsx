@@ -32,7 +32,8 @@ export function GameShell() {
   const [canvasPhase, setCanvasPhase] = useState<CanvasPhase>("loading");
   const guide = useHubGuide(bridge, nearBoss);
   const welcomeOpen = guide.hydrated && guide.state.step === "welcome" && canvasPhase !== "error";
-  const overlayOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen || arena.wallet.busy;
+  const gameDialogOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen;
+  const overlayOpen = gameDialogOpen || Boolean(arena.wallet.busy);
 
   useEffect(() => {
     const offNear = bridge.on("gate:near", ({ bossId }) => setNearBoss(bossId));
@@ -51,6 +52,32 @@ export function GameShell() {
     guide.syncModal(overlayOpen);
     bridge.send("ui:modal", { open: overlayOpen });
   }, [bridge, guide.syncModal, overlayOpen]);
+
+  useEffect(() => {
+    const onMove = (event: KeyboardEvent) => {
+      const wasd = /^[wasd]$/i.test(event.key);
+      const arrow = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key);
+      if ((!wasd && !arrow) || event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (arena.wallet.busy || writeState.status === "prompting" || canvasPhase !== "ready") return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"]')) return;
+      if (!gameDialogOpen && target?.closest('[role="dialog"], dialog')) return;
+      if (gameDialogOpen) {
+        if (!wasd) return;
+        setOpenBoss(null);
+        setShowChain(false);
+        setRouteOpen(false);
+        setHelpOpen(false);
+        if (welcomeOpen) guide.start();
+        // Resume before this same keydown reaches Phaser's window listener.
+        bridge.send("ui:modal", { open: false });
+      }
+      // Phaser ignores cancelled events, so let the original keydown reach it.
+      focusHubCanvas();
+    };
+    window.addEventListener("keydown", onMove, true);
+    return () => window.removeEventListener("keydown", onMove, true);
+  }, [arena.wallet.busy, bridge, canvasPhase, gameDialogOpen, guide.start, welcomeOpen, writeState.status]);
 
   useEffect(() => {
     if (openBoss) guide.panelOpened(openBoss);
@@ -100,11 +127,11 @@ export function GameShell() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [showChain]);
 
-  const chainWasOpen = useRef(false);
+  const overlayWasOpen = useRef(false);
   useEffect(() => {
-    if (chainWasOpen.current && !showChain) focusHubCanvas();
-    chainWasOpen.current = showChain;
-  }, [showChain]);
+    if (overlayWasOpen.current && !overlayOpen) focusHubCanvas();
+    overlayWasOpen.current = overlayOpen;
+  }, [overlayOpen]);
 
   const closeBoss = useCallback(() => setOpenBoss(null), []);
   const closeRoute = useCallback(() => setRouteOpen(false), []);
@@ -136,10 +163,7 @@ export function GameShell() {
     <main ref={shellRef} className="relative h-dvh w-full overflow-hidden bg-ink text-fog">
       <GameCanvas bridge={bridge} onPhase={setCanvasPhase} />
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col gap-3 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-4">
-        <header
-          className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-start"
-          onKeyDown={(event) => event.stopPropagation()}
-        >
+        <header className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-start">
           <div className="pointer-events-none">
             <p className="font-mono text-[10px] tracking-[0.22em] text-dim">BOSS POOL</p>
             <div className="mt-1 flex flex-wrap items-baseline gap-2">

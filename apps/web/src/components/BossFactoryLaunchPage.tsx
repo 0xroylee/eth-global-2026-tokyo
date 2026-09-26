@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   BossFactorySdkError,
+  FactoryOperationTerminalError,
   BASE_SEPOLIA_CHAIN,
   createBaseSepoliaPublicClient,
   createBaseSepoliaWalletClient,
@@ -22,6 +23,8 @@ import {
   type FactoryLaunchResult,
 } from "@boss-pool/chain";
 import { WalletControl } from "./WalletControl";
+import { useFactoryOperation } from "./FactoryOperationProvider";
+import { isCurrentQuoteResponse, isCurrentTokenResponse, parseStrictUnits, sameAddressText } from "@/lib/factory-form";
 import { useWallet } from "@/wallet/WalletProvider";
 
 const BASE_SEPOLIA_RPC_URL =

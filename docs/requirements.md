@@ -111,6 +111,8 @@ Players can inspect the shared boss without connecting a wallet. A wallet is req
 
 The hub boss gate shows boss health and **ENTER BATTLE**. Quotes, token approvals, attacks, and claims are available inside the battle. The player UI has no faucet; players need an existing MockUSD balance to attack.
 
+In the hub, WASD returns keyboard focus from toolbar buttons to the game. Pressing WASD closes an ordinary game panel and resumes movement. Text fields, native select controls, and wallet prompts keep their keyboard input. Closing a game panel with its button or Escape also returns focus to the canvas.
+
 **SWAP ATTACK** leads to a quote review before any transaction. The player sees the maximum MockUSD spend, expected spend and refunds, expected damage, and minimum accepted output. Approval and attack remain distinct wallet actions. Damage appears after confirmation. Other players' confirmed attacks also update the shared boss.
 
 Each attack uses a fixed input cap of **1 MockUSD**. The player does not enter an amount or choose a preset. The fixed cap appears in the quote review before confirmation. Damage varies with the live quote. A stage-clearing attack can spend less than 1 MockUSD and returns unused input.
