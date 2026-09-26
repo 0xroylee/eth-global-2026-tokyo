@@ -1,8 +1,18 @@
-# Boss Pool
+# Boss BoostPad
 
-Players spend MockUSD through the supply pool to buy Attack Token, then BossHP through Uniswap v4. The Hook counts actual BossHP output as damage without burning tokens. Each defeated stage unlocks a new allocation of BossHP liquidity. After final defeat, eligible BossHP represents a share of the sponsor-funded prize.
+Boss BoostPad creates a token pool and turns it into a boss raid on Uniswap v4. The creator already holds the token. Fighters swap to attack, so each attack adds to that token's swap volume, and they share the creator-funded prize. Clearing a stage unlocks the next liquidity.
 
-廣東話 pitch：MockUSD 買 Attack Token，Attack Token 換 BossHP；hook 累計買入 HP 當傷害，清一階先放下一階流動性，打贏按貢獻分獎。
+廣東話 pitch：Boss BoostPad 為已有代幣開一個池，再變成 Boss 戰。攻擊就係 swap，所以每一下攻擊都增加該幣嘅成交量。打贏之後戰士分創建者放嘅獎。清一階先放下一階流動性。
+
+## Public description
+
+Demo: https://web-smoky-tau-35.vercel.app/
+
+**Short:** Boss BoostPad turns a token pool into a boss raid. Fighters swap to attack and share the prize.
+
+**Description:** A token sitting in a normal pool gives traders nothing to defeat and no shared prize. Boss BoostPad creates a pool for a token the creator already holds and turns that pool into a boss raid on Uniswap v4. The creator sets the pool in the blacksmith: pool size, a volume target, a prize share, and a portrait for each stage. Fighters attack by swapping through the pools, so each attack adds to that token's swap volume. Swaps outside the fight do not count. Clearing a stage unlocks the next liquidity. After the final stage, eligible fighters share the creator-funded prize. The garden hub, workshop, and battle run in the browser.
+
+**How it's made:** The boss is a Uniswap v4 hook. An attack is one routed swap, from MockUSD through Attack Token into the creator's existing token, and the hook counts that swap as damage and volume. The Boss Factory contract creates the pool, escrows the creator-funded prize, and releases the next stage's liquidity when the current stage is cleared. The browser app is Next.js and Phaser: a walkable garden hub, a blacksmith workshop where the creator sets the pool, and a turn-based battle. Wallet calls use viem on Base Sepolia. The hook is the notable part: swap output is the attack, with no token burn and no separate damage ledger.
 
 ## Current direction
 

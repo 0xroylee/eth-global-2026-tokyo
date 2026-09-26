@@ -1,6 +1,6 @@
-# Boss Pool domain language
+# Boss BoostPad domain language
 
-Boss Pool is a sponsor-funded fight where players spend Attack Token to buy a boss token. The standalone BossHP demo has transferable reward rights; Factory encounters record prize credit separately for each attacker. Attacks do not burn tokens.
+Boss BoostPad creates a pool for a token the creator already holds and turns that pool into a boss raid. Fighters swap to attack, those swaps are the volume that advances the fight, and they share a creator-funded prize. The standalone BossHP demo has transferable reward rights; Factory encounters record prize credit separately for each attacker. Attacks do not burn tokens.
 
 Attack Token is the name used in product copy and documentation. Existing compatibility identifiers such as `RoyToken`, `roy`, and `royBought` refer to this same token. ABI names, manifest keys, and historical deployment records retain those identifiers. New deployments use `Attack Token` for both the ERC-20 name and symbol; existing deployments retain their original metadata.
 
