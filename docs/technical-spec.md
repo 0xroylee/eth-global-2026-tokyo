@@ -8,8 +8,8 @@ Status (26 September 2026): The no-burn, no-entry contracts, transferable HP red
 flowchart LR
     W[Player wallet] -->|attack| R[BossRouter: routing, reserve and LP custody]
     R -->|one unlock, two swaps| PM[PoolManager]
-    PM -->|MockUSD to ROY| A[Supply pool state]
-    PM -->|ROY to BossHP| B[Boss pool state]
+    PM -->|MockUSD to Attack Token| A[Supply pool state]
+    PM -->|Attack Token to BossHP| B[Boss pool state]
     PM -->|Boss pool callbacks| H[BossHook: stage state and prize custody]
     PM -->|router takes purchased BossHP for player| W
     R -->|guarded transition begin and completion| H
@@ -17,11 +17,11 @@ flowchart LR
     W -->|redeem HP| H
 ```
 
-The two pools are states inside one PoolManager, not separate pool contracts. ROY is a payment asset. Purchased BossHP goes to the player and its actual output counts as damage. One attack uses at most one supply-pool swap and one player Boss-pool swap. A clearing attack may additionally trigger the controller-only reverse refill, which earns no contribution.
+The two pools are states inside one PoolManager, not separate pool contracts. Attack Token is a payment asset. Purchased BossHP goes to the player and its actual output counts as damage. One attack uses at most one supply-pool swap and one player Boss-pool swap. A clearing attack may additionally trigger the controller-only reverse refill, which earns no contribution.
 
 Use two custom core contracts: BossHook and BossRouter. BossRouter combines the attack route with the stage reserve/controller responsibility. It initiates swaps and liquidity changes so the hook remains a distinct callback recipient. The pinned v4 implementation suppresses callbacks when the initiating caller is the hook itself; keeping those roles separate makes the intended checks explicit. Reuse upstream settlement and liquidity math rather than writing a new AMM or liquidity manager.
 
-BossHook is attached to the ROY/BossHP pool. The MockUSD/ROY supply pool can use ordinary v4 behavior without a game hook. Locks on the game's supply LP allocation are enforced by its controlled position owner, not by restricting the entire supply market.
+BossHook is attached to the Attack Token/BossHP pool. The MockUSD/Attack Token supply pool can use ordinary v4 behavior without a game hook. Locks on the game's supply LP allocation are enforced by its controlled position owner, not by restricting the entire supply market.
 
 ### Proposed contract boundaries
 
@@ -30,7 +30,7 @@ Actual source uses `BossHP`, `RoyToken`, `MockUSD`, and `BossCollectibles` under
 | Contract | Responsibilities and custody | Main interface |
 | --- | --- | --- |
 | `BossHook` | Canonical pool and stage rules, sold counters, frozen eligible supply, prize ledger, permanently surrendered HP, and optional victory-NFT eligibility | `activate`, `claimReward(hpAmount)`, `claimVictoryNFT`, `expire`, expired-prize recovery; authenticated v4 callbacks and router-only transition methods |
-| `BossRouter` | User attack context, two-hop settlement, stage HP reserve, game-owned LP positions, recovered ROY, bounded refills and LP top-ups | Public `quoteAttackWithMockUSD`, authenticated `attackWithMockUSD`, PoolManager-only `unlockCallback`, hook-authorized setup; optional held-ROY route later |
+| `BossRouter` | User attack context, two-hop settlement, stage HP reserve, game-owned LP positions, recovered Attack Token, bounded refills and LP top-ups | Public `quoteAttackWithMockUSD`, authenticated `attackWithMockUSD`, PoolManager-only `unlockCallback`, hook-authorized setup; optional held-Attack Token route later |
 | `BossHP` | Standard fixed-supply ERC-20; initial allocation to the controlled reserve, ordinary player transfers, no public mint or burn extension | Standard ERC-20 interface |
 | `RoyToken` | Standard fixed-supply ERC-20 for LP and locked Router reserve | Standard ERC-20 interface |
 | `BossCollectibles` | Optional victory NFTs in one standard ERC-721 collection; minting authorized only by BossHook | Restricted victory mint method |
@@ -85,19 +85,105 @@ The wallet flow requests accounts, detects account and chain changes, offers a c
 
 Preserve the existing approval, simulation, receipt, and stale-stage rules. Attacks approve MockUSD to BossRouter; redemption approves BossHP to BossHook. Keep optional victory-NFT claims separate. Derive damage and stage transitions from confirmed receipts and refreshed canonical state.
 
+### Live battle page context
+
+`/mock-battle` now consumes the live SDK while retaining its existing URL. [Live battle page requirements](requirements.md#live-battle-page) owns the user flow. The route uses the selected verified deployment and has no simulated-damage fallback.
+
+The page represents one shared, deployed Boss Pool round. The lake arena, player sprite, Attack Token boss forms, pixel windows, command menu, and dialog describe that encounter. Attack Token in the nameplate is the boss identity; its displayed level follows the stage. The nameplate is not the connected wallet's identity or a separate player progression system. On-chain stage indices are zero-based; labels and artwork use stages 1 through 3.
+
+The existing integration code provides the starting points:
+
+| File | Current responsibility | Role in the live page |
+| --- | --- | --- |
+| [`mock-battle/page.tsx`](../apps/web/src/app/mock-battle/page.tsx) | Reads the selected network from route parameters and renders `BattlePage`; exit navigates to `/`. | Route entry for the live battle controller. |
+| [`BattleView.tsx`](../apps/web/src/components/battle/BattleView.tsx) | `BattlePage` selects the route's network. `BattleView` renders the arena, controls, native action dialog, and confirmed effects. | Round and player state come from the shared provider and SDK. |
+| [`BossPoolProvider.tsx`](../apps/web/src/components/BossPoolProvider.tsx) | Owns one `useBossPool` instance in the root layout. | Wallet prompts, the write lock, and receipt recovery survive route navigation. |
+| [`useBossPool.ts`](../apps/web/src/lib/useBossPool.ts) | Verifies deployments, manages the injected wallet, polls every five seconds, and saves pending requests. | Existing owner of SDK access, refresh, `runPending`, and `resumePending`. |
+| [`BossActions.tsx`](../apps/web/src/components/BossActions.tsx) | Implements the fixed 1 MockUSD cap, quote freshness, approval, attack, reward, NFT, faucet, and receipt recovery actions. | The hub and battle use the same component. |
+| [`GameShell.tsx`](../apps/web/src/components/GameShell.tsx) and [`BossEntryPanel.tsx`](../apps/web/src/components/BossEntryPanel.tsx) | The hub uses the shared arena and links to the battle with the selected network. | The shared `confirmedBattleAttack` helper scopes receipt effects in both views. |
+| [`reads.ts`](../packages/chain/src/reads.ts) and [`sdk.ts`](../packages/chain/src/sdk.ts) | Export `RoundSnapshot`, `PlayerSnapshot`, quotes, writes, decoded receipt events, and recovery. | Authoritative application interface through `@boss-pool/chain`. |
+
+`layout.tsx` supplies one `BossPoolProvider` to both routes. Leaving the battle during an open wallet prompt does not unmount the transaction controller or release its write lock. Once the wallet supplies a hash, the same controller saves and follows the receipt even when the hub is visible. A full browser refresh recovers submitted requests from storage. Presentation components receive the shared arena state and keep no independent on-chain HP ledger.
+
+The screen data maps as follows:
+
+| Screen element | Live source | Meaning and limits |
+| --- | --- | --- |
+| Boss HP | `round.remainingSellableHP`, `round.stageCapacity[round.currentStage]` | Remaining purchasable HP against the current nominal capacity. Rounded display values do not determine stage completion. |
+| Stage dots, Attack Token level, boss form | `round.currentStage` and `round.status` | One shared round with three forms. The existing art order is form-b, form-a, then form-c. |
+| Round deadline | `round.deadline`, `round.blockTimestamp`, snapshot receipt time | Countdown derived from the chain deadline. Elapsed local time can animate the countdown between reads; it cannot reset the deadline or authorize an attack. |
+| Player HP during the fight | `player.bossHPBalance` | Current reward-bearing holdings, labeled YOUR HP until defeat. Disconnected wallets show a connect prompt or unavailable value. |
+| Reward share after defeat | `player.bossHPBalance / round.finalEligibleHP` | Share of the original prize represented by current unredeemed holdings. The denominator stays fixed after claims. No percentage is calculated with a zero denominator. |
+| Reward preview | `sdk.previewReward(hpAmount, account)` | Payout for the selected redemption amount, with SDK claimability checks. MockUSD uses six decimals; Attack Token and BossHP use eighteen. |
+| Hit message and hit animation | Confirmed `AttackResult.bossHPOut` or the matching decoded `AttackRecorded` event | Actual output of that attack. A quote supplies a preview only. |
+| Historical contribution | Confirmed `AttackRecorded` events for the wallet and deployment | `PlayerSnapshot` contains `hasAttacked`, not a historical damage total. A full history requires bounded event replay; session receipts alone cannot supply lifetime contribution. |
+| Network and read status | `arena.network`, `arena.deployment`, snapshot block | The selected network and actual availability replace mock labels. `Uniswap v4` alone does not identify the network or establish a live read. |
+
+The mock's `sum(stageSold) / MOCK_FINAL_ELIGIBLE_HP` bar measures shared progress and cannot become a wallet reward share. Its victory card also assumes one player owns every eligible token. Those assumptions disappear in the live mapping. A contribution field can remain unavailable until event history is available; a wallet balance cannot fill that gap.
+
+An external purchase or transfer of the same round's BossHP changes `player.bossHPBalance`, which the existing state poll refreshes. It does not change `stageSold`, `finalEligibleHP`, or attack history. Reward claims use the current holder's surrendered amount, with `payout = floor(originalPrize * hpAmount / finalEligibleHP)`. Only the denominator freezes at defeat; wallet balances remain transferable. The price paid in an external market does not enter this calculation.
+
+For an illustrative final supply of 1,800 eligible BossHP and a 1,000 MockUSD prize, a buyer who acquires and redeems 180 BossHP receives 100 MockUSD. The seller gives up those same reward rights. Redemption moves the 180 BossHP into permanent custody, preventing another sale and claim of those tokens. This works for a buyer with no attack history; the optional victory NFT still requires that wallet's own attack participation.
+
+BossHP is a fungible ERC-20 without per-token provenance. The eligibility rule relies on unsold reserve and fee HP staying in controlled custody, as specified in [reward accounting](refill-math.md#rewards-follow-eligible-bosshp). If those tokens leaked into public circulation, the claim function could not distinguish them from player-issued HP. The page and SDK use the verified deployment's BossHP address; a token with the same name from another contract has no claim rights in this round.
+
+The action flow reuses these SDK operations:
+
+| Player step | Existing operation | Page result |
+| --- | --- | --- |
+| Open battle | `arena.deployment` from `sdk.readState(account?)` | Public round state renders before wallet connection. |
+| Review attack | `sdk.quoteAttack({ maxMockUSD: 1_000_000n, stage, account, slippageBps })` | Uses the agreed 1 MockUSD cap in six-decimal base units. Shows `AttackQuote` spend, intermediate Attack Token, refunds, BossHP output, output floors, expiry, and predicted stage result. |
+| Connect or switch network | `arena.connect()` or `arena.switchToSelectedNetwork()` | Refreshes wallet data and invalidates quotes bound to an earlier account or network. |
+| Check attack allowance | `sdk.getApproval({ kind: "attack", maxMockUSD }, account)` | Shows whether MockUSD approval to BossRouter is required. |
+| Approve MockUSD | `arena.runPending(label, () => sdk.approve(action))` | Separate wallet action. The SDK currently requests an unlimited allowance; the UI identifies the token, spender, and scope. |
+| Confirm attack | `arena.runPending("Attack", () => sdk.attack(quote))` | The SDK simulates the authenticated call, then submits the accepted bounds. A confirmed result supplies the actual attack amounts. |
+| Recover receipt | `arena.resumePending()` | Checks the saved request against its original deployment without resubmitting the attack. |
+| Redeem reward | `previewReward`, claim `getApproval` and `approve`, then `claimReward(hpAmount)` through `runPending` | Surrenders selected BossHP to permanent custody and pays the proportional MockUSD reward. |
+| Claim optional NFT | `sdk.claimVictoryNFT()` through `runPending` | Separate action subject to `hasAttacked` and `victoryClaimed`. Holding transferred BossHP alone does not establish NFT eligibility. |
+| Obtain test funds when needed | `sdk.faucetMockUSD(amount)` through `runPending` | Existing test-only funding action. Its current UI amount is 100 MockUSD; its location in the battle flow remains a UI choice. |
+
+The live page and hub use a fixed cap of 1 MockUSD per attack, with no amount editor or preset selector. Its SDK value is `1_000_000n`, because MockUSD uses six decimals. Shared action logic uses 100 basis points of slippage, and the SDK defaults to a five-minute quote lifetime bounded by the round deadline. The player's MockUSD balance must cover the cap. Actual spend can be lower when a stage clears, and unused MockUSD and intermediate Attack Token are returned. A fixed cap does not produce fixed damage.
+
+Quote freshness follows the existing checks in `BossActions`. Configured cap, account, wallet chain, selected deployment, stage, observed stage sales or boss price, and elapsed quote lifetime can invalidate the preview. `sdk.attack` then enforces the accepted output floors with a fresh authenticated simulation. A changed quote requires another review; a failed simulation never authorizes looser output floors automatically.
+
+Transaction progress drives the dialog. Local timers can dismiss a hit message or animate a confirmed stage change, but they do not create confirmation or mutate round state:
+
+| State | Page behavior |
+| --- | --- |
+| Deployment loading, missing, or RPC error | Shows the actual availability state and a retry or network action. No mock HP, deadline, or damage fills failed reads. |
+| Setup or stage transition | Shows the confirmed status; new attacks are unavailable until the round is Active. |
+| Quote loading or ready | Shows preview feedback with no damage applied. |
+| Wallet action in progress | Identifies approval, attack, or claim. Existing `WriteState.prompting` covers preparation and the wallet prompt together; it is not evidence that the wallet dialog is already open. |
+| Submitted or unresolved | Shows the transaction hash and receipt status. The saved request blocks duplicate writes. A timeout means unresolved, not reverted. |
+| Confirmed attack | Shows actual damage and refreshes canonical state. Effects belong to the matching deployment and account and deduplicate by transaction hash and log index. |
+| Rejected, reverted, replaced, or failed | Explains the result and offers the appropriate retry or receipt action. No new hit is invented. |
+| Requote required | Invalidates the accepted preview and returns to quote review. |
+| Defeated | Shows confirmed victory and wallet-specific reward actions, including a visit after someone else delivered the final hit. Defeat takes precedence over countdown expiry; reward claims remain available after the deadline. |
+| Deadline reached or Expired | Stops new attacks, retains pending receipt recovery, and shows the round outcome. Local countdown expiry does not itself submit `expire` or change contract status. |
+
+One confirmed attack can clear a stage and activate the next stage atomically. Polling may see stage 1 followed directly by stage 2 without ever observing status 2. `StageCleared`, `StageActivated`, and `BossDefeated` events in the receipt provide the animation sequence. The attack's `stage` identifies where its damage belongs; a refreshed `currentStage` may already refer to the next form. The controller never applies damage twice or spills it into the next stage. Fresh snapshots also reflect attacks from other wallets, without claiming that the local player caused them.
+
+Leaving the page changes navigation only. Once a hash is saved, the existing pending record supports receipt recovery after refresh or return. Escape closes an inner quote or claim panel before closing the battle. Focus returns to the initiating control, transaction results use accessible live messages, and the countdown does not announce every second. Existing reduced-motion handling applies to battle effects.
+
+The mock reducer, timer-driven attack hook, and mock badge are removed. [`battle.ts`](../apps/web/src/lib/battle.ts) contains the shared receipt-effect filter and deadline calculation. Confirmed receipts keep their original stage and exact damage, even when the refreshed round has already advanced. Quote, signature, and receipt timing follows the actual SDK operations. Repeated reads of an unchanged block timestamp retain their clock anchor so the countdown continues between polls.
+
+The SDK exposes both configured pool fee rates in `RoundSnapshot` and `AttackQuote`, read from the Router's pool keys at the snapshot block. Quote review shows both rates. The newly available paginated `readActivity` API can supply historical contribution, but the battle's current HUD displays wallet holdings and rewards only. It does not sum an incomplete session history or count transfer events as attacks.
+
+Base Sepolia is the default target, and the published deployment manifest is included. Local Anvil remains available for integration with a real deployed fixture; historical Robinhood is read-only. Missing manifests and failed verification still produce unavailable states. Browser and local-chain verification are recorded separately in the PR; this integration does not broadcast transactions to Base Sepolia.
+
 ## Deployment and proof gate
 
 The target is Base Sepolia chain ID `84532` at `https://sepolia.base.org`. The verified team deployment is recorded in `apps/web/public/deployments/base-sepolia.json` at block `47325823`. It uses its own PoolManager built from pinned v4-core source; it is not an official Base PoolManager. The team-deployed Robinhood fixture remains historical evidence and does not represent an official Robinhood manager.
 
 BP01 adapts the existing compact real-v4 scenario: both swaps, ordinary BossHP delivery, cumulative purchase accounting, current-stage completion, and the reserve-funded refill/LP addition with all deltas settled. Reuse existing upstream fixtures and settlement helpers. Then verify the real target-chain route after deployment.
 
-Choose the LP ranges, inventory buffers, paired ROY requirements, reserve budgets, fee values, and attack bounds from that scenario. They are not inherited from the discarded ROY/MROY plan. Use real token sorting and 6-decimal MockUSD / 18-decimal ROY and BossHP.
+Choose the LP ranges, inventory buffers, paired Attack Token requirements, reserve budgets, fee values, and attack bounds from that scenario. They are not inherited from the discarded Attack Token/MROY plan. Use real token sorting and 6-decimal MockUSD / 18-decimal Attack Token and BossHP.
 
 The manifest records both pool keys/IDs, addresses, provenance, deployment block, compiler/source pins, hook flags, initial price, each stage's HP quota and bounded LP plan, prefunded asset balances, unlock times, attack limits, and actual transaction evidence. Do not commit keys or imaginary addresses.
 
 ## Contracts and permissions
 
-Use standard fixed-supply ERC-20 implementations for ROY and BossHP. Prefund BossHP and any paired ROY before activation. Stage release moves these existing assets into positions; it does not grant an unrestricted mint role. MockUSD is a test-only faucet asset.
+Use standard fixed-supply ERC-20 implementations for Attack Token and BossHP. Prefund BossHP and any paired Attack Token before activation. Stage release moves these existing assets into positions; it does not grant an unrestricted mint role. MockUSD is a test-only faucet asset.
 
 BossCollectibles provides optional victory NFTs. Historical attack eligibility lives independently of token holdings. A boolean `hasAttacked` is sufficient when victory-NFT eligibility requires prior participation; no per-wallet damage amount is needed for token payouts.
 
@@ -107,7 +193,7 @@ Every BossHook callback verifies the configured PoolManager and complete canonic
 
 | Operation | Supply pool | Boss pool |
 | --- | --- | --- |
-| Initialization | Fixed ROY/MockUSD key and seed settings | Fixed ROY/BossHP key and stage-plan settings |
+| Initialization | Fixed Attack Token/MockUSD key and seed settings | Fixed Attack Token/BossHP key and stage-plan settings |
 | Add liquidity | Normal setup rules | Only authenticated setup/stage release matching the frozen plan |
 | Remove principal | Locked from activation through deadline | Same; stage progression defaults to add-only |
 | Buy | Ordinary purchase; no damage | Registered attack path, fresh wallet, expected active stage |
@@ -122,20 +208,20 @@ Whitelisting the shared PositionManager address alone does not authenticate a st
 
 ## One atomic attack
 
-Primary inputs are MockUSD input cap, minimum ROY output, minimum BossHP output/damage, expected stage, and deadline. No burn cap or physical/magic selector remains. An approval transaction may precede Attack.
+Primary inputs are MockUSD input cap, minimum Attack Token output, minimum BossHP output/damage, expected stage, and deadline. No burn cap or physical/magic selector remains. An approval transaction may precede Attack.
 
 1. BossRouter authenticates the wallet, validates bounds, and calls PoolManager.unlock once.
-2. In unlockCallback, execute an exact-input MockUSD-to-ROY swap in the supply pool. The resulting ROY credit is intermediate payment, not damage.
-3. Execute an exact-input ROY-to-BossHP swap in the Boss pool, limited to the ROY available from step 2 and the authorized request.
+2. In unlockCallback, execute an exact-input MockUSD-to-Attack Token swap in the supply pool. The resulting Attack Token credit is intermediate payment, not damage.
+3. Execute an exact-input Attack Token-to-BossHP swap in the Boss pool, limited to the Attack Token available from step 2 and the authorized request.
 4. beforeSwap verifies player/context, expected stage, HP-buying direction, and the current stage's terminal price limit. No future stage is made available by this check.
 5. afterSwap reads actual positive BossHP output from the swap delta, using the canonical token ordering. Enforce the player's minimum output and add the output to `stageSold[currentStage]`. Preserve participation evidence for the victory NFT. The hook takes no tokens and returns zero hook delta.
 6. Validate registered-position integrity and remaining sellable HP. If exhausted, record bounded rounding residue without contribution, then mark StageCleared or final Defeated. Do not credit a zero-output call.
-7. After the swap returns, settle the player's input debt, deliver purchased BossHP through the router's ordinary `take` settlement, and return unused inputs. Finish player accounting before maintenance so reserve ROY cannot cancel or refund the player's trade debt.
-8. For a cleared nonfinal stage, enter guarded Transition. Reverse-swap prefunded BossHP to the lower price, take recovered ROY into reserve custody, then add the next stage's incremental LP position in the same unlock. Maintenance is excluded from all player counters.
+7. After the swap returns, settle the player's input debt, deliver purchased BossHP through the router's ordinary `take` settlement, and return unused inputs. Finish player accounting before maintenance so reserve Attack Token cannot cancel or refund the player's trade debt.
+8. For a cleared nonfinal stage, enter guarded Transition. Reverse-swap prefunded BossHP to the lower price, take recovered Attack Token into reserve custody, then add the next stage's incremental LP position in the same unlock. Maintenance is excluded from all player counters.
 9. Settle every actor/currency delta. LP and refill costs come solely from the frozen reserve. Open the next stage only after successful funding; no second player attack can occur within this request.
 10. Close unlock successfully. Any swap, delivery, release, or settlement failure reverts the whole attack, including its counters and events.
 
-ROY input remains in LP assets until an authorized refill exchanges reserve HP for it. BossHP supply does not decrease. Transfers do not alter stage damage, but eligible BossHP carries reward rights in the worked transferable model. Held BossHP has no direct damage action; redemption is available only after victory.
+Attack Token input remains in LP assets until an authorized refill exchanges reserve HP for it. BossHP supply does not decrease. Transfers do not alter stage damage, but eligible BossHP carries reward rights in the worked transferable model. Held BossHP has no direct damage action; redemption is available only after victory.
 
 This path uses ordinary v4 output settlement and a state-only `afterSwap`, without custom output accounting. See the pinned [hook dispatch](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/Hooks.sol) and [flash accounting](https://developers.uniswap.org/docs/protocols/v4/concepts/flash-accounting).
 
@@ -176,14 +262,14 @@ Each request pins expectedStage. A transaction that arrives after another player
 Keep these balances and authorities separate:
 
 - MockUSD prize escrow, used only for final victory claims or the defined expired-round refund.
-- No entry proceeds or starter ROY allocation.
+- No entry proceeds or starter Attack Token allocation.
 - LP assets already committed to the two pools.
-- Stage reserve of BossHP and any paired ROY required during play.
+- Stage reserve of BossHP and any paired Attack Token required during play.
 - Unallocated treasury, time-locked until at least the round deadline.
 
 Future-stage reserve must not be trapped behind the end-of-round treasury timelock. Only the game gate may spend the staged amounts. After victory, unissued BossHP and HP fee/residue holdings cannot leave controlled custody while `redeemedHP < finalEligibleHP`, even after the deadline. LP ownership, fee collection, and recovery methods must preserve this restriction. Blocking protocol addresses from calling claim alone is insufficient because leaked HP could be transferred to another wallet. A defeated round's prize remains claimable indefinitely; this may keep unsold HP locked indefinitely too.
 
-Ordinary LP principal withdrawals are blocked from activation through the fixed deadline, even after an early victory. During play, only the frozen controller refill can move LP ROY into reserve custody. Keep LP fees uncollected for the current math model. Recovered ROY remains game-controlled through the deadline and cannot be spent as a player refund or prize.
+Ordinary LP principal withdrawals are blocked from activation through the fixed deadline, even after an early victory. During play, only the frozen controller refill can move LP Attack Token into reserve custody. Keep LP fees uncollected for the current math model. Recovered Attack Token remains game-controlled through the deadline and cannot be spent as a player refund or prize.
 
 Attacks stop at the deadline. If the boss survives, anyone can expire the round and the maker can reclaim the unawarded prize once. If stage 3 was defeated earlier, there is no prize refund to the maker. Attack purchases are not refundable through expiry.
 

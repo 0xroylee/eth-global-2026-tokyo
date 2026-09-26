@@ -7,6 +7,12 @@ export function displayAmount(value: bigint, decimals: number): string {
     .replace(/\.0+$/, "");
 }
 
+export function displayEstimate(value: bigint, decimals: number, fractionDigits = 4): string {
+  const places = Math.min(decimals, fractionDigits);
+  const factor = 10n ** BigInt(decimals - places);
+  return displayAmount((value + factor / 2n) / factor, places);
+}
+
 export const ROUND_STATUSES = ["Setup", "Active", "Stage cleared", "Defeated", "Expired"] as const;
 
 export function roundStatusLabel(status: number): string {

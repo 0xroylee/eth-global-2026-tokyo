@@ -4,10 +4,10 @@ Status: numerical model with a BP01 no-burn implementation, 26 September 2026. S
 
 ## Assumptions
 
-- One ROY / BossHP battle pool; both tokens use 18 decimals. The equations use normalized ROY-per-BossHP prices, independently of address sorting.
+- One Attack Token / BossHP battle pool; both tokens use 18 decimals. The equations use normalized Attack Token-per-BossHP prices, independently of address sorting.
 - Nominal stage HP is 300, 600, and 900.
-- Every stage uses the same finite range, tick spacing 60. Use `[0, 1920]` when BossHP is currency0, and `[-1920, 0]` when BossHP is currency1. Both start at normalized price 1 and finish near 1.211659 ROY/HP. Hook immutable bounds are authoritative for the router and manifest.
-- Price is ROY per BossHP. `P_low = 1`; `P_high = 1.0001^1920 = 1.211658885759174828926510469707860814750856832246328162756272699402253`.
+- Every stage uses the same finite range, tick spacing 60. Use `[0, 1920]` when BossHP is currency0, and `[-1920, 0]` when BossHP is currency1. Both start at normalized price 1 and finish near 1.211659 Attack Token/HP. Hook immutable bounds are authoritative for the router and manifest.
+- Price is Attack Token per BossHP. `P_low = 1`; `P_high = 1.0001^1920 = 1.211658885759174828926510469707860814750856832246328162756272699402253`.
 - Fixed swap fee `f = 0.003` in both directions. Protocol fee is zero.
 - Only registered game-owned liquidity participates. Players receive BossHP and its actual authorized purchase output advances the stage. Eligible tokens carry transferable reward rights. No token is burned. Only the controller can reverse-swap during Transition; player sell-backs are prohibited.
 - Freeze eligible reward supply at final defeat as the sum of actual player attack outputs. Prefunded reserve, LP fees, rounding residue, and controller refills are not additional reward rights.
@@ -18,7 +18,7 @@ Status: numerical model with a BP01 no-burn implementation, 26 September 2026. S
 
 The position equations come from the [Uniswap v3 whitepaper](https://app.uniswap.org/whitepaper-v3.pdf); v4 uses the same concentrated-liquidity model. Exact step fees and rounding follow the pinned [SwapMath](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/SwapMath.sol) and [SqrtPriceMath](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/SqrtPriceMath.sol). The numerical model and deductions below are our calculations.
 
-For HP1, the attack starts at raw tick 0 and moves down to -1920. Its initial tick crossing has zero output, then one positive-output interval. The reverse refill can split at raw tick -60, the bitmap word boundary for spacing 60. The implementation sums rounded input and fee for both refill intervals; a single continuous `H/(1-f)` formula alone is not an exact integer funding quote. The HP1 regression measures total stage-one spend of 331.219793595396366740 ROY and verifies the normalized start/end/reset prices.
+For HP1, the attack starts at raw tick 0 and moves down to -1920. Its initial tick crossing has zero output, then one positive-output interval. The reverse refill can split at raw tick -60, the bitmap word boundary for spacing 60. The implementation sums rounded input and fee for both refill intervals; a single continuous `H/(1-f)` formula alone is not an exact integer funding quote. The HP1 regression measures total stage-one spend of 331.219793595396366740 Attack Token and verifies the normalized start/end/reset prices.
 
 ## Stage equations
 
@@ -27,17 +27,17 @@ Let `a = sqrt(P_low)`, `b = sqrt(P_high)`, and `H_i` be a stage's sellable BossH
 ```text
 L_i = H_i / (1/a - 1/b)
 
-Net ROY deposited into LP while selling H_i:
+Net Attack Token deposited into LP while selling H_i:
 Y_i = L_i * (b-a) = H_i * a * b
 
-Gross ROY paid by players:
+Gross Attack Token paid by players:
 C_i = Y_i / (1-f)
 
-ROY LP fee:
+Attack Token LP fee:
 F_ROY_i = C_i - Y_i
 ```
 
-Here `a*b = 1.100753780715367258795495644244473625414131375548283588615684417865703`. The average gross cost is about 1.104066 ROY per HP for every complete stage. Stage size changes total cost and depth, while the starting/ending price band stays the same.
+Here `a*b = 1.100753780715367258795495644244473625414131375548283588615684417865703`. The average gross cost is about 1.104066 Attack Token per HP for every complete stage. Stage size changes total cost and depth, while the starting/ending price band stays the same.
 
 For an attack buying `d` HP from current square-root price `s`:
 
@@ -55,7 +55,7 @@ For each reset, the controller supplies fresh BossHP from reserve to reverse the
 Gross BossHP input for reset:
 R_HP_i = H_i / (1-f)
 
-ROY returned to game custody:
+Attack Token returned to game custody:
 R_ROY_i = H_i * a * b
 
 BossHP LP fee for reset:
@@ -71,15 +71,15 @@ Reset already restores H_i BossHP principal to the existing positions. Therefore
 
 Rounded display values; calculations retain higher precision.
 
-| Stage | HP sold to players | Player ROY input | Reset BossHP input | Reset ROY to reserve | LP BossHP added after this stage |
+| Stage | HP sold to players | Player Attack Token input | Reset BossHP input | Reset Attack Token to reserve | LP BossHP added after this stage |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | 1 | 300.000000 | 331.219794 | 300.902708 | 330.226134 | 300.000000 |
 | 2 | 600.000000 | 662.439587 | 601.805416 | 660.452268 | 300.000000 |
 | 3 | 900.000000 | 993.659381 | 0.000000 | 0.000000 | 0.000000 |
 
-Every refill returns price from 1.211659 to 1 ROY/HP, a 17.468521% drop from the stage-end spot price. Adding the next LP increment alone does not move price.
+Every refill returns price from 1.211659 to 1 Attack Token/HP, a 17.468521% drop from the stage-end spot price. Adding the next LP increment alone does not move price.
 
-The player's clearing trade is settled before maintenance, or the two use separate delta accounts. Reset ROY belongs to game custody, never to the player's refund. Maintenance creates no damage, eligible reward supply, or player trading-volume credit.
+The player's clearing trade is settled before maintenance, or the two use separate delta accounts. Reset Attack Token belongs to game custody, never to the player's refund. Maintenance creates no damage, eligible reward supply, or player trading-volume credit.
 
 ## Minimum prefunded BossHP
 
@@ -99,11 +99,11 @@ If modifying an old position collects its accrued fees, the accounting changes. 
 ## Conservation checks
 
 ```text
-ROY paid by players:
+Attack Token paid by players:
 1,987.318762
   = 990.678403  controller reserve from the two resets
-  + 990.678403  final LP ROY principal
-  + 5.961956  uncollected ROY LP fees
+  + 990.678403  final LP Attack Token principal
+  + 5.961956  uncollected Attack Token LP fees
 
 BossHP required:
 1,802.708124
@@ -111,13 +111,13 @@ BossHP required:
   + 2.708124  uncollected BossHP reset fees
 ```
 
-These equalities were checked using Decimal arithmetic at 70-digit precision. The reset spends fresh reserve HP to acquire the ROY left in the prior LP inventory. Removing the burn changes the output's destination and total-supply ledger, not the AMM equations or funding requirements. The updated no-burn balance is `initial HP supply = unused reserve + player holdings + PoolManager holdings`, with unchanged total supply.
+These equalities were checked using Decimal arithmetic at 70-digit precision. The reset spends fresh reserve HP to acquire the Attack Token left in the prior LP inventory. Removing the burn changes the output's destination and total-supply ledger, not the AMM equations or funding requirements. The updated no-burn balance is `initial HP supply = unused reserve + player holdings + PoolManager holdings`, with unchanged total supply.
 
 ## Optional MockUSD supply-pool estimate
 
-This part is an analytical funding example, not yet a real-v4 two-hop execution test. Assume a full-range approximation with 50,000 ROY + 5,000 MockUSD, 0.30% fee, fees left uncollected, no other trades/LP changes, and exactly the ROY needed by the battle. Starter ROY is not spent in this primary-route example and excess ROY is not overbought. Price starts at 0.1 MockUSD/ROY.
+This part is an analytical funding example, not yet a real-v4 two-hop execution test. Assume a full-range approximation with 50,000 Attack Token + 5,000 MockUSD, 0.30% fee, fees left uncollected, no other trades/LP changes, and exactly the Attack Token needed by the battle. Starter Attack Token is not spent in this primary-route example and excess Attack Token is not overbought. Price starts at 0.1 MockUSD/Attack Token.
 
-For cumulative ROY purchases `R`:
+For cumulative Attack Token purchases `R`:
 
 ```text
 MockUSD_input(R) = 5,000 * R / (50,000 - R) / (1-0.003)
@@ -129,9 +129,9 @@ MockUSD_input(R) = 5,000 * R / (50,000 - R) / (1-0.003)
 | 2 | 68.242568 | 101.685753 |
 | 3 | 105.894683 | 207.580436 |
 
-The modeled ROY spot ends at 0.108450 MockUSD, about 8.449634% above its starting price. Battle-pool refill resets BossHP's ROY price; it does not reset ROY's MockUSD price. Actual v4 ranges, 6/18-decimal rounding, external flow, and unused intermediate tokens change this estimate.
+The modeled Attack Token spot ends at 0.108450 MockUSD, about 8.449634% above its starting price. Battle-pool refill resets BossHP's Attack Token price; it does not reset Attack Token's MockUSD price. Actual v4 ranges, 6/18-decimal rounding, external flow, and unused intermediate tokens change this estimate.
 
-Example setup capital is 5,000 MockUSD in the supply LP plus the separate 1,000 MockUSD prize. ROY supply and allocations must cover the LP, starter grants, and locked treasury; the example does not authorize additional minting during play.
+Example setup capital is 5,000 MockUSD in the supply LP plus the separate 1,000 MockUSD prize. Attack Token supply and allocations must cover the LP, starter grants, and locked treasury; the example does not authorize additional minting during play.
 
 ## Incentive result
 
@@ -216,9 +216,9 @@ Result: 1 passed, 0 failed
 Local source: /tmp/boss-pool-refill-proof.6qeuKO/test/BossRefillProof.t.sol
 ```
 
-The scenario includes a partial first hit, stage-clearing attacks, two same-pool resets, and final defeat. Player ROY debts settle before maintenance. Each liquidity increment uses a fresh salt in the same range, leaving prior fees uncollected. No attack spills into the next stage, and maintenance adds no player contribution. Both reset square-root prices move from `87210699426708006962522930182` to `79228162514264337593543950336` (`2^96`, or price 1).
+The scenario includes a partial first hit, stage-clearing attacks, two same-pool resets, and final defeat. Player Attack Token debts settle before maintenance. Each liquidity increment uses a fresh salt in the same range, leaving prior fees uncollected. No attack spills into the next stage, and maintenance adds no player contribution. Both reset square-root prices move from `87210699426708006962522930182` to `79228162514264337593543950336` (`2^96`, or price 1).
 
-| Stage | Actual HP burn | HP rounding residue | Actual player ROY debit | Actual reset HP debit |
+| Stage | Actual HP burn | HP rounding residue | Actual player Attack Token debit | Actual reset HP debit |
 | --- | ---: | ---: | ---: | ---: |
 | 1 | 299.999999999999999999 | 0.000000000000000001 | 331.219793595396366740 | 300.902708124373119359 |
 | 2 | 599.999999999999999999 | 0.000000000000000001 | 662.439587190792733479 | 601.805416248746238717 |
@@ -231,7 +231,7 @@ BossHP controller spending = 1802.708124373119358078
   = 1799.999999999999999997 actual burn
   + 2.708124373119358081 PoolManager balance (fees and rounding)
 
-ROY player spending = 1987.318761572378200436
+Attack Token player spending = 1987.318761572378200436
   = 990.678402643830532915 controller custody from resets
   + 996.640358928547667521 PoolManager balance (principal and fees)
 ```

@@ -1,30 +1,30 @@
 # Boss Pool requirements
 
-Status: attacks count purchases without burns, and reward shares follow eligible BossHP rather than a per-wallet damage total. The worked claim default is transferable tokens surrendered into permanent custody; the frozen-balance alternative remains available. [BP01](bp01-foundation.md) records the local no-burn contract foundation. The full browser game and active Base Sepolia deployment remain unverified; the earlier Robinhood deployment is historical.
+Status: attacks count purchases without burns, and reward shares follow eligible BossHP rather than a per-wallet damage total. The worked claim default is transferable tokens surrendered into permanent custody; the frozen-balance alternative remains available. [BP01](bp01-foundation.md) records the local no-burn contract foundation. The browser battle consumes the live SDK and Base Sepolia has a verified deployment manifest. A manual browser-wallet transaction journey remains unverified; the earlier Robinhood deployment is historical.
 
 ## Confirmed gameplay
 
-1. Use MockUSD / ROY as the supply pool and ROY / BossHP as a real second pool.
-2. Connect a wallet and press Attack. After any required MockUSD approval to the Router, one transaction buys ROY and then BossHP. No enrollment, entry fee, starter grant, or entry NFT is required.
-3. ROY is paid into the Boss pool. The hook adds actual BossHP output to the current stage's `stageSold`. One purchased BossHP equals one effective damage unit. The player receives the tokens, which represent reward rights; no burn occurs.
+1. Use MockUSD / Attack Token as the supply pool and Attack Token / BossHP as a real second pool.
+2. Connect a wallet and press Attack. After any required MockUSD approval to the Router, one transaction buys Attack Token and then BossHP. No enrollment, entry fee, starter grant, or entry NFT is required.
+3. Attack Token is paid into the Boss pool. The hook adds actual BossHP output to the current stage's `stageSold`. One purchased BossHP equals one effective damage unit. The player receives the tokens, which represent reward rights; no burn occurs.
 4. Retain independent stage HP budgets of 300, 600, and 900. One attack affects only its starting stage.
 5. Once the current registered allocation has no sellable HP, reset its price with a controller-only reserve-funded refill and add the next stage's incremental liquidity. Preloading every future allocation into active positions would violate this choice.
 6. Final defeat freezes the eligible supply as the sum of actual player attack outputs. Eligible BossHP determines proportional MockUSD rewards. Victory NFT eligibility remains separate from transferable token reward rights.
 7. Keep fixed prefunded supply, a separate sponsor prize, Next.js with TypeScript and Tailwind CSS, direct viem wallet/contract access, Bun, Uniswap v4, Base Sepolia, and the small monorepo.
 8. Use the established two-person ownership: contracts/backend and UI/interface/gaming. Reuse existing solutions and verify the core through a shared E2E scenario.
 
-There is one attack currency, ROY. MROY, two attack types, the 3x magic multiplier, and the 5x magic price are removed. Attacks burn neither ROY nor BossHP.
+There is one attack currency, Attack Token. MROY, two attack types, the 3x magic multiplier, and the 5x magic price are removed. Attacks burn neither Attack Token nor BossHP.
 
 ## Bounded defaults
 
 | Topic | Default |
 | --- | --- |
 | Round | One deployment, one maker, one prize, one shared boss state. |
-| Entry | Connect a wallet, approve MockUSD to the Router if needed, then Attack. No entry fee, entry NFT, starter ROY, or enrollment cap. |
+| Entry | Connect a wallet, approve MockUSD to the Router if needed, then Attack. No entry fee, entry NFT, starter Attack Token, or enrollment cap. |
 | Primary action | MockUSD-funded attack through both pools. |
-| Optional inventory action | Spend held ROY directly through the Boss pool; actual BossHP output earns damage. |
+| Optional inventory action | Spend held Attack Token directly through the Boss pool; actual BossHP output earns damage. |
 | Damage | Sum actual authorized BossHP output in the current stage; no spill into the next stage. |
-| Settlement | Deliver purchased BossHP to the player and return unspent input/intermediate ROY. Bound the swap to the current stage's allocation. |
+| Settlement | Deliver purchased BossHP to the player and return unspent input/intermediate Attack Token. Bound the swap to the current stage's allocation. |
 | Rewards | 1,000 MockUSD example prize. Proposed token claims surrender eligible BossHP into permanent custody without burning; partial or later claims with newly acquired eligible tokens are allowed. Victory-NFT claims remain separate and once per eligible wallet. |
 | Deadline | A fixed deadline, with a two-hour round as a deployment target. |
 | Expiry | If the boss survives, stop attacks and allow the maker to reclaim only the unawarded prize once. Attack purchases are nonrefundable. |
@@ -37,7 +37,7 @@ These default quantities are demo choices, not real-value commitments. The suppl
 
 ## Trading and identity rules
 
-The supply pool can support ordinary trading. A BossHP purchase in the canonical Boss pool must pass through the authenticated attack path. Player BossHP-to-ROY sell-backs are disabled in this pool, so an attacker cannot recycle purchased HP into another credited purchase. The controller-only reverse refill uses the frozen stage reserve during transition and earns zero contribution.
+The supply pool can support ordinary trading. A BossHP purchase in the canonical Boss pool must pass through the authenticated attack path. Player BossHP-to-Attack Token sell-backs are disabled in this pool, so an attacker cannot recycle purchased HP into another credited purchase. The controller-only reverse refill uses the frozen stage reserve during transition and earns zero contribution.
 
 Direct token transfers, wallet balances, token supply, liquidity changes, and donations do not deal new damage or increase eligible reward supply. A transfer of eligible BossHP moves reward rights in the worked transferable model. Historical attack records and NFT eligibility do not move with the tokens. A wallet address does not establish human uniqueness.
 
@@ -58,11 +58,11 @@ HP budgets are nominal stage allocations, not PoolManager's raw ERC-20 balance. 
 | US01 | Connect to Base Sepolia and verify the two-hop route and stage LP primitives. |
 | US02 | Fund and activate a round with the prize, initial LP, and gated future-stage reserve. |
 | US03 | Connect a wallet and authorize the Router to spend MockUSD when needed. |
-| US04 | Press Attack and atomically buy ROY, receive BossHP, and record its actual output as damage. |
+| US04 | Press Attack and atomically buy Attack Token, receive BossHP, and record its actual output as damage. |
 | US05 | Clear a stage and activate the next stage's actual liquidity once. |
 | US06 | See the new full HP bar, form, fee/quote state, and confirmed stage events. |
 | US07 | Claim the proportional prize and a victory NFT after final defeat. |
-| US08 | Optionally attack with held ROY by skipping the supply-pool hop. |
+| US08 | Optionally attack with held Attack Token by skipping the supply-pool hop. |
 | US09 | Follow confirmed activity and contribution across wallets and refreshes. |
 | US10 | Observe expiry and the separate prize/reserve/LP fund outcomes. |
 | US11 | Trace the demo to public code, transactions, a focused E2E run, and sponsor feedback. |
@@ -71,9 +71,29 @@ HP budgets are nominal stage allocations, not PoolManager's raw ERC-20 balance. 
 
 Two fresh wallets execute the full two-hop route without enrollment or an entry NFT, receive real BossHP, clear all three stages, trigger exactly two reserve-funded refills and next-stage LP activations, and claim the prize. No NFT is minted during attacks or token claims; victory NFTs are optional separate claims. BossHP supply stays unchanged. Future-stage liquidity is unavailable before its gate. Failed stage activation rolls back all swaps, token deliveries, contribution, and stage changes.
 
-The UI shows MockUSD input, intermediate ROY, purchased BossHP, effective damage, remaining sellable HP, returned inputs, both swap fees, and receipt status. A changed expected stage requires a fresh quote. Approvals are separate when necessary.
+The UI shows MockUSD input, intermediate Attack Token, purchased BossHP, effective damage, remaining sellable HP, returned inputs, both swap fees, and receipt status. A changed expected stage requires a fresh quote. Approvals are separate when necessary.
 
-Keep the shared E2E and focused accounting checks. Optional held-ROY attacks, global activity, World ID, future ROY emissions, and long-term vesting do not block the core.
+Keep the shared E2E and focused accounting checks. Optional held-Attack Token attacks, global activity, World ID, future Attack Token emissions, and long-term vesting do not block the core.
+
+## Live battle page
+
+`/mock-battle` is the live battle page using `@boss-pool/chain`; its URL is retained for existing links. The pixel arena presents the verified shared round. The command label is **ATTACK**, consistent with the purchase-based attack rules above.
+
+Players can inspect the shared boss without connecting a wallet. A wallet is required for approvals, attacks, and claims. Boss HP, stage, deadline, and rewards come from the selected verified deployment. An unavailable deployment shows an unavailable state. Entering or refreshing the page does not start a new round.
+
+**ATTACK** leads to a quote review before any transaction. The player sees the maximum MockUSD spend, expected spend and refunds, expected damage, and minimum accepted output. Approval and attack remain distinct wallet actions. Damage appears after confirmation. Other players' confirmed attacks also update the shared boss.
+
+Each attack uses a fixed input cap of **1 MockUSD**. The player does not enter an amount or choose a preset. The fixed cap appears in the quote review before confirmation. Damage varies with the live quote. A stage-clearing attack can spend less than 1 MockUSD and returns unused input.
+
+**RUN**, **EXIT BATTLE**, and Escape close the battle view. Escape closes the quote or claim dialog first when it is open. Leaving does not refund purchases or cancel a submitted transaction. The saved transaction remains recoverable on return through **CHECK TRANSACTION**. Unused **MAGIC** and **ITEM** placeholders are removed.
+
+Reward rights follow the connected wallet's eligible BossHP. The HUD shows **YOUR HP** during the fight and **YOUR SHARE** after defeat, when the denominator is frozen. Historical damage remains separate from current token holdings; the victory card does not invent a contribution total from the wallet balance.
+
+Buying this round's BossHP from another holder or an external market transfers its reward rights to the buyer. That purchase adds no damage and does not increase the prize denominator. The current holder can redeem after victory, including when the transfer happened after defeat. Buying Attack Token alone gives no prize entitlement. The page refreshes wallet holdings independently of the player's attack history.
+
+After victory, the page supports reward preview, any required BossHP approval, and reward claiming. Optional victory-NFT claiming remains separate. After expiry, attacks close and the page explains that attack purchases are nonrefundable. The existing [core acceptance](#core-acceptance) still applies.
+
+The [battle page integration context](technical-spec.md#live-battle-page-context) maps these behaviors to current code and SDK operations. **BATTLE DETAILS** opens the shared quote and claim controls. The network selector and wallet controls remain available from the battle itself.
 
 ## Coordination
 

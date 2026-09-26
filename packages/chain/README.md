@@ -1,6 +1,8 @@
 # Boss Pool chain SDK
 
-`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses the generated Foundry ABIs in `src/generated/abi.ts`. Deployment, round creation, and maker administration remain CLI operations. No Boss Pool Base Sepolia manifest is published yet.
+`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses the generated Foundry ABIs in `src/generated/abi.ts`. Deployment, round creation, and maker administration remain CLI operations. A verified Base Sepolia manifest is published under `apps/web/public/deployments/base-sepolia.json`.
+
+The attack currency is named **Attack Token** in the UI and documentation. SDK fields such as `royBought`, `roySpent`, `royRefunded`, `minRoyOut`, and `royBalance`, plus the manifest key `roy` and contract `RoyToken`, retain their existing names for deployment compatibility. All refer to Attack Token. See [domain language](../../CONTEXT.md).
 
 Use `createLocalPublicClient` and `fetchLocalDeployment` for Anvil. Use `createBaseSepoliaPublicClient` and `fetchBaseSepoliaDeployment` for Base Sepolia. Use the corresponding `createRobinhoodPublicClient` and `fetchRobinhoodDeployment` exports only to inspect the historical Robinhood deployment. Public deployment manifests omit RPC URLs. Pass the endpoint separately to the client.
 
@@ -143,7 +145,7 @@ const result = await submitQuotedAttack();
 
 ```
 
-Approvals use the fixed map and request unlimited allowances: attack MockUSD to Router and reward BossHP to Hook. Existing sufficient allowance skips the write. Attacks have no Hook approval, entry fee, starter-ROY grant, or entry NFT. `attack` performs an authenticated Router simulation after approval and before sending the unchanged accepted floors.
+Approvals use the fixed map and request unlimited allowances: attack MockUSD to Router and reward BossHP to Hook. Existing sufficient allowance skips the write. Attacks have no Hook approval, entry fee, starter-Attack Token grant, or entry NFT. `attack` performs an authenticated Router simulation after approval and before sending the unchanged accepted floors.
 
 `transferBossHP`, `claimReward`, `claimVictoryNFT`, and `faucetMockUSD` follow the same submitted-hash then `wait()` pattern. `previewReward` uses the frozen original prize and eligible BossHP denominator after defeat. A token transferee can claim without attacking; optional victory-NFT eligibility depends on that account's attack history.
 
@@ -151,7 +153,7 @@ Each pending operation exposes a JSON-safe `request` with transaction hash, chai
 
 Use `DecodedContractEvent` results instead of decoding receipt logs in UI code. Logs are filtered to verified contract emitters and include the transaction hash and log index for effect deduplication. Broad contract errors remain unchanged; the SDK only maps known stale quote, stage, expiry, and slippage conditions to requote results.
 
-`faucetMockUSD` mints the configured deployment's test-only MockUSD. It is usable on the current local deployment. The historical Robinhood contracts expose a faucet, but SDK writes on that network are disabled. Base Sepolia has no Boss Pool manifest yet. MockUSD is not a real asset. Never place private keys, Bun/Node imports, or environment loading in browser imports.
+`faucetMockUSD` mints the configured deployment's test-only MockUSD on the local and Base Sepolia deployments. The historical Robinhood contracts expose a faucet, but SDK writes on that network are disabled. MockUSD is not a real asset. Never place private keys, Bun/Node imports, or environment loading in browser imports.
 
 ## Compatibility exports
 
