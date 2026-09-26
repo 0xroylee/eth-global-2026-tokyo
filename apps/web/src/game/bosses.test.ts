@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import roster from "./boss-roster.json";
-import { BOSSES, findBoss, HIDDEN_BOSS_PORTRAIT } from "./bosses";
+import { BOSSES, bossHookForNetwork, findBoss, findBossPresentation, HIDDEN_BOSS_PORTRAIT } from "./bosses";
+import manifest from "../../public/deployments/base-sepolia.json";
+import { parseBaseSepoliaDeployment } from "@boss-pool/chain";
+
+const baseManifest = parseBaseSepoliaDeployment(manifest);
 
 /** The curated Launch Boost snapshot and the hub's total gate count. */
 const ROSTER_SIZE = 10;
@@ -8,9 +12,15 @@ const GATES = 12;
 
 describe("boss table", () => {
   // The shell routes a gate to the battle panel or to the roster card on `source`.
-  // Exactly one gate owns contract semantics, and it is the playable cat.
-  test("carries contract semantics on the cat gate alone", () => {
-    expect(BOSSES.filter((boss) => boss.source === "chain").map((boss) => boss.id)).toEqual(["cat"]);
+  test("keeps Roy and Whale on separate battle routes and rejects Whale on the local network", () => {
+    expect(BOSSES.filter((boss) => boss.source === "chain").map((boss) => boss.id)).toEqual(["cat", "macro-whale"]);
+    const royHook = bossHookForNetwork(findBoss("cat"), 84532, baseManifest.addresses.hook);
+    const whaleHook = bossHookForNetwork(findBoss("macro-whale"), 84532, royHook);
+    expect(royHook).toBe(baseManifest.defaultBossHook);
+    expect(whaleHook).not.toBe(royHook);
+    expect(findBossPresentation(84532, whaleHook!)?.name).toBe("Macro Whale");
+    expect(findBossPresentation(84532, royHook!)?.name).toBe("Pool Unis");
+    expect(bossHookForNetwork(findBoss("macro-whale"), 31337, royHook)).toBeUndefined();
   });
 
   test("gives every gate without a contract the hidden boss face", () => {
@@ -23,6 +33,7 @@ describe("boss table", () => {
       expect(boss.crop).not.toBeNull();
     }
     expect(findBoss("cat").portrait).not.toBe(HIDDEN_BOSS_PORTRAIT);
+    expect(findBoss("macro-whale").portrait).not.toBe(HIDDEN_BOSS_PORTRAIT);
   });
 
   test("derives every curated roster entry as a venue showcase", () => {

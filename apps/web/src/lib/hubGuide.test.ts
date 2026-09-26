@@ -21,11 +21,11 @@ describe("transitionGuide", () => {
   test("keeps the guide in find when a contract-less gate is the discovery target", () => {
     let state = transitionGuide(welcome, { type: "start" });
     state = transitionGuide(state, { type: "moved" });
-    state = transitionGuide(state, { type: "near", bossId: "macro-whale" });
-    // macro-whale is a Hidden Boss (no-contract), so it never unlocks inspect.
-    expect(state).toEqual({ step: "find", nearBoss: "macro-whale" });
-    state = transitionGuide(state, { type: "opened", bossId: "macro-whale" });
-    expect(state).toEqual({ step: "find", nearBoss: "macro-whale" });
+    state = transitionGuide(state, { type: "near", bossId: "aero" });
+    // The AERO roster gate remains a Hidden Boss without a contract.
+    expect(state).toEqual({ step: "find", nearBoss: "aero" });
+    state = transitionGuide(state, { type: "opened", bossId: "aero" });
+    expect(state).toEqual({ step: "find", nearBoss: "aero" });
   });
 
   // "locked" stays a dormant data state (no gate carries it); "active" is the

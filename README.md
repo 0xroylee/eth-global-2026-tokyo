@@ -2,7 +2,7 @@
 
 Boss BoostPad turns a token pool into a boss raid on Uniswap v4. Creators commit tokens and a prize. Fighters swap to attack, advance through volume goals and stage cooldowns, and share the prize after victory.
 
-[Live demo](https://web-smoky-tau-35.vercel.app/) · [Create a boss](https://web-smoky-tau-35.vercel.app/boostpad) · [Play Roy](https://web-smoky-tau-35.vercel.app/battle/0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0?network=base-sepolia) · [Uniswap feedback](FEEDBACK.md)
+[Live demo](https://web-smoky-tau-35.vercel.app/) · [Create a boss](https://web-smoky-tau-35.vercel.app/boostpad) · [Play Roy](https://web-smoky-tau-35.vercel.app/battle/0x1DF6674F1C6B18d9C1b3df2480093AC831816aC0?network=base-sepolia) · [Play Macro Whale](https://web-smoky-tau-35.vercel.app/battle/0x13F91b1F75B676B97B4DE3Db7fd2eD8Ab87FEAC0?network=base-sepolia) · [Uniswap feedback](FEEDBACK.md)
 
 Pitch: Boss BoostPad creates a pool for an existing token and turns it into a boss battle. Attacks are swaps, so each attack adds to that token's trading volume. After victory, fighters share the creator-funded prize. All sale liquidity is active from the start. Clearing stage one starts a 60-second wait; clearing stage two starts a 120-second wait before attacks resume.
 
@@ -192,6 +192,17 @@ The PoolManager is a team-deployed test instance built from pinned v4-core sourc
 The current Factory was deployed at block `47341945`: [deployment transaction](https://sepolia.basescan.org/tx/0x48b3c5d6a87f4432d8c0e974bb21370c146f4134067092d3e2de1d71082a85ef), [build and deployment evidence](docs/evidence/base-sepolia-continuous-factory.json). The public Blacksmith uses this address, passes SDK build verification, and returns funding quotes.
 
 The current Roy was launched at block `47342620`: [launch transaction](https://sepolia.basescan.org/tx/0x1db679d76d70c95281211f8f1f8f126430da729ab7a0accefed083d986ff04fa), [Roy launch evidence](docs/evidence/base-sepolia-roy-boss.json). Its creator deposited 10,000 BHP, including a 1,000 BHP prize, and set a 60 MockUSD target. All 9,000 sale BHP fund the initial position. Stage goals are 10, 20, and 30 MockUSD, with 60/120-second cooldowns and no expiry.
+
+Macro Whale is a second independent encounter with the same allocation, prize percentage, volume goals, fixed 0.3% pool fees, cooldowns, and no expiry. It uses the existing Macro Whale portrait across all three stages. Its Hook, Router, BHP token, reward credit, and prize are separate from Roy. Choose either boss in the hub's Boss Actions menu or its existing map gate; Roy remains the default for bare `/battle` links. Macro Whale is configured only for Base Sepolia.
+
+| Macro Whale contract | Base Sepolia address |
+| --- | --- |
+| BossHook | [0x13F91b1F75B676B97B4DE3Db7fd2eD8Ab87FEAC0](https://sepolia.basescan.org/address/0x13F91b1F75B676B97B4DE3Db7fd2eD8Ab87FEAC0) |
+| BossRouter | [0x4cd243BC8006952600ce243f0d7d4a9E945BB35e](https://sepolia.basescan.org/address/0x4cd243BC8006952600ce243f0d7d4a9E945BB35e) |
+| Boss token, BHP | [0xF32C5d00e6d972Df60240Ed0E82996768c17B7e6](https://sepolia.basescan.org/address/0xF32C5d00e6d972Df60240Ed0E82996768c17B7e6) |
+| BossCollectibles | [0xd1030b42A73935eD034A2E8CA72d49EcBA8B288F](https://sepolia.basescan.org/address/0xd1030b42A73935eD034A2E8CA72d49EcBA8B288F) |
+
+Macro Whale was launched at block `47346397`: [launch transaction](https://sepolia.basescan.org/tx/0x17ae5c2b885c417259e8697053b0a0f0f2ec92a9d22a488186d2cefb411e4d63), [verified manifest](apps/web/public/deployments/base-sepolia-macro-whale.json), and [launch evidence](docs/evidence/base-sepolia-macro-whale-boss.json).
 
 Each new launch creates a different Hook, Router, and collectible contract. Read their addresses from the Factory's `BossLaunched` event. Uniswap v4 pools live inside PoolManager, so a pool ID is not a separate contract address.
 
@@ -393,6 +404,7 @@ The repository records the following evidence:
 | Contract behavior and local SDK journeys | [Factory review](docs/evidence/factory-review-verification.json) and [SDK verification](docs/sdk-verification.md) |
 | Current Base Sepolia Factory deployment and build hashes | [Continuous Factory deployment](docs/evidence/base-sepolia-continuous-factory.json) |
 | Current Roy, prize custody, launch receipt, and public attack quote | [Roy boss evidence](docs/evidence/base-sepolia-roy-boss.json) |
+| Independent Macro Whale with the same launch settings | [Macro Whale evidence](docs/evidence/base-sepolia-macro-whale-boss.json) |
 | Retired timed Roy | [Historical demo boss evidence](docs/evidence/base-sepolia-factory-demo-boss.json) |
 | Historical Robinhood gameplay and NFT claims | [SDK report](docs/sdk-verification.md#historical-robinhood-testnet-run) and [foundation report](docs/testnet-verification.md) |
 

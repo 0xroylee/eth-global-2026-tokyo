@@ -1,5 +1,9 @@
 import { getAddress, isAddress } from "viem";
+import { parseBaseSepoliaDeployment, type Address } from "@boss-pool/chain";
 import roster from "./boss-roster.json";
+import macroWhaleManifest from "../../public/deployments/base-sepolia-macro-whale.json";
+
+const macroWhaleDeployment = parseBaseSepoliaDeployment(macroWhaleManifest);
 
 /** Bosses the hub can open. Positions live on the Tiled marker layer. */
 export type BossId = string;
@@ -29,7 +33,7 @@ export type BossPresentation = {
 };
 
 /** Source canvas and exclusive alpha bounds for artwork rendered at a fixed visible height. */
-export type BossImageBounds = { sourceWidth: number; sourceHeight: number; x: number; y: number; width: number; height: number };
+export type BossImageBounds = { sourceWidth: number; sourceHeight: number; x: number; y: number; width: number; height: number; clip?: boolean };
 
 /** Shared face for every gate that has no contract behind it. */
 export const HIDDEN_BOSS_PORTRAIT = "/images/boss-hidden-crowned-shadow-master.png";
@@ -52,9 +56,19 @@ export const POOL_UNIS_PRESENTATION: BossPresentation = {
   ],
 };
 
+const MACRO_WHALE_PORTRAIT = "/images/boss-macro-whale-portrait.png";
+const MACRO_WHALE_BOUNDS: BossImageBounds = { sourceWidth: 1254, sourceHeight: 1254, x: 133, y: 205, width: 1058, height: 791, clip: true };
+export const MACRO_WHALE_PRESENTATION: BossPresentation = {
+  name: "Macro Whale",
+  japaneseName: "マクロ・ホエール",
+  stageImages: [MACRO_WHALE_PORTRAIT, MACRO_WHALE_PORTRAIT, MACRO_WHALE_PORTRAIT],
+  stageVisibleBounds: [MACRO_WHALE_BOUNDS, MACRO_WHALE_BOUNDS, MACRO_WHALE_BOUNDS],
+};
+
 /** A presentation is a checked-in choice for one chain and Hook; it never verifies a contract. */
 const BOSS_PRESENTATIONS: Readonly<Record<string, BossPresentation>> = {
   "84532:0x1df6674f1c6b18d9c1b3df2480093ac831816ac0": POOL_UNIS_PRESENTATION,
+  [`${macroWhaleDeployment.chainId}:${macroWhaleDeployment.addresses.hook.toLowerCase()}`]: MACRO_WHALE_PRESENTATION,
 };
 
 export function findBossPresentation(chainId: number, hookAddress: string, localDefaultHookAddress?: string): BossPresentation | undefined {
@@ -87,6 +101,8 @@ export type BossDefinition = {
   accent: string;
   /** `chain` has contract semantics behind it; `venue` is a showcase entry. */
   source: "chain" | "venue";
+  /** A specific encounter; omitted when the gate uses the selected network's default. */
+  deployment?: { chainId: number; hookAddress: Address };
   /** Launch Boost snapshot fields. Only roster gates carry them. */
   rosterMeta?: {
     rank: number;
@@ -96,7 +112,7 @@ export type BossDefinition = {
   };
 };
 
-/** Gates that predate the roster: one playable, one fixture that has a portrait. */
+/** The two playable gates that predate the roster. */
 const CORE_BOSSES: readonly BossDefinition[] = [
   {
     id: "cat",
@@ -112,15 +128,16 @@ const CORE_BOSSES: readonly BossDefinition[] = [
   },
   {
     id: "macro-whale",
-    name: "Hidden Boss",
-    ticker: "HIDDEN",
-    tagline: "A crowned shadow. No pool is deployed here.",
-    portrait: HIDDEN_BOSS_PORTRAIT,
-    crop: HIDDEN_BOSS_CROP,
-    status: "no-contract",
+    name: "Macro Whale",
+    ticker: "WHALE",
+    tagline: "Three volume goals. A separate pool and prize.",
+    portrait: MACRO_WHALE_PORTRAIT,
+    crop: { x: 133, y: 205, w: 1058, h: 791, targetHeight: 28 },
+    status: "active",
     locked: false,
     accent: "#5aa9ff",
-    source: "venue",
+    source: "chain",
+    deployment: { chainId: macroWhaleDeployment.chainId, hookAddress: macroWhaleDeployment.addresses.hook },
   },
 ];
 
@@ -154,6 +171,12 @@ export function findBoss(id: BossId): BossDefinition {
   const boss = BOSSES.find((b) => b.id === id);
   if (!boss) throw new Error(`Unknown boss ${id}`);
   return boss;
+}
+
+export function bossHookForNetwork(boss: BossDefinition, chainId: number, defaultHook?: Address): Address | undefined {
+  if (boss.source !== "chain") return undefined;
+  if (!boss.deployment) return defaultHook;
+  return boss.deployment.chainId === chainId ? boss.deployment.hookAddress : undefined;
 }
 
 export function isBossId(value: unknown): value is BossId {

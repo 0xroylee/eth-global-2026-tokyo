@@ -36,10 +36,10 @@
     },
     {
       "id": "macro-whale",
-      "name": "Hidden Boss",
+      "name": "Macro Whale",
       "evolution": ["portrait"],
       "images": {
-        "portrait": { "label": "Hidden Boss", "src": "/images/boss-hidden-crowned-shadow-master.png" }
+        "portrait": { "label": "Macro Whale", "src": "/images/boss-macro-whale-portrait.png" }
       }
     }
   ]

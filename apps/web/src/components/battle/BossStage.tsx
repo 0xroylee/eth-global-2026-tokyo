@@ -57,6 +57,9 @@ export function BossStage({ stage, stageImages, state, reducedMotion = false, vi
             height: `${visibleBounds.sourceHeight / visibleBounds.height * 100}%`,
             left: `calc(50% - ${(visibleBounds.x + visibleBounds.width / 2) / visibleBounds.height * 100}cqh)`,
             bottom: `-${(visibleBounds.sourceHeight - visibleBounds.y - visibleBounds.height) / visibleBounds.height * 100}cqh`,
+            ...(visibleBounds.clip ? {
+              clipPath: `inset(${visibleBounds.y / visibleBounds.sourceHeight * 100}% ${(visibleBounds.sourceWidth - visibleBounds.x - visibleBounds.width) / visibleBounds.sourceWidth * 100}% ${(visibleBounds.sourceHeight - visibleBounds.y - visibleBounds.height) / visibleBounds.sourceHeight * 100}% ${visibleBounds.x / visibleBounds.sourceWidth * 100}%)`,
+            } : {}),
           } : {}),
           transform: reducedMotion ? "none" : transform,
           opacity,
