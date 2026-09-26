@@ -76,6 +76,8 @@ export function GameShell() {
 
   useEffect(() => {
     if (deployment.kind === "live") {
+      // Real chain state is the only thing allowed to move the sage's script on.
+      if (deployment.round.status === CAT_DEFEATED_STATUS) markCatDefeated();
       bridge.send("round:state", {
         status: deployment.round.status,
         currentStage: deployment.round.currentStage,
@@ -435,6 +437,23 @@ function isCatDefeated(): boolean {
     return localStorage.getItem(SAGE_DEFEATED_STORAGE_KEY) === "1";
   } catch {
     return false;
+  }
+}
+
+/** `round.status` 3 is Defeated (`lib/format.ts` ROUND_STATUSES). */
+const CAT_DEFEATED_STATUS = 3;
+
+/**
+ * Remember a real defeat so the sage can talk about it later. Written once: the
+ * earlier value is checked first, so repeat renders do not touch storage again.
+ * Never called from fixture or mock data — only from a live deployment's round.
+ */
+function markCatDefeated() {
+  try {
+    if (localStorage.getItem(SAGE_DEFEATED_STORAGE_KEY) === "1") return;
+    localStorage.setItem(SAGE_DEFEATED_STORAGE_KEY, "1");
+  } catch {
+    // Storage can be blocked. The sage keeps the first-visit and repeat lines.
   }
 }
 
