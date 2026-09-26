@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- art masters are static PNGs; no optimisation needed yet */
 
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 import type { BossDefinition } from "@/game/bosses";
 import { displayAmount, roundStatusLabel } from "@/lib/format";
 import { type useBossPool } from "@/lib/useBossPool";
@@ -28,8 +29,8 @@ export function BossEntryPanel({
 
   useEffect(() => {
     closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -47,7 +48,7 @@ export function BossEntryPanel({
           <div className="flex min-w-0 items-start gap-4">
             <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-ink">
               {portrait ? (
-                <img src={portrait} alt="" className="size-full object-cover object-top" />
+                <img src={portrait} alt="" className="size-full object-cover object-top [image-rendering:pixelated]" />
               ) : (
                 <span className="font-mono text-2xl text-dim">?</span>
               )}
@@ -76,7 +77,21 @@ export function BossEntryPanel({
         </div>
 
         {supported ? (
-          <BossActions arena={arena} />
+          <>
+            <BossActions arena={arena} />
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/30 px-3 py-3">
+              <div>
+                <p className="font-mono text-[9px] tracking-[0.12em] text-dim">SEPARATE MOCK PREVIEW</p>
+                <p className="mt-1 text-xs text-muted">The pixel battle is a visual demo and never changes contract state.</p>
+              </div>
+              <Link
+                href="/mock-battle"
+                className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog transition-colors hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                OPEN MOCK BATTLE
+              </Link>
+            </div>
+          </>
         ) : (
           <p className="mt-4 rounded-lg border border-white/8 px-3 py-3 text-xs leading-relaxed text-muted">
             This gate is a visual fixture. No contract or attack route is deployed for it.

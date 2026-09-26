@@ -2,6 +2,9 @@
 
 import dynamic from "next/dynamic";
 import type { GameBridge } from "@/game/bridge";
+import type { CanvasPhase } from "./GameCanvasRuntime";
+
+export type { CanvasPhase } from "./GameCanvasRuntime";
 
 const GameCanvasRuntime = dynamic(
   () => import("./GameCanvasRuntime").then((module) => module.GameCanvasRuntime),
@@ -15,6 +18,6 @@ const GameCanvasRuntime = dynamic(
   },
 );
 
-export function GameCanvas({ bridge }: { bridge: GameBridge }) {
-  return <GameCanvasRuntime bridge={bridge} />;
+export function GameCanvas({ bridge, onPhase }: { bridge: GameBridge; onPhase?: (phase: CanvasPhase) => void }) {
+  return <GameCanvasRuntime bridge={bridge} onPhase={onPhase} />;
 }

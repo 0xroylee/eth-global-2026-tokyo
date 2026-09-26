@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { GameBridge } from "@/game/bridge";
+import { HubMusic } from "@/game/HubMusic";
 
 const PEAK_GAIN = 0.045;
 const ATTACK_S = 0.012;
@@ -10,6 +11,17 @@ const VOICE_CAP = 8;
 const DISCOVERY_COOLDOWN_MS = 600;
 
 type Voice = { stop: () => void };
+
+/** Hand the keyboard back to the map after a sound or music click. */
+function focusMap(control: HTMLElement) {
+  const canvas = control.closest("section")?.querySelector("canvas");
+  if (!(canvas instanceof HTMLCanvasElement)) {
+    control.blur();
+    return;
+  }
+  canvas.tabIndex = -1;
+  canvas.focus();
+}
 
 /** Quiet synthesized cues. Playback starts only after the sound button's click. */
 export function HubSoundControl({ bridge }: { bridge: GameBridge }) {
@@ -23,6 +35,13 @@ export function HubSoundControl({ bridge }: { bridge: GameBridge }) {
   const muting = useRef(false);
   const [on, setOn] = useState(false);
   const [failed, setFailed] = useState(false);
+  const music = useRef<HubMusic | null>(null);
+  const [musicOn, setMusicOn] = useState(false);
+
+  const stopMusic = () => {
+    music.current?.stop();
+    music.current = null;
+  };
 
   const stopAll = () => {
     const active = voices.current;
@@ -82,7 +101,11 @@ export function HubSoundControl({ bridge }: { bridge: GameBridge }) {
       play(bossId === "locked" ? [196, 164.81] : [392, 523.25, 783.99]);
     });
     const onHide = () => {
-      if (document.hidden) stopAll();
+      if (document.hidden) {
+        stopAll();
+        stopMusic();
+        setMusicOn(false);
+      }
     };
     document.addEventListener("visibilitychange", onHide);
     return () => {
@@ -92,6 +115,7 @@ export function HubSoundControl({ bridge }: { bridge: GameBridge }) {
       offEnter();
       document.removeEventListener("visibilitychange", onHide);
       enabled.current = false;
+      stopMusic();
       stopAll();
       const context = audio.current;
       audio.current = null;
@@ -110,6 +134,8 @@ export function HubSoundControl({ bridge }: { bridge: GameBridge }) {
         setOn(false);
         setFailed(false);
         stopAll();
+        stopMusic();
+        setMusicOn(false);
         await audio.current?.suspend();
         muting.current = false;
         return;
@@ -122,8 +148,10 @@ export function HubSoundControl({ bridge }: { bridge: GameBridge }) {
           if (audio.current !== context) return;
           enabled.current = false;
           stopAll();
+          stopMusic();
           if (!mounted.current) return;
           setOn(false);
+          setMusicOn(false);
           setFailed(true);
         };
       }
@@ -137,11 +165,13 @@ export function HubSoundControl({ bridge }: { bridge: GameBridge }) {
     } catch {
       enabled.current = false;
       stopAll();
+      stopMusic();
       const context = audio.current;
       audio.current = null;
       if (context) void context.close().catch(() => {});
       if (!mounted.current) return;
       setOn(false);
+      setMusicOn(false);
       setFailed(true);
     } finally {
       busy.current = false;
@@ -156,10 +186,34 @@ export function HubSoundControl({ bridge }: { bridge: GameBridge }) {
         type="button"
         aria-label={failed ? "Sound unavailable. Retry enabling sound" : "Map sound effects"}
         aria-pressed={on}
-        onClick={() => void toggle()}
+        onClick={(event) => {
+          void toggle();
+          focusMap(event.currentTarget);
+        }}
         className="inline-flex min-h-9 items-center rounded-md border border-white/20 bg-ink/85 px-2.5 font-mono text-[9px] tracking-[0.12em] text-fog transition-colors hover:bg-panel focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         {failed ? "SOUND · RETRY" : `SOUND · ${on ? "ON" : "OFF"}`}
+      </button>
+      <button
+        type="button"
+        aria-label="Background music"
+        aria-pressed={musicOn}
+        disabled={!on}
+        title={on ? "Quiet garden melody" : "Enable sound first"}
+        onClick={(event) => {
+          if (music.current) {
+            stopMusic();
+            setMusicOn(false);
+          } else if (audio.current?.state === "running" && enabled.current) {
+            music.current = new HubMusic(audio.current);
+            music.current.start();
+            setMusicOn(true);
+          }
+          focusMap(event.currentTarget);
+        }}
+        className="inline-flex min-h-9 items-center rounded-md border border-white/20 bg-ink/85 px-2.5 font-mono text-[9px] tracking-[0.12em] text-fog disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        MUSIC · {musicOn ? "ON" : "OFF"}
       </button>
       <span role="status" className={`font-mono text-[9px] tracking-[0.08em] text-[#f5b04a] ${failed ? "" : "sr-only"}`}>
         {status}
