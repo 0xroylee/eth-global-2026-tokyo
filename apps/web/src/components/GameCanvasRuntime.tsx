@@ -71,10 +71,10 @@ export function GameCanvasRuntime({ bridge, onPhase }: { bridge: GameBridge; onP
   }, [attempt, bridge]);
 
   return (
-    <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-white/10 bg-ink shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+    <div className="absolute inset-0 overflow-hidden bg-ink">
       <div
         ref={hostRef}
-        className={`absolute inset-0 transition-opacity duration-[250ms] ease-[var(--ease-out-strong)] motion-reduce:transition-none [&>canvas]:!h-full [&>canvas]:!w-full [&>canvas]:[image-rendering:pixelated] ${
+        className={`absolute inset-0 transition-opacity duration-[250ms] ease-[var(--ease-out-strong)] motion-reduce:transition-none [&>canvas]:[image-rendering:pixelated] ${
           phase === "ready" ? "opacity-100" : "opacity-0"
         }`}
       />

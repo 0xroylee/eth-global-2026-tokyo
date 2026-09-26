@@ -16,34 +16,48 @@ export function BossEntryPanel({
   boss,
   arena,
   onClose,
+  suspendInput = false,
+  onConnect,
+  onSwitch,
 }: {
   boss: BossDefinition;
   arena: Arena;
   onClose: () => void;
+  suspendInput?: boolean;
+  onConnect?: () => void;
+  onSwitch?: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const actionRef = useRef<HTMLButtonElement>(null);
   const live = arena.deployment.kind === "live" ? arena.deployment : null;
   const stage = live?.round.currentStage ?? 0;
   const portrait = boss.id === "cat" ? CAT_FORMS[Math.min(stage, 2)] : boss.portrait;
   const supported = boss.id === "cat";
+  const needsWallet = supported && !arena.wallet.account;
+  const needsSwitch = supported && Boolean(arena.wallet.account) && arena.networkMismatch;
+  const actionsReady = supported && !needsWallet && !needsSwitch;
 
   useEffect(() => {
-    closeRef.current?.focus();
+    if (suspendInput) return;
+    (needsWallet || needsSwitch ? actionRef : closeRef).current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [needsSwitch, needsWallet, onClose, suspendInput]);
 
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="boss-entry-title"
+      inert={suspendInput}
       className="absolute inset-0 z-20 grid place-items-center bg-ink/70 p-4 backdrop-blur-[2px]"
     >
-      <div className="panel-enter max-h-full w-full max-w-[560px] overflow-y-auto rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)] sm:p-6">
+      <div className="panel-enter max-h-[min(32rem,calc(100dvh-2rem))] w-full max-w-[560px] overflow-y-auto rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)] sm:p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-4">
             <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-ink">
@@ -76,7 +90,27 @@ export function BossEntryPanel({
           <BossHealth boss={boss} deployment={arena.deployment} />
         </div>
 
-        {supported ? (
+        {needsWallet && (
+          <button
+            ref={actionRef}
+            type="button"
+            onClick={onConnect}
+            className="mt-5 w-full rounded-lg bg-accent/20 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-accent-soft transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-accent/25 active:scale-[0.98]"
+          >
+            CONNECT WALLET TO CHALLENGE
+          </button>
+        )}
+        {needsSwitch && (
+          <button
+            ref={actionRef}
+            type="button"
+            onClick={onSwitch}
+            className="mt-5 w-full rounded-lg border border-[#f5b04a]/40 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-[#f5b04a] transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-[#f5b04a]/10 active:scale-[0.98]"
+          >
+            SWITCH WALLET TO {arena.selectedChainId}
+          </button>
+        )}
+        {actionsReady && (
           <>
             <BossActions arena={arena} />
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/30 px-3 py-3">
@@ -92,7 +126,8 @@ export function BossEntryPanel({
               </Link>
             </div>
           </>
-        ) : (
+        )}
+        {!supported && (
           <p className="mt-4 rounded-lg border border-white/8 px-3 py-3 text-xs leading-relaxed text-muted">
             This gate is a visual fixture. No contract or attack route is deployed for it.
           </p>
@@ -113,7 +148,6 @@ export function BossEntryPanel({
 }
 
 function BossHealth({ boss, deployment }: { boss: BossDefinition; deployment: Arena["deployment"] }) {
-  // Only the cat is backed by the deployed round today.
   if (boss.id !== "cat") {
     return (
       <Row label="BOSS HP" badge="NO CONTRACT YET">

@@ -27,7 +27,7 @@
     text-rendering: optimizeLegibility;
   }
   body {
-    @apply bg-ink text-fog font-sans min-h-screen min-w-80 m-0;
+    @apply bg-ink text-fog font-sans m-0 h-dvh overflow-hidden;
     background-image: radial-gradient(
       ellipse at 72% 26%,
       rgba(51, 79, 132, 0.2),
@@ -35,8 +35,12 @@
     );
   }
 
-  /* The app's only canvas is the Phaser game canvas: keep FIT-scaled pixels
-     crisp instead of browser-smoothed. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent-soft);
+    outline-offset: 2px;
+  }
+
+  /* The Phaser canvas maps 1:1 to the window. Keep those pixels crisp. */
   canvas {
     image-rendering: pixelated;
   }
