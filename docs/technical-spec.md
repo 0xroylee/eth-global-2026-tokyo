@@ -1,6 +1,6 @@
 # Boss Pool technical specification
 
-Status: purchase accounting replaces BossHP burns, and eligible BossHP determines rewards. The worked default permits transferable reward rights and locks tokens on redemption. The earlier local burn-based refill scenario passed; ordinary output delivery and token redemption still need verification in the shared fixture. No target-chain deployment or complete project E2E is verified.
+Status: BP01 implements local no-burn contracts, transferable HP redemption and the shared real-v4 fixture. Four focused cases pass: the full HP0 round/claims path, an HP1 normalized-price/refill regression, deadline setup rejection and expiry. The workspace/local read shell is separate from the still-unimplemented full game UI. Robinhood target-chain deployment remains unverified.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ BossHook is attached to the ROY/BossHP pool. The MockUSD/ROY supply pool can use
 
 ### Proposed contract boundaries
 
-These are planned contract names, not implemented source files.
+These boundaries guide the implementation. Actual BP01 source uses `BossHP`, `RoyToken`, `MockUSD` and `BossCollectibles` under `contracts/src`; generated ABI is authoritative. There is no LP/treasury/fee recovery path in this foundation, so those assets remain locked. Recovery, complete game UI and production NFT metadata remain downstream work.
 
 | Contract | Responsibilities and custody | Main interface |
 | --- | --- | --- |
@@ -59,7 +59,7 @@ Use a small Bun workspace monorepo. Both teammates change one versioned set of c
 | Seed, liquidity scenario, smoke, and shared E2E orchestration | `scripts/` | A |
 | Arena, wallet flows, game UI | `apps/web/` | B: UI + interface + gaming |
 
-This is a planned layout, not an existing scaffold. Root `package.json` is private and defines workspaces for `apps/*` and `packages/*`. Keep one root `bun.lock`. Name the shared package `@boss-pool/chain`, keep it private, and consume it through `workspace:*`. Root TypeScript scripts and the web app use the same package.
+BP01 establishes this layout. Root `package.json` is private and defines workspaces for `apps/*` and `packages/*`, with one root `bun.lock`. The shared private `@boss-pool/chain` package is consumed through `workspace:*`. Root TypeScript scripts and the web app use the same package.
 
 Foundry owns the Solidity toolchain under `contracts/`; it does not need a JavaScript workspace just to compile Solidity. Use root Bun scripts to invoke the selected Forge commands. Generated client ABIs flow from compiled contracts into the shared package. Never maintain a second handwritten ABI in the frontend.
 
@@ -67,7 +67,7 @@ The shared package exports only public chain definitions, verified deployment ad
 
 When a contract interface changes, update its generated ABI and affected consumers in the same PR. Commit the generated client ABI so B can run the UI without deploying contracts. The root build/verification flow detects stale generation using the same export command rather than another test framework.
 
-BP01 adds the minimal install, contract-build/ABI-export, web-dev/build, typecheck, and targeted E2E commands. These command names are not available yet. Keep scripts discoverable in package manifests rather than duplicating them across agent documents.
+The root package now exposes contract build/test, ABI export/check, web dev/build, typecheck, local node/seed and read smoke commands. See the README for the current runnable sequence. Keep commands discoverable in package manifests rather than duplicating them across agent documents.
 
 Start with direct viem reads/writes. A's backend work is contracts, deployment, scripts, and shared integration. Add a read-only service under `apps/` only when BP09 demonstrates an RPC or shared-activity need. No Turbo, Nx, database, queue, shared UI library, or extra package split is required for the core demo. [Bun workspaces](https://bun.com/docs/pm/workspaces)
 
@@ -133,7 +133,7 @@ Stage 1 positions are funded at activation. Stage 2 and 3 assets remain in the g
 
 Use bounded explicit liquidity actions. The upstream PositionManager exposes modifyLiquiditiesWithoutUnlock for callers already inside an unlock. Do not call another unlock-opening entry point from the attack callback. Avoid deprecated from-deltas actions; prefer explicit amounts with existing slippage controls.
 
-A position generally needs both assets when the current price lies inside its range. The candidate same-range plan first resets to the HP-side boundary, then adds only the incremental liquidity needed for the next stage. Resetting 300 HP restores that existing capacity; reaching 600 requires another 300, not another 600. The same applies from 600 to 900. See [refill math](refill-math.md) for fees, ranges, and reserve amounts.
+A position generally needs both assets when the current price lies inside its range. The same-range plan first resets to the HP-side boundary, then adds only the incremental liquidity needed for the next stage. Resetting 300 HP restores that capacity; reaching 600 requires another 300, not another 600. The same applies from 600 to 900. Hook immutable bounds are `[0,1920]` for HP0 and `[-1920,0]` for HP1, preserving the normalized price band across token ordering. HP1 refill funding includes separate input/fee rounding at tick -60. See [refill math](refill-math.md).
 
 Release each stage allocation once. Check the pending stage, old-stage completion, reserve balances, position owner, token amounts, and expected pool. Mark the release in progress before external calls and reject reentrant attacks or repeated activation. A public caller cannot skip directly to a future stage.
 
@@ -195,4 +195,4 @@ Use one reusable two-wallet core/E2E fixture with real v4 core. Adapt the existi
 
 Assert unchanged BossHP supply, output delivery equal to eligible issuance, transfers moving reward rights without new damage, one-time surrender of each redeemed token amount, locked protocol HP including after the deadline, rejection of player sell-backs, no premature future liquidity, no same-attack stage spill, reserve/player fund separation, single release per stage, and zero unsettled deltas. Extend the shared claim journey with a token transfer and redemption rather than adding a separate suite. Keep the failed-release rollback and focused access-control/expiry checks where the browser cannot reliably exercise them.
 
-Do not add a separate simulator, exhaustive test matrix, or broad fuzz suite. Reuse focused evidence until relevant code changes. This new two-hop and stage-release path has not yet passed a project test.
+Do not add a separate simulator, exhaustive test matrix, or broad fuzz suite. Reuse focused evidence until relevant code changes. The current `BossPoolCoreTest` fixture exercises the local no-burn path; it does not establish production audit coverage or Robinhood deployment.

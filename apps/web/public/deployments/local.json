@@ -1,0 +1,99 @@
+{
+  "chainId": 31337,
+  "addresses": {
+    "hook": "0x0d02E9E37688772EEd3cd9A31c2F119d61aAaaC0",
+    "router": "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
+    "bossHP": "0x59b670e9fA9D0A427751Af201D676719a970857b",
+    "roy": "0xc6e7DF5E7b4f2A278906862b61205850344D4e7d",
+    "mockUSD": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
+    "collectibles": "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1",
+    "poolManager": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed"
+  },
+  "pools": {
+    "supply": {
+      "id": "0xbf30029accc8ea64aee04c0ed3a2f92712eddffc4adbd7b8a026b7da0a3274aa",
+      "key": {
+        "currency0": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
+        "currency1": "0xc6e7DF5E7b4f2A278906862b61205850344D4e7d",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      }
+    },
+    "boss": {
+      "id": "0xc91cd452ca4908c0e0fee5086e71b34d796274a32e4db67e9002d5fa2091e68b",
+      "key": {
+        "currency0": "0x59b670e9fA9D0A427751Af201D676719a970857b",
+        "currency1": "0xc6e7DF5E7b4f2A278906862b61205850344D4e7d",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0d02E9E37688772EEd3cd9A31c2F119d61aAaaC0"
+      }
+    }
+  },
+  "config": {
+    "hookFlags": "0x0000000000000000000000000000000000002Ac0",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "bossTicks": [
+      0,
+      1920
+    ],
+    "bossIsCurrency0": true,
+    "bossInitialSqrtPriceX96": "79228162514264337593543950336",
+    "bossSqrtLowerX96": "79228162514264337593543950336",
+    "bossSqrtUpperX96": "87210699426708006962522930182",
+    "expectedStageTerminalSqrtPriceX96": "87210699426708006962522930182",
+    "supplyStartTick": 299520,
+    "supplyTicks": [
+      293520,
+      305520
+    ],
+    "initialSupplySqrtPriceX96": "252667024921278396854838551797218243",
+    "supplyLiquidity": "60494400020748065",
+    "supplyLPAccounting": {
+      "mockUSDFunded": "5001000000",
+      "royFunded": "100000000000000000000000",
+      "mockUSDDebited": "4916228255",
+      "royDebited": "49999999999999999402381"
+    },
+    "stageCapacity": [
+      "300000000000000000000",
+      "600000000000000000000",
+      "900000000000000000000"
+    ],
+    "stageLiquidity": [
+      "3277555758900103786129",
+      "6555111517800207572259",
+      "9832667276700311358389"
+    ],
+    "observedStageEndSqrtPriceX96": [
+      "0",
+      "0",
+      "0"
+    ],
+    "stageRoyInputRequirement": [
+      "331219793595396366740",
+      "662439587190792733479",
+      "993659380786189100217"
+    ],
+    "originalPrize": "1000000000",
+    "deadline": "1790370144"
+  },
+  "prefunded": {
+    "routerBossHP": "1700000000000000000000",
+    "routerROY": "50000000000000000597619",
+    "routerMockUSD": "84771745",
+    "ownerROY": "0",
+    "starterRoyBudget": "10000000000000000000000",
+    "starterRoyPaid": "0",
+    "starterRoyUnspent": "10000000000000000000000",
+    "lockedRouterROY": "40000000000000000597619",
+    "poolManagerBossHP": "300000000000000000000",
+    "mockUSDInHook": "1000000000"
+  },
+  "schemaVersion": 1,
+  "rpcUrl": "http://127.0.0.1:8547",
+  "deployedAtBlock": 24,
+  "deploymentTxHash": "0x1867c29973e46aa26fef3f3e701e4376b14854bfc0992791be0105e8b2fe80b6"
+}

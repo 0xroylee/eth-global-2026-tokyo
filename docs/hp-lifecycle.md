@@ -2,7 +2,7 @@
 
 Status: current purchase-accounting design, 26 September 2026. Attacks do not burn tokens. Focus on one ROY / BossHP battle pool with three gated stages. Physical/magic routing remains deferred.
 
-The accepted same-pool refill/reset model is documented in [Refill math](refill-math.md). A controller-only reverse swap during transition restores the lower price, then incremental liquidity funds the next stage. Historical test results used burns; ordinary player output delivery and unchanged supply still need verification in the shared scenario.
+The accepted same-pool refill/reset model is documented in [Refill math](refill-math.md). A controller-only reverse swap during transition restores the lower price, then incremental liquidity funds the next stage. The BP01 shared fixture now verifies no-burn delivery, stages, custody and claims, with a targeted mirrored HP1 price/refill case. Historical burn results below remain separate from current evidence.
 
 ## Finite registered stage liquidity
 
@@ -10,7 +10,7 @@ Use existing v4 concentrated-liquidity math and finite single-sided BossHP posit
 
 The nominal stage sizes remain 300, 600, and 900 HP. Each stage records its funded sellable capacity, registered positions, cumulative liquidity, tick bounds, start/end sqrt price, `stageSold`, and rounding residue. Validate a positive sellable amount before activating the stage.
 
-Reuse the same range after each reset. Add a fresh incremental position to reach the next total capacity, accounting for HP already restored to earlier positions. Correct token sorting determines the swap direction. Calculate actual amounts with the pinned Uniswap libraries.
+Reuse the same range after each reset. Add a fresh incremental position to reach the next total capacity, accounting for HP already restored to earlier positions. Use Hook's immutable `[0,1920]` bounds for HP0 and `[-1920,0]` for HP1 so normalized ROY/HP prices agree. Calculate actual amounts with the pinned Uniswap libraries, including HP1 refill rounding across the -60 bitmap boundary.
 
 A finite range can sell its HP inventory at a finite terminal price. The game's completion rule must not require PoolManager's shared token balance to become zero. [Uniswap range orders](https://developers.uniswap.org/docs/get-started/concepts/liquidity-providers/range-orders)
 

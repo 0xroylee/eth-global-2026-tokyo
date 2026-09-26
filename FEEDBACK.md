@@ -1,6 +1,6 @@
 # Uniswap developer feedback
 
-Status: planning-stage draft, updated 26 September 2026. The current no-burn Boss Pool application has not been deployed or E2E-tested. Historical local burn-based feasibility/refill proofs passed, but do not verify current token delivery/redemption. Update this file with actual implementation experience before submission. The feedback form has not been submitted.
+Status: local-implementation draft, updated 26 September 2026. BP01 has four passing real-v4 core cases, an actual Anvil deployment and a verified read-only arena. The complete browser attack/claim journey and Robinhood deployment are not verified. Historical burn proofs are separate evidence. The feedback form has not been submitted.
 
 ## What we are building
 
@@ -11,7 +11,8 @@ Boss Pool routes MockUSD through a ROY supply pool into a ROY/BossHP battle pool
 - The deployment table lists Robinhood mainnet but does not list Robinhood testnet in its testnet section. A documented path for deploying a supported development stack on a new testnet would help.
 - Probes of Robinhood's documented testnet RPC returned HTTP 403 from our planning environment on 25 and 26 September. This is a network-access observation, not a Uniswap contract failure. An alternative supported endpoint still needs testing.
 - The earlier local stage proof found that integer rounding could leave no sellable HP just before the exact terminal sqrt price. Its remaining-inventory check progressed where strict endpoint equality did not. This is a game integration lesson, not evidence of a v4 bug.
-- Callback self-call suppression and actor-specific currency deltas matter for this design. The router settles the player's trade before reserve maintenance so recovered ROY cannot be mistaken for a player refund. The new no-burn path still needs its own execution evidence.
+- Callback self-call suppression and actor-specific currency deltas matter for this design. The router settles the player's trade before reserve maintenance so recovered ROY cannot be mistaken for a player refund. The local no-burn fixture now checks this path and failed-transition rollback.
+- Real deployment exposed a token-order pricing error: using raw ticks [0,1920] for HP1 inverted the intended ROY/HP band. Mirroring HP1 to [-1920,0] restores the same human-unit prices as HP0. The reverse HP1 refill splits at bitmap boundary -60 for tick spacing 60, so its reserve quote rounds each interval separately. These are integration lessons, not evidence of a v4 bug.
 
 ## Evidence to add
 
