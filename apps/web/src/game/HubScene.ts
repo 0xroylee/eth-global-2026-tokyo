@@ -293,12 +293,11 @@ export class HubScene extends Phaser.Scene {
       const glow = this.add.circle(cx, base - 18, 16, color, locked ? 0.18 : 0.32).setDepth(base - 1);
       this.add.circle(cx, base - 18, 13, 0x0b0e18, 0.85).setDepth(base - 1);
 
-      if (locked) {
-        this.add.rectangle(cx, base - 16, 10, 8, 0x8a8fa3).setDepth(base + 1);
-        this.add.circle(cx, base - 22, 4, 0x000000, 0).setStrokeStyle(2, 0x8a8fa3).setDepth(base + 1);
-        this.add.rectangle(cx, base - 16, 2, 3, 0x2a2d38).setDepth(base + 2);
+      const portraitKey = `portrait-${boss.id}`;
+      if (this.textures.exists(portraitKey)) {
+        this.add.image(cx, base - 19, portraitKey).setDepth(base + 1);
       } else {
-        this.add.image(cx, base - 19, `portrait-${boss.id}`).setDepth(base + 1);
+        this.drawTickerShield(cx, base - 18, color, boss.ticker, base + 1);
       }
 
       // Name plate. Rendered at 3x resolution so the zoomed camera keeps it crisp.
@@ -380,6 +379,47 @@ export class HubScene extends Phaser.Scene {
     }
 
     return bodies;
+  }
+
+  /**
+   * Placeholder for a gate that has no portrait yet: a small shield plate with the
+   * ticker's initials, drawn from the same dark-plate vocabulary as the name plate.
+   */
+  private drawTickerShield(cx: number, cy: number, color: number, ticker: string, depth: number) {
+    const halfW = 7;
+    const top = -8;
+    const shoulder = 1;
+    const bottom = 7;
+    const chamfer = 2;
+    const shield = this.add.polygon(
+      cx,
+      cy,
+      [
+        { x: -halfW + chamfer, y: top },
+        { x: halfW - chamfer, y: top },
+        { x: halfW, y: top + chamfer },
+        { x: halfW, y: shoulder },
+        { x: chamfer + 1, y: bottom - 3 },
+        { x: 0, y: bottom },
+        { x: -(chamfer + 1), y: bottom - 3 },
+        { x: -halfW, y: shoulder },
+        { x: -halfW, y: top + chamfer },
+      ],
+      0x1b1f2e,
+      0.95,
+    );
+    shield.setStrokeStyle(1, color, 0.9).setDepth(depth);
+    const initials = this.add
+      .text(cx, cy - 1, ticker.slice(0, 2).toUpperCase(), {
+        fontFamily: "var(--font-dm-mono), monospace",
+        fontSize: "6px",
+        color: "#f3f3f8",
+        letterSpacing: 0.5,
+        resolution: ZOOM,
+      })
+      .setOrigin(0.5)
+      .setDepth(depth + 1);
+    this.crispLabels.push(initials);
   }
 
   private registerWalk() {
