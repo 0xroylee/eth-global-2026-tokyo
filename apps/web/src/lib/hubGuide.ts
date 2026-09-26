@@ -1,5 +1,5 @@
-import { findBoss, type BossId } from "@/game/bosses";
-import type { GuideSceneStep } from "@/game/bridge";
+import { findBoss, type BossId } from "../game/bosses";
+import type { GuideSceneStep } from "../game/bridge";
 
 export const HUB_GUIDE_STORAGE_KEY = "boss-pool:hub-guide:v1";
 

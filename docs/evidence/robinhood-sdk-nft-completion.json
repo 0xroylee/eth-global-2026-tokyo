@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "network": "robinhood-testnet",
+  "chainId": 46630,
+  "deploymentTxHash": "0x9ca00e6932e57622e0da76d35eea6e6a424a49dc4d02bf7d9096776a5987b57e",
+  "deploymentBlock": "124450523",
+  "sourceCommit": "4033d7b7818fc9f8bae621f797cc8ec5148f334a",
+  "sourceDirty": false,
+  "sdkSourceSha256": "83bec9ba7d99412eb71e8b38c6a8f92b47a0959518a976f7a11979e274747908",
+  "originalJournal": ".scratch/boss-pool-exercise/testnet-20260926T075804250Z-48685.json",
+  "originalJournalStatus": "failed",
+  "originalJournalTransactionCount": 16,
+  "status": "completed",
+  "currentStep": "final reward, supply, custody and NFT ownership verified",
+  "startedAt": "2026-09-26T08:23:45.999Z",
+  "checkedPriorReceipts": 16,
+  "transactions": [
+    {
+      "player": "A",
+      "account": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+      "status": "success",
+      "hash": "0x05e1f1570ececa16930877913733933a1f3ca006afbd2f86eba932a17ec65f05",
+      "request": {
+        "hash": "0x05e1f1570ececa16930877913733933a1f3ca006afbd2f86eba932a17ec65f05",
+        "kind": "claimVictoryNFT",
+        "chainId": 46630,
+        "account": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+        "target": "0xE2B98136353ce411EA9356F01Ac6AD12a597aAC0",
+        "calldata": "0xde63af3b"
+      },
+      "confirmedHash": "0x05e1f1570ececa16930877913733933a1f3ca006afbd2f86eba932a17ec65f05",
+      "blockNumber": "124492612",
+      "gasUsed": "118244",
+      "tokenId": "3"
+    },
+    {
+      "player": "B",
+      "account": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+      "status": "success",
+      "hash": "0xaa31624cd18a6b8bdcf9de5f7532498712478d495bab49593be4f2fdbfb72b43",
+      "request": {
+        "hash": "0xaa31624cd18a6b8bdcf9de5f7532498712478d495bab49593be4f2fdbfb72b43",
+        "kind": "claimVictoryNFT",
+        "chainId": 46630,
+        "account": "0x3D0A61Bd3730524752330db5a815dd05a3D2ebE9",
+        "target": "0xE2B98136353ce411EA9356F01Ac6AD12a597aAC0",
+        "calldata": "0xde63af3b"
+      },
+      "confirmedHash": "0xaa31624cd18a6b8bdcf9de5f7532498712478d495bab49593be4f2fdbfb72b43",
+      "blockNumber": "124492657",
+      "gasUsed": "118244",
+      "tokenId": "4"
+    }
+  ],
+  "final": {
+    "finalEligibleHP": "1799999999999999999997",
+    "redeemedHP": "1799999999999999999997",
+    "paidPrize": "999999999",
+    "originalPrize": "1000000000",
+    "bossHPtotalSupply": "2000000000000000000000",
+    "bossHPCustody": "2000000000000000000000",
+    "royTotalSupply": "100000000000000000000000",
+    "victoryTokenIds": {
+      "A": "3",
+      "B": "4"
+    }
+  }
+}

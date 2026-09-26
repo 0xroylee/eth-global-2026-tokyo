@@ -160,6 +160,78 @@ contract BossPoolCoreTest is Test {
         _claimVictoryNFTs();
     }
 
+    function test_PublicQuoteNeedsNoFundingOrAllowanceAndMatchesDirectAttackWithoutEffects() public {
+        _seedSupplyPool();
+        router.activate();
+
+        address unreadyPlayer = address(0xCAFE);
+        address quoteSink = address(0x000000000000000000000000000000000000dEaD);
+        PoolKey memory supplyKey = router.supplyPoolKey();
+        PoolKey memory bossKey = router.bossPoolKey();
+        (uint160 supplyPriceBefore,,,) = manager.getSlot0(supplyKey.toId());
+        (uint160 bossPriceBefore,,,) = manager.getSlot0(bossKey.toId());
+        uint256 routerUSDBefore = mockUSD.balanceOf(address(router));
+        uint256 routerRoyBefore = roy.balanceOf(address(router));
+        uint256 routerHPBefore = bossHP.balanceOf(address(router));
+
+        vm.prank(unreadyPlayer);
+        BossRouter.QuoteResult memory quote = router.quoteAttackWithMockUSD(1e6, 0);
+
+        assertGt(quote.mockUSDSpent, 0);
+        assertGt(quote.royBought, 0);
+        assertGt(quote.roySpent, 0);
+        assertGt(quote.bossHPOut, 0);
+        assertFalse(quote.stageCleared);
+        assertFalse(quote.bossDefeated);
+        assertEq(quote.nextStage, 0);
+        assertFalse(hook.hasAttacked(unreadyPlayer));
+        assertEq(mockUSD.balanceOf(unreadyPlayer), 0);
+        assertEq(mockUSD.allowance(unreadyPlayer, address(router)), 0);
+        assertEq(mockUSD.allowance(unreadyPlayer, address(hook)), 0);
+        assertEq(roy.balanceOf(unreadyPlayer), 0);
+        assertEq(collectibles.balanceOf(unreadyPlayer), 0);
+        assertEq(mockUSD.balanceOf(quoteSink), 0);
+        assertEq(roy.balanceOf(quoteSink), 0);
+        assertEq(bossHP.balanceOf(quoteSink), 0);
+        assertEq(uint8(router.mode()), uint8(BossRouter.Operation.Idle));
+        assertEq(router.activePlayer(), address(0));
+        assertEq(router.expectedStage(), 0);
+        assertEq(router.pendingStage(), 0);
+        assertEq(hook.stageSold(0), 0);
+        assertEq(hook.stageAttackCount(0), 0);
+        assertEq(uint8(hook.status()), uint8(BossHook.RoundStatus.Active));
+        assertEq(hook.currentStage(), 0);
+        assertEq(mockUSD.balanceOf(address(router)), routerUSDBefore);
+        assertEq(roy.balanceOf(address(router)), routerRoyBefore);
+        assertEq(bossHP.balanceOf(address(router)), routerHPBefore);
+        (uint160 supplyPriceAfter,,,) = manager.getSlot0(supplyKey.toId());
+        (uint160 bossPriceAfter,,,) = manager.getSlot0(bossKey.toId());
+        assertEq(supplyPriceAfter, supplyPriceBefore);
+        assertEq(bossPriceAfter, bossPriceBefore);
+        assertEq(manager.getNonzeroDeltaCount(), 0);
+
+        _assertFreshWalletDirectAttack(unreadyPlayer, quote);
+    }
+
+    function _assertFreshWalletDirectAttack(address player, BossRouter.QuoteResult memory quote) private {
+        mockUSD.faucet(player, 1_000e6);
+        vm.startPrank(player);
+        mockUSD.approve(address(router), type(uint256).max);
+        (uint256 spent, uint256 royBought, uint256 roySpent, uint256 hpOut) = router.attackWithMockUSD(
+            1e6, 1, 1, 0, block.timestamp + 1 hours
+        );
+        vm.stopPrank();
+
+        assertEq(quote.mockUSDSpent, spent);
+        assertEq(quote.royBought, royBought);
+        assertEq(quote.roySpent, roySpent);
+        assertEq(quote.bossHPOut, hpOut);
+        assertTrue(hook.hasAttacked(player), "fresh wallet receives a recorded attack");
+        assertEq(mockUSD.balanceOf(address(hook)), PRIZE, "attack collects no entry fee");
+        assertEq(collectibles.nextTokenId(), 1, "direct attack mints no entry NFT");
+        assertEq(collectibles.balanceOf(player), 0, "direct attack mints no NFT");
+    }
+
     function _assertGatesAndRejectUnauthorizedSwap() private {
         assertEq(hook.LOWER_TICK(), 0);
         assertEq(hook.UPPER_TICK(), 1_920);
@@ -175,18 +247,19 @@ contract BossPoolCoreTest is Test {
         assertGe(router.minimumBossHPForVictoryPath(), 1_802e18);
         assertLe(router.minimumBossHPForVictoryPath(), 1_803e18);
         assertEq(bossHP.totalSupply(), BOSS_HP_SUPPLY);
+        assertEq(roy.balanceOf(ALICE), 0, "fresh attacker needs no starter ROY");
+        assertEq(collectibles.balanceOf(ALICE), 0, "fresh attacker needs no entry NFT");
+        assertEq(mockUSD.allowance(ALICE, address(hook)), 0, "attack needs no Hook approval");
+        uint256 aliceUSD = mockUSD.balanceOf(ALICE);
+        vm.prank(ALICE);
+        vm.expectRevert();
+        router.attackWithMockUSD(1e6, 1, 1, 0, block.timestamp + 1 hours);
+        assertEq(mockUSD.balanceOf(ALICE), aliceUSD, "attack without Router approval leaves funds unchanged");
+        assertEq(hook.stageSold(0), 0, "attack without Router approval deals no damage");
         assertEq(bossHP.balanceOf(address(router)) + bossHP.balanceOf(address(manager)), BOSS_HP_SUPPLY);
         assertEq(_positionLiquidity(2), 0, "stage two remains gated");
         assertEq(_positionLiquidity(3), 0, "stage three remains gated");
         assertGe(_seededRoyOutputCapacity(), hook.minimumRoyForVictoryPath());
-        assertEq(roy.balanceOf(ALICE), 0, "a fresh player does not need starter ROY");
-        assertEq(collectibles.balanceOf(ALICE), 0, "a fresh player does not need an entry NFT");
-        assertEq(mockUSD.allowance(ALICE, address(hook)), 0, "the Hook needs no entry-fee approval");
-
-        vm.expectRevert();
-        vm.prank(ALICE);
-        router.attackWithMockUSD(1e6, 1, 1, 0, block.timestamp + 1 hours);
-        assertEq(hook.stageSold(0), 0, "attacks still require the player's token approval");
 
         UnauthorizedSwapProbe probe = new UnauthorizedSwapProbe(manager);
         PoolKey memory bossKey = router.bossPoolKey();
@@ -211,8 +284,6 @@ contract BossPoolCoreTest is Test {
         assertEq(hook.stageSold(0), firstHPOut);
         assertEq(bossHP.totalSupply(), aliceSupplyBefore, "attacks do not burn");
         assertEq(aliceUSD - mockUSD.balanceOf(ALICE), firstSpend);
-        assertEq(mockUSD.balanceOf(address(hook)), PRIZE, "attacking charges no entry fee");
-        assertEq(collectibles.nextTokenId(), 1, "attacking does not mint an NFT");
         assertEq(manager.getNonzeroDeltaCount(), 0, "all first attack deltas settled");
         assertEq(hook.currentStage(), 0, "partial attack stays in its stage");
     }
@@ -226,6 +297,10 @@ contract BossPoolCoreTest is Test {
         uint256 bobUSDBeforeFailure = mockUSD.balanceOf(BOB);
         uint256 bobHPBeforeFailure = bossHP.balanceOf(BOB);
         (uint160 priceBeforeFailure,,,) = manager.getSlot0(bossKey.toId());
+        vm.expectRevert();
+        router.quoteAttackWithMockUSD(1_000e6, 0);
+        assertEq(hook.stageSold(0), soldBeforeFailure, "unexpected quote failure bubbles and rolls back damage");
+        assertEq(uint8(router.mode()), uint8(BossRouter.Operation.Idle), "failed quote leaves context idle");
         vm.prank(BOB);
         mockUSD.approve(address(router), type(uint256).max);
         vm.expectRevert();
@@ -264,14 +339,15 @@ contract BossPoolCoreTest is Test {
         _assertBossPriceAtReset();
         assertEq(manager.getNonzeroDeltaCount(), 0, "stage two reset deltas settled");
 
-        uint256 finalSupplyBefore = bossHP.totalSupply();
-        _attack(BOB, 1_000e6, 2);
+        _quoteFinalDefeatAndMatchAttack();
         assertEq(uint8(hook.status()), uint8(BossHook.RoundStatus.Defeated));
         assertEq(hook.currentStage(), 2, "final ABI stage remains zero-based 2");
         assertGt(hook.finalEligibleHP(), 0);
         assertEq(
             hook.finalEligibleHP(), hook.stageSold(0) + hook.stageSold(1) + hook.stageSold(2)
         );
+        assertEq(mockUSD.balanceOf(address(hook)), PRIZE, "attacks leave prize custody unchanged");
+        assertEq(collectibles.nextTokenId(), 1, "attacks mint no entry NFT");
         assertEq(hook.roundingDust(0), hook.stageCapacity(0) - hook.stageSold(0));
         assertEq(hook.roundingDust(1), hook.stageCapacity(1) - hook.stageSold(1));
         assertEq(hook.roundingDust(2), hook.stageCapacity(2) - hook.stageSold(2));
@@ -285,7 +361,7 @@ contract BossPoolCoreTest is Test {
             : stageOneQuote - stageOneRoyalSpent;
         assertLe(stageOneQuoteDifference, 2 * hook.stageAttackCount(0) + 2);
         assertApproxEqAbs(stageOneQuote, 331_219_793_595_396_366_740, 1e12);
-        assertEq(bossHP.totalSupply(), finalSupplyBefore, "total supply unchanged through defeat");
+        assertEq(bossHP.totalSupply(), BOSS_HP_SUPPLY, "total supply unchanged through defeat");
         assertEq(manager.getNonzeroDeltaCount(), 0, "all final attack deltas settled");
         assertEq(hook.redeemedHP(), 0);
 
@@ -297,6 +373,40 @@ contract BossPoolCoreTest is Test {
             }
         }
         assertEq(refillEvents, 2, "exactly two reserve refills");
+    }
+
+    function _quoteFinalDefeatAndMatchAttack() private {
+        uint256 finalEligibleBefore = hook.finalEligibleHP();
+        uint256 redeemedBefore = hook.redeemedHP();
+        uint256 paidPrizeBefore = hook.paidPrize();
+        uint256 escrowBefore = mockUSD.balanceOf(address(hook));
+        uint256 soldBefore = hook.stageSold(2);
+        uint256 supplyBefore = bossHP.totalSupply();
+        address quoteSink = address(0x000000000000000000000000000000000000dEaD);
+        uint256 sinkHPBefore = bossHP.balanceOf(quoteSink);
+
+        BossRouter.QuoteResult memory quote = router.quoteAttackWithMockUSD(1_000e6, 2);
+        assertTrue(quote.stageCleared);
+        assertTrue(quote.bossDefeated);
+        assertEq(quote.nextStage, 2);
+        assertEq(hook.finalEligibleHP(), finalEligibleBefore, "final quote does not freeze eligible supply");
+        assertEq(hook.redeemedHP(), redeemedBefore);
+        assertEq(hook.paidPrize(), paidPrizeBefore);
+        assertEq(mockUSD.balanceOf(address(hook)), escrowBefore, "final quote leaves prize escrow untouched");
+        assertEq(hook.stageSold(2), soldBefore, "final quote rolls back stage sales");
+        assertEq(bossHP.balanceOf(quoteSink), sinkHPBefore);
+        assertEq(bossHP.totalSupply(), supplyBefore);
+        assertEq(uint8(hook.status()), uint8(BossHook.RoundStatus.Active));
+        assertEq(hook.currentStage(), 2);
+        assertEq(uint8(router.mode()), uint8(BossRouter.Operation.Idle));
+        assertEq(manager.getNonzeroDeltaCount(), 0);
+
+        (uint256 spent, uint256 royBought, uint256 roySpent, uint256 hpOut) = _attack(BOB, 1_000e6, 2);
+        assertEq(quote.mockUSDSpent, spent);
+        assertEq(quote.royBought, royBought);
+        assertEq(quote.roySpent, roySpent);
+        assertEq(quote.bossHPOut, hpOut);
+        assertEq(bossHP.totalSupply(), supplyBefore);
     }
 
     function _transferAndRedeemEligibleHP() private {
@@ -321,9 +431,10 @@ contract BossPoolCoreTest is Test {
         assertEq(bossHP.balanceOf(address(hook)), hook.finalEligibleHP());
         assertLe(firstClaim + finalClaim, PRIZE);
         assertLe(PRIZE - firstClaim - finalClaim, 1, "two floor-rounded claims leave at most one USD base unit");
-        assertEq(mockUSD.balanceOf(address(hook)), PRIZE - hook.paidPrize());
-        assertEq(collectibles.nextTokenId(), 1, "the full round and token claims need no NFT mint");
+        assertEq(mockUSD.balanceOf(address(hook)), PRIZE - hook.paidPrize(), "only the prize is held by Hook");
         assertEq(bossHP.totalSupply(), BOSS_HP_SUPPLY, "claims never burn BossHP");
+        assertEq(collectibles.nextTokenId(), 1, "attacks and token claims mint no NFT");
+        assertEq(collectibles.balanceOf(ALICE) + collectibles.balanceOf(BOB), 0, "no entry NFT is minted");
     }
 
     function _claimVictoryNFTs() private {
@@ -335,6 +446,9 @@ contract BossPoolCoreTest is Test {
         assertTrue(collectibles.isVictoryToken(bobVictory));
         assertEq(collectibles.ownerOf(aliceVictory), ALICE);
         assertEq(collectibles.ownerOf(bobVictory), BOB);
+        assertEq(aliceVictory, 1, "optional victory NFT ids start at one");
+        assertEq(bobVictory, 2, "victory NFT ids follow claim order");
+        assertEq(collectibles.nextTokenId(), 3);
     }
 
     function test_DeadlineStopsAttackAndRefundsPrizeOnce() public {
@@ -346,8 +460,8 @@ contract BossPoolCoreTest is Test {
         vm.prank(ALICE);
         vm.expectRevert();
         router.attackWithMockUSD(1e6, 1, 1, 0, roundDeadline);
-        assertEq(hook.stageSold(0), 0);
         assertEq(mockUSD.balanceOf(ALICE), aliceUSD, "deadline attack rejection is atomic");
+        assertEq(hook.stageSold(0), 0);
 
         vm.prank(BOB);
         hook.expire();
@@ -391,14 +505,38 @@ contract BossPoolCoreTest is Test {
         (uint160 startPrice,,,) = round.manager.getSlot0(bossKey.toId());
         assertEq(startPrice, TickMath.getSqrtPriceAtTick(0), "human ROY/HP starts at 1");
 
+        vm.prank(address(0xCAFE));
+        BossRouter.QuoteResult memory initialQuote = round.router.quoteAttackWithMockUSD(1e6, 0);
+        assertGt(initialQuote.bossHPOut, 0, "currency1 pool quote works for a fresh wallet");
+        assertEq(round.mockUSD.balanceOf(address(0xCAFE)), 0);
+        assertEq(round.roy.balanceOf(address(0xCAFE)), 0);
+        assertEq(round.collectibles.balanceOf(address(0xCAFE)), 0);
+        assertEq(round.mockUSD.allowance(address(0xCAFE), address(round.hook)), 0);
+        assertEq(round.hook.stageSold(0), 0, "currency1 quote rolls back contribution");
+        assertEq(round.manager.getNonzeroDeltaCount(), 0);
+
         uint256 initialSupply = round.bossHP.totalSupply();
         AttackAmounts memory partialAttack = _attackForRound(round, ALICE, 1e6, 0);
         assertGt(partialAttack.hpOut, 0);
         assertEq(round.bossHP.balanceOf(ALICE), partialAttack.hpOut);
+        assertEq(initialQuote.mockUSDSpent, partialAttack.usdSpent);
+        assertEq(initialQuote.royBought, partialAttack.royBought);
+        assertEq(initialQuote.roySpent, partialAttack.roySpent);
+        assertEq(initialQuote.bossHPOut, partialAttack.hpOut);
         (uint160 partialPrice,,,) = round.manager.getSlot0(bossKey.toId());
         assertLt(partialPrice, startPrice, "human ROY/HP rises as the pool price falls");
 
+        BossRouter.QuoteResult memory clearQuote = round.router.quoteAttackWithMockUSD(1_000e6, 0);
+        assertTrue(clearQuote.stageCleared);
+        assertFalse(clearQuote.bossDefeated);
+        assertEq(clearQuote.nextStage, 1);
+        assertEq(round.hook.currentStage(), 0, "currency1 clear preview leaves the live stage unchanged");
+        assertEq(round.manager.getNonzeroDeltaCount(), 0);
         AttackAmounts memory clearAttack = _attackForRound(round, BOB, 1_000e6, 0);
+        assertEq(clearQuote.mockUSDSpent, clearAttack.usdSpent);
+        assertEq(clearQuote.royBought, clearAttack.royBought);
+        assertEq(clearQuote.roySpent, clearAttack.roySpent);
+        assertEq(clearQuote.bossHPOut, clearAttack.hpOut);
         assertGt(clearAttack.hpOut, 0);
         assertGt(clearAttack.royBought, clearAttack.roySpent, "unused supply-pool ROY returns to the player");
         assertEq(round.hook.currentStage(), 1);

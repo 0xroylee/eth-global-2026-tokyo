@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { BOSSES, findBoss, isBossId, type BossDefinition, type BossId } from "./bosses";
-import type { GameBridge } from "./bridge";
+import type { GameBridge, GameCommands } from "./bridge";
 import { HUB_LAYERS, HUB_TILESET } from "./hubTiles";
 import { makeCroppedTexture } from "./textures";
 import { HubAtmosphere } from "./HubAtmosphere";
@@ -24,6 +24,7 @@ type Gate = {
   boss: BossDefinition;
   zone: Phaser.Geom.Rectangle;
   glow: Phaser.GameObjects.Arc;
+  stageLabel?: Phaser.GameObjects.Text;
   pulse?: Phaser.Tweens.Tween;
 };
 
@@ -62,7 +63,12 @@ export class HubScene extends Phaser.Scene {
   private tileset!: Phaser.Tilemaps.Tileset;
   private nearGate: Gate | null = null;
   private modalOpen = false;
+  private domControlFocused = false;
   private reduceMotion = false;
+  private roundState?: GameCommands["round:state"];
+  private unavailableLabel?: string;
+  private attackPending = false;
+  private pendingStage: number | null = null;
   private facing: Facing = "down";
   private lastX = 0;
   private lastY = 0;
@@ -145,6 +151,19 @@ export class HubScene extends Phaser.Scene {
     // Sets reduceMotion and applies tile animation for the current preference.
     this.watchReducedMotion();
 
+    let focusOutTimer: number | undefined;
+    const handleFocusIn = () => this.refreshDomKeyboardFocus();
+    const handleFocusOut = () => {
+      if (focusOutTimer !== undefined) window.clearTimeout(focusOutTimer);
+      focusOutTimer = window.setTimeout(() => {
+        focusOutTimer = undefined;
+        this.refreshDomKeyboardFocus();
+      }, 0);
+    };
+    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("focusout", handleFocusOut);
+    this.refreshDomKeyboardFocus();
+
     this.unsubscribe.push(
       this.bridge.onCommand("guide:step", ({ step }) => {
         const enteringMove = step === "move" && this.guideStep !== "move";
@@ -159,13 +178,21 @@ export class HubScene extends Phaser.Scene {
       }),
       this.bridge.onCommand("ui:modal", ({ open }) => {
         this.modalOpen = open;
-        this.player.setVelocity(0, 0);
+        this.resetKeyboardState();
         if (open) this.showIdle();
         if (!this.input.keyboard) return;
         this.input.keyboard.enabled = !open;
         // Drop keys that went up while Phaser was ignoring the keyboard, so closing a panel does not resume a drift.
         if (!open) this.input.keyboard.resetKeys();
       }),
+      this.bridge.onCommand("round:state", (state) => this.applyRoundState(state)),
+      this.bridge.onCommand("round:unavailable", ({ label }) => this.showRoundUnavailable(label)),
+      this.bridge.onCommand("attack:pending", ({ active, stage }) => {
+        this.attackPending = active;
+        this.pendingStage = active ? stage ?? null : null;
+        this.renderCatStageLabel();
+      }),
+      this.bridge.onCommand("attack:confirmed", (effect) => this.showConfirmedAttack(effect)),
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.hintArrow?.destroy();
@@ -174,6 +201,10 @@ export class HubScene extends Phaser.Scene {
       this.nearRegion = false;
       this.unsubscribe.forEach((u) => u());
       this.unsubscribe = [];
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("focusout", handleFocusOut);
+      if (focusOutTimer !== undefined) window.clearTimeout(focusOutTimer);
+      this.resetKeyboardState();
     });
 
     this.exposeDevProbe();
@@ -287,6 +318,14 @@ export class HubScene extends Phaser.Scene {
         )
         .setDepth(LABEL_DEPTH);
       plate.setStrokeStyle(1, color, 0.6);
+      const stageLabel = boss.id === "cat"
+        ? this.add.text(cx, base + 18, "CHECKING ROUND", {
+            fontFamily: "var(--font-dm-mono), monospace",
+            fontSize: "9px",
+            color: "#f5b04a",
+            letterSpacing: 1,
+          }).setOrigin(0.5, 0).setDepth(LABEL_DEPTH + 1)
+        : undefined;
 
       bodies.add(this.add.rectangle(cx, obj.y + GATE.height / 2, GATE.width, GATE.height).setVisible(false));
 
@@ -295,6 +334,7 @@ export class HubScene extends Phaser.Scene {
         // Approach zone: the path tiles directly below the gate.
         zone: new Phaser.Geom.Rectangle(obj.x - 8, base, GATE.width + 16, 40),
         glow,
+        stageLabel,
       });
     }
 
@@ -343,14 +383,13 @@ export class HubScene extends Phaser.Scene {
     // Phaser calls preventDefault on every captured key page-wide, which
     // swallows Space on focused React buttons. Read keys without capturing.
     keyboard.clearCaptures();
-    // Listen on the window, not Phaser. A focused music or sound button otherwise
-    // keeps the key event off the canvas, so E never reaches the gate.
+    // Listen on the window, not Phaser. Ignore native controls so their keyboard
+    // behavior stays intact and only canvas-focused input reaches gates/routes.
     const interact = (event: KeyboardEvent) => {
-      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || this.modalOpen) return;
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || this.modalOpen || this.domControlFocused || isPageControlTarget(event)) return;
       const inspect = event.key === "e" || event.key === "E";
       const activatesFocusedControl = event.key === " " || event.key === "Enter";
       if (!inspect && !activatesFocusedControl) return;
-      if (activatesFocusedControl && isPageControlTarget(event)) return;
       const target = event.target;
       if (target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       if (this.nearGate) {
@@ -424,7 +463,7 @@ export class HubScene extends Phaser.Scene {
 
   private updateMovement() {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
-    if (this.modalOpen || !this.cursors) {
+    if (this.modalOpen || this.domControlFocused || !this.cursors) {
       body.setVelocity(0, 0);
       this.showIdle();
       this.guideAnchorX = this.player.x;
@@ -462,6 +501,76 @@ export class HubScene extends Phaser.Scene {
     this.player.setScale(1).setFlipX(false).setDepth(this.player.y);
     const shadow = this.children.getByName("player-shadow") as Phaser.GameObjects.Ellipse | null;
     shadow?.setPosition(this.player.x, this.player.y - 1);
+  }
+
+  private applyRoundState(state: GameCommands["round:state"]) {
+    this.roundState = state;
+    this.unavailableLabel = undefined;
+    this.renderCatStageLabel();
+  }
+
+  private showRoundUnavailable(label: string) {
+    this.roundState = undefined;
+    this.unavailableLabel = label;
+    this.renderCatStageLabel();
+  }
+
+  private renderCatStageLabel() {
+    const catGate = this.gates.find((gate) => gate.boss.id === "cat");
+    if (!catGate?.stageLabel) return;
+    if (this.attackPending) {
+      catGate.stageLabel.setText(this.pendingStage === null
+        ? "PENDING · RECEIPT"
+        : `S${this.pendingStage + 1}/3 · CHARGING`);
+      catGate.stageLabel.setColor("#f5b04a");
+      return;
+    }
+    if (!this.roundState) {
+      catGate.stageLabel.setText(this.unavailableLabel === "CHECKING DEPLOYMENT" ? "CHECKING ROUND" : this.unavailableLabel === "NO DEPLOYMENT" ? "NO ROUND" : "ROUND UNAVAILABLE");
+      catGate.stageLabel.setColor("#9da8c3");
+      return;
+    }
+    const stage = this.roundState.currentStage;
+    const capacity = this.roundState.stageCapacity[stage] ?? 0n;
+    const sold = this.roundState.stageSold[stage] ?? 0n;
+    const percent = capacity > 0n ? Math.min(100, Number((sold * 100n) / capacity)) : 0;
+    const status = this.roundState.status === 3 ? "DEFEATED" : this.roundState.status === 4 ? "EXPIRED" : "ACTIVE";
+    catGate.stageLabel.setText(status === "ACTIVE" ? `S${stage + 1}/3 · ${percent}%` : `S${stage + 1}/3 · ${status}`);
+    catGate.stageLabel.setColor(this.roundState.status === 3 ? "#91e7c5" : this.roundState.status === 4 ? "#9da8c3" : "#f5b04a");
+  }
+
+  private showConfirmedAttack(effect: GameCommands["attack:confirmed"]) {
+    const catGate = this.gates.find((gate) => gate.boss.id === "cat");
+    if (!catGate) return;
+    catGate.stageLabel?.setText(`−${formatHp(effect.bossHPOut)} HP`);
+    catGate.stageLabel?.setColor("#91e7c5");
+    if (!this.reduceMotion) {
+      this.tweens.add({
+        targets: catGate.glow,
+        scale: 1.24,
+        alpha: 0.76,
+        duration: 180,
+        yoyo: true,
+        ease: "Sine.Out",
+      });
+    }
+    this.time.delayedCall(2_200, () => this.renderCatStageLabel());
+  }
+
+  private refreshDomKeyboardFocus() {
+    const active = document.activeElement;
+    const focusedOnControl = active instanceof Element && Boolean(active.closest(
+      'input, textarea, select, button, a[href], [contenteditable]:not([contenteditable="false"]), [role="button"], [role="combobox"], [role="textbox"]',
+    ));
+    if (focusedOnControl !== this.domControlFocused) {
+      this.domControlFocused = focusedOnControl;
+      this.resetKeyboardState();
+    }
+  }
+
+  private resetKeyboardState() {
+    this.input.keyboard?.resetKeys();
+    this.player?.setVelocity(0, 0);
   }
 
   /** Counts resolved travel during the move step. Walls, pauses, and idle frames do not add distance. */
@@ -584,4 +693,10 @@ export class HubScene extends Phaser.Scene {
     if (hit) this.startGatePulse(hit);
     this.bridge.emit("gate:near", { bossId: hit?.boss.id ?? null });
   }
+}
+
+function formatHp(value: bigint): string {
+  const whole = value / 10n ** 18n;
+  const fraction = (value % 10n ** 18n).toString().padStart(18, "0").slice(0, 3).replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole.toString();
 }

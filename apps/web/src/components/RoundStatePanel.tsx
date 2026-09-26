@@ -1,11 +1,10 @@
 "use client";
 
 import { displayAmount, roundStatusLabel } from "@/lib/format";
-import { useLocalRound, type DeploymentState } from "@/lib/useLocalRound";
+import type { DeploymentState } from "@/lib/useBossPool";
 import { Metric } from "./Metric";
 
-export function RoundStatePanel() {
-  const deployment = useLocalRound();
+export function RoundStatePanel({ deployment }: { deployment: DeploymentState }) {
   const live = deployment.kind === "live";
 
   return (
@@ -17,7 +16,13 @@ export function RoundStatePanel() {
         <div>
           <p className="eyebrow mb-2">ON-CHAIN ROUND STATE</p>
           <h2 className="text-[19px] font-medium tracking-[-0.025em]">
-            {live ? "Connected to local contracts" : "Waiting for local deployment"}
+            {live
+              ? `Connected to ${deployment.network === "local" ? "local contracts" : deployment.network === "base-sepolia" ? "Base Sepolia" : "historical Robinhood testnet"}`
+              : deployment.kind === "loading"
+                ? "Checking the selected deployment"
+                : deployment.kind === "not-deployed"
+                  ? `No ${deployment.network === "local" ? "local" : deployment.network === "base-sepolia" ? "Base Sepolia" : "historical Robinhood"} manifest found`
+                  : "Deployment unavailable"}
           </h2>
         </div>
         <StatusBadge state={deployment} />
@@ -29,8 +34,9 @@ export function RoundStatePanel() {
         <p className="hairline mt-5 border-t pt-[17px] text-[13px] leading-[1.6] text-danger">{deployment.message}</p>
       ) : (
         <p className="hairline mt-5 border-t pt-[17px] text-[13px] leading-[1.6] text-[#a2abc1]">
-          No deployment manifest is available. Run the local seed command after starting Anvil; arena values will
-          appear only after it reads real contract state.
+          {deployment.kind === "loading"
+            ? "Verifying the manifest, recorded deployment transaction, contract code, and immutable wiring."
+            : "No deployment manifest is available for this network. Arena values appear only after the configured RPC reads verified contract state."}
         </p>
       )}
     </section>
