@@ -54,6 +54,8 @@ const ROAMER = {
   /** How far the control point sits off the leg's midpoint, perpendicular to it. */
   bend: 12,
   radius: 4.5,
+  /** World pixels around the body that count as "at the gate"; it has no fixed zone. */
+  interactRadius: 22,
 } as const;
 
 /** Overhead tiles (fences, canopies) draw above every y-sorted sprite. */
@@ -140,6 +142,8 @@ export class HubScene extends Phaser.Scene {
   private gates: Gate[] = [];
   private tileset!: Phaser.Tilemaps.Tileset;
   private nearGate: Gate | null = null;
+  /** The walking gate has no zone, so proximity is tracked as a radius. */
+  private nearRoamer = false;
   private modalOpen = false;
   private domControlFocused = false;
   private reduceMotion = false;
@@ -200,6 +204,7 @@ export class HubScene extends Phaser.Scene {
   create() {
     this.gates = [];
     this.nearGate = null;
+    this.nearRoamer = false;
     this.regionZone = null;
     this.nearRegion = false;
     this.sage = null;
@@ -327,6 +332,7 @@ export class HubScene extends Phaser.Scene {
       this.sage = null;
       this.sageZone = null;
       this.nearSage = false;
+      this.nearRoamer = false;
       this.roamerTween?.stop();
       this.roamerTween = null;
       this.roamerIdle?.remove();
@@ -359,6 +365,7 @@ export class HubScene extends Phaser.Scene {
       frame: this.player.frame.name,
       walking: this.player.anims.isPlaying,
       nearGate: this.nearGate?.boss.id ?? null,
+      roamerNear: this.nearRoamer,
       glowScale: this.nearGate?.glow.scaleX ?? null,
       glowAlpha: this.nearGate?.glow.alpha ?? null,
       reduceMotion: this.reduceMotion,
@@ -1110,7 +1117,13 @@ export class HubScene extends Phaser.Scene {
   private updateGateProximity() {
     const px = this.player.x;
     const py = this.player.y;
-    const hit = this.gates.find((g) => Phaser.Geom.Rectangle.Contains(g.zone, px, py)) ?? null;
+    const roamer = this.roamer;
+    // SOL walks its spur instead of standing in a zone, so "at the gate" is a radius
+    // around the body. Recomputed every frame so the probe never reports a stale value.
+    this.nearRoamer = roamer !== null && Phaser.Math.Distance.Between(px, py, roamer.x, roamer.y) <= ROAMER.interactRadius;
+    const hit =
+      this.gates.find((g) => Phaser.Geom.Rectangle.Contains(g.zone, px, py)) ??
+      (this.nearRoamer ? this.gates.find((g) => g.boss.id === ROAMER.bossId) ?? null : null);
     if (hit === this.nearGate) return;
 
     if (this.nearGate) {
