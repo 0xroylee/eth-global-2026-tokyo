@@ -31,15 +31,17 @@ Use the existing dark tokens for the surrounding shell. Avoid rounded dashboard 
 
 ## Attack preview
 
-An active, verified battle loads a public quote automatically for the fixed **1 MockUSD maximum**. No wallet, allowance, amount input, or **GET QUOTE** button is needed to see the preview.
+An active, verified battle loads a public quote automatically for the selected attack cap, initially **1 MockUSD**. The commands are **SWAP ATTACK**, **5× SWAP ATTACK**, and **10× SWAP ATTACK**, with maximum spends of 1, 5, and 10 MockUSD. Each command submits one attack transaction. The multiplier describes the input cap; damage follows the live quote.
+
+Choosing a different command selects its cap and refreshes the public preview. It does not request a transaction. Highlight the selection and show its maximum spend. After reviewing the quote, the player clicks the selected command again to continue. No wallet or allowance is needed to select a cap and see its preview.
 
 The battle shows estimated damage and the input cap before the player chooses **SWAP ATTACK**. Expected spend, refunds, minimum output, and both pool fees remain available in the preview. Distinguish estimates from confirmed amounts. Expandable details can show exact amounts and intermediate Attack Token values.
 
-Refresh the quote when its encounter, wallet context, stage, observed pool state, or validity changes. Ignore late responses from an earlier context. While a quote is unavailable or refreshing, show that state and prevent submission with stale bounds. Failed reads display an error and recover without repeatedly prompting the wallet.
+Refresh the quote when its input cap, encounter, wallet context, stage, observed pool state, or validity changes. Ignore late responses from an earlier context. While a quote is unavailable or refreshing, show that state and prevent submission with stale bounds. Failed reads display an error and recover without repeatedly prompting the wallet.
 
 ## Approval and attack flow
 
-| Player state | Result of choosing SWAP ATTACK |
+| Player state | Result of clicking the selected attack command |
 | --- | --- |
 | Wallet disconnected | Request wallet connection. Keep the public preview visible. |
 | Wrong wallet network | Request the selected network. |
@@ -51,6 +53,8 @@ Refresh the quote when its encounter, wallet context, stage, observed pool state
 The approval dialog is compact. It identifies MockUSD, the BossRouter spender, and the unlimited allowance requested by the existing SDK. Explain the two actions: approve access in the wallet, then return to **SWAP ATTACK**. Show approval progress and errors in the same window.
 
 Close the approval dialog when sufficient allowance is confirmed. Approval never submits an attack automatically. Each attack requires a new player click and retains its displayed input cap and accepted minimum outputs. Approved players do not pass through an extra attack-confirmation dialog.
+
+Balance and allowance checks use the selected cap. Insufficient balance for 10 MockUSD does not prevent selecting a smaller cap. A pending wallet action or unresolved transaction locks all attack commands. Changing the encounter or account resets the selection to 1 MockUSD.
 
 Battle details, receipt recovery, and reward claims remain available through explicit controls. They do not interrupt the normal attack path. When a quote changes during simulation, show the refreshed preview and require another click.
 

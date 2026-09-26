@@ -11,7 +11,7 @@ import {
 } from "@boss-pool/chain";
 import { displayAmount, displayEstimate, roundStatusLabel } from "@/lib/format";
 import { writeStateMatchesEncounter } from "@/lib/battle";
-import { routeAttackCommand } from "@/lib/attackCommand";
+import { attackCapAmount, routeAttackCommand, type AttackCap } from "@/lib/attackCommand";
 import { type useBossPool } from "@/lib/useBossPool";
 
 type Arena = ReturnType<typeof useBossPool>;
@@ -28,14 +28,13 @@ type QuoteState = {
   receivedAt: number;
 };
 type ActionResult =
-  | { kind: "approval"; hash: string; token: string; spender: string; amount: bigint }
-  | { kind: "attack"; hash: string; result: AttackResult }
+  | { kind: "approval"; hash: string; token: string; spender: string; amount: bigint; attackCap?: bigint }
+  | { kind: "attack"; hash: string; maxMockUSD: bigint; result: AttackResult }
   | { kind: "reward"; hash: string; hpAmount: bigint; payout: bigint }
   | { kind: "nft"; hash: string; tokenId: bigint };
 
 const MOCK_USD_DECIMALS = 6;
 const DEFAULT_SLIPPAGE_BPS = 100;
-const ATTACK_CAP = 1_000_000n;
 
 export type AttackQuotePreview = {
   quote: AttackQuote | null;
@@ -52,10 +51,11 @@ export type AttackQuotePreview = {
   outputDecimals: number;
 };
 
-export type BossActionsHandle = { attackOrRequestApproval: () => void };
+export type BossActionsHandle = { attackOrRequestApproval: (cap: AttackCap) => void };
 
 type BossActionsProps = {
   arena: Arena;
+  selectedCap: AttackCap;
   approvalOnly: boolean;
   onApprovalRequired: () => void;
   onApprovalReady: () => void;
@@ -64,6 +64,7 @@ type BossActionsProps = {
 
 export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(function BossActions({
   arena,
+  selectedCap,
   approvalOnly,
   onApprovalRequired,
   onApprovalReady,
@@ -76,7 +77,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
   const [claimText, setClaimText] = useState("");
   const [rewardPreview, setRewardPreview] = useState<RewardPreview | null>(null);
   const [rewardError, setRewardError] = useState<string | null>(null);
-  const [approvals, setApprovals] = useState<{ attack?: ApprovalStatus; claim?: ApprovalStatus }>({});
+  const [approvals, setApprovals] = useState<{ attack?: { maxMockUSD: bigint; status: ApprovalStatus }; claim?: ApprovalStatus }>({});
   const [lastResult, setLastResult] = useState<ActionResult | null>(null);
   const [now, setNow] = useState(Date.now());
   const [quoteRefreshVersion, setQuoteRefreshVersion] = useState(0);
@@ -92,7 +93,9 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
   const rewardToken = round?.rewardToken;
   const claimToken = factory ? rewardToken : hpToken;
   const claimableAmount = player ? factory ? player.rewardCredit : player.bossHPBalance : 0n;
-  const inputAmount = ATTACK_CAP;
+  const inputAmount = attackCapAmount(selectedCap);
+  const attackCommandLabel = selectedCap === 1 ? "SWAP ATTACK" : `${selectedCap}× SWAP ATTACK`;
+  const approvalActionLabel = `Approve unlimited MockUSD allowance · ${selectedCap} MockUSD attack cap`;
   const hpAmount = parseTokenAmount(claimText, claimToken?.decimals ?? 18);
   const attackAllowance = player?.attackAllowance;
   const claimAllowance = player?.claimAllowance;
@@ -147,7 +150,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
       if (!activeRequest) return;
       const attack = attackResult.status === "fulfilled" ? attackResult.value : undefined;
       const claim = claimResult.status === "fulfilled" ? claimResult.value : undefined;
-      setApprovals({ attack, claim });
+      setApprovals({ attack: attack ? { maxMockUSD: inputAmount, status: attack } : undefined, claim });
       setApprovalLoading(false);
       if (attackResult.status === "rejected" || claimResult.status === "rejected") {
         const retryDelays = [2_000, 5_000, 15_000, 30_000];
@@ -189,11 +192,12 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
       inputAmount !== null && quote.maxMockUSD === inputAmount &&
       chainTimestamp < quote.expiresAt && quoteTimestamp < quote.expiresAt && active;
   }, [quoteState, live, round, arena.network, arena.wallet.chainId, account, inputAmount, chainTimestamp, quoteTimestamp, active]);
+  const selectedQuoteState = quoteState?.quote.maxMockUSD === inputAmount ? quoteState : null;
 
   const quoteSecondsLeft = quoteState && live
     ? Math.max(0, Number(quoteState.quote.expiresAt - quoteTimestamp))
     : 0;
-  const attackApproval = approvals.attack;
+  const attackApproval = approvals.attack?.maxMockUSD === inputAmount ? approvals.attack.status : undefined;
   const claimApproval = approvals.claim;
   const hasInputBalance = Boolean(player && inputAmount !== null && inputAmount > 0n && player.mockUSDBalance >= inputAmount);
   const attackReady = Boolean(
@@ -278,7 +282,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
 
   useEffect(() => {
     onQuotePreviewChange({
-      quote: quoteState?.quote ?? null,
+      quote: selectedQuoteState?.quote ?? null,
       fresh: quoteFresh,
       loading: quoteBusy,
       allowanceLoading: approvalLoading,
@@ -291,7 +295,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
       outputSymbol: hpToken?.symbol ?? "HP",
       outputDecimals: hpToken?.decimals ?? 18,
     });
-  }, [onQuotePreviewChange, quoteState?.quote, quoteFresh, quoteBusy, quoteError, attackApproval?.approvalNeeded,
+  }, [onQuotePreviewChange, selectedQuoteState?.quote, quoteFresh, quoteBusy, quoteError, attackApproval?.approvalNeeded,
     Boolean(attackApproval), approvalLoading, hasInputBalance, attackReady, Boolean(player), hpToken?.symbol, hpToken?.decimals]);
 
   useEffect(() => {
@@ -310,7 +314,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
   }, [approvalOnly, quoteFresh, attackApproval, onApprovalReady]);
 
   async function submitApproval(action: ApprovalAction, label: string) {
-    if (!sdk) return;
+    if (!sdk || (action.kind === "attack" && action.maxMockUSD !== inputAmount)) return;
     try {
       const confirmed = await arena.runPending(label, () => sdk.approve(action));
       if (confirmed?.status === "confirmed") {
@@ -320,6 +324,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
           token: confirmed.result.token,
           spender: confirmed.result.spender,
           amount: confirmed.result.amount,
+          attackCap: action.kind === "attack" ? action.maxMockUSD : undefined,
         });
       }
     } catch {
@@ -352,12 +357,12 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
   }
 
   async function attack() {
-    if (!sdk || !quoteFresh || !quoteState) return;
+    if (!sdk || !quoteFresh || !quoteState || quoteState.quote.maxMockUSD !== inputAmount) return;
     setQuoteError(null);
     try {
-      const confirmed = await arena.runPending("Attack", () => sdk.attack(quoteState.quote));
+      const confirmed = await arena.runPending(`${attackCommandLabel} · max ${selectedCap} MockUSD`, () => sdk.attack(quoteState.quote));
       if (confirmed?.status === "confirmed") {
-        setLastResult({ kind: "attack", hash: confirmed.hash, result: confirmed.result });
+        setLastResult({ kind: "attack", hash: confirmed.hash, maxMockUSD: inputAmount, result: confirmed.result });
       }
     } catch (error) {
       if (error instanceof RequoteRequiredError) {
@@ -369,9 +374,13 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
   }
 
   useImperativeHandle(ref, () => ({
-    attackOrRequestApproval() {
+    attackOrRequestApproval(requestedCap) {
+      const requestedMaxMockUSD = attackCapAmount(requestedCap);
+      if (requestedCap !== selectedCap || inputAmount !== requestedMaxMockUSD) return;
       const route = routeAttackCommand({
         quoteFresh,
+        quoteMaxMockUSD: quoteState?.quote.maxMockUSD ?? null,
+        selectedMaxMockUSD: requestedMaxMockUSD,
         attackReady,
         allowanceMissing: Boolean(attackApproval?.approvalNeeded),
         approvalReady: approvalCanContinue,
@@ -379,7 +388,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
       if (route === "attack") void attack();
       else if (route === "approval") onApprovalRequired();
     },
-  }), [attackReady, approvalCanContinue, onApprovalRequired, attack]);
+  }), [selectedCap, inputAmount, quoteFresh, quoteState?.quote.maxMockUSD, attackReady, approvalCanContinue, onApprovalRequired, attack]);
 
   const statusText = round ? roundStatusLabel(round.status) : arena.deployment.kind === "not-deployed" ? "Not deployed" : arena.deployment.kind === "error" ? "Unavailable" : "Checking";
   const attackBlockReason = !account
@@ -389,26 +398,26 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
       : !active
         ? round?.status === 3 ? "The boss has been defeated." : round?.status === 4 ? "This round has expired." : "Attack is unavailable outside an active round."
         : !hasInputBalance
-          ? "The wallet needs enough MockUSD for the full input cap; unused input is refunded."
+          ? `The wallet needs enough MockUSD for up to ${selectedCap} MockUSD; unused input is refunded.`
           : !quoteState
             ? quoteBusy ? "The public attack quote is loading." : "The public attack quote is unavailable; it will retry automatically."
             : !quoteFresh
               ? "This quote is stale. Wait for the refreshed preview before attacking."
               : attackApproval?.approvalNeeded
-                ? "Approve MockUSD for BossRouter before attacking."
-                : "Ready to submit the quoted attack.";
+                ? `Approve MockUSD for BossRouter before ${attackCommandLabel}.`
+                : `Ready to submit the quoted ${attackCommandLabel}.`;
 
   if (approvalOnly) {
     return (
       <div className="font-mono text-sm leading-relaxed text-[#2b4a8b]">
-        <p>BossRouter needs permission to spend MockUSD before this attack.</p>
+        <p>BossRouter needs permission to spend MockUSD before this {attackCommandLabel}.</p>
         <dl className="mt-3 grid gap-1 border-y border-[#2b4a8b]/25 py-2 text-xs">
           <div className="flex justify-between gap-3"><dt>Token</dt><dd>MockUSD</dd></div>
           <div className="flex justify-between gap-3"><dt>Spender</dt><dd className="font-semibold">BossRouter</dd></div>
           <div className="flex justify-between gap-3"><dt>Permission</dt><dd>Unlimited</dd></div>
-          <div className="flex justify-between gap-3"><dt>Attack cap</dt><dd>{displayAmount(inputAmount, MOCK_USD_DECIMALS)} MockUSD</dd></div>
+          <div className="flex justify-between gap-3"><dt>Attack cap</dt><dd>Up to {displayAmount(inputAmount, MOCK_USD_DECIMALS)} MockUSD</dd></div>
         </dl>
-        <p className="mt-3">1. Approve MockUSD in your wallet. 2. When this closes, click SWAP ATTACK to send the attack.</p>
+        <p className="mt-3">1. Approve MockUSD in your wallet. 2. When this closes, click the selected command to send the quoted attack.</p>
         <p className="mt-1 text-xs">Approval never sends an attack.</p>
         {live && <details className="mt-2 text-xs">
           <summary className="cursor-pointer">Show full token and spender addresses</summary>
@@ -422,7 +431,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
         {attackApproval?.approvalNeeded && <button
           type="button"
           disabled={!approvalCanContinue}
-          onClick={() => void submitApproval({ kind: "attack", maxMockUSD: inputAmount }, "Approve attack input")}
+          onClick={() => void submitApproval({ kind: "attack", maxMockUSD: inputAmount }, approvalActionLabel)}
           className="mt-3 min-h-11 border-2 border-[#2b4a8b] bg-[#2b4a8b] px-4 py-2 font-pixel text-xs text-white shadow-[3px_3px_0_rgba(20,30,60,.45)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {writeBusy ? "Approval in progress…" : !quoteFresh ? "Waiting for fresh quote…" : "Approve MockUSD"}
@@ -463,7 +472,8 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
           </div>
           <span className="font-mono text-[9px] tracking-[0.1em] text-dim">NO WALLET OR ALLOWANCE NEEDED</span>
         </div>
-        <p className="mt-3 text-sm text-fog">1 MockUSD maximum per attack · refreshes when the stage, pool, wallet, or quote validity changes</p>
+        <p className="mt-3 text-sm text-fog">Selected cap: up to {selectedCap} MockUSD · damage is estimated from the live quote and can vary with pool prices.</p>
+        <p className="mt-1 text-xs text-muted">The public quote refreshes when the stage, pool, wallet, selected cap, or quote validity changes.</p>
         {arena.deployment.kind === "not-deployed" && <p className="mt-2 text-xs text-muted">No deployment manifest exists for this network, so no quote is available.</p>}
         {arena.deployment.kind === "error" && <p className="mt-2 text-xs text-danger" role="status">Public quote unavailable: {arena.deployment.message}</p>}
         {round && !active && !quoteError && (
@@ -476,50 +486,50 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
           </p>
         )}
         {quoteError && <p className="mt-2 text-xs text-danger" role="alert">Quote or simulation failed: {quoteError}</p>}
-        {quoteState && (
+        {selectedQuoteState && (
           <div className={`mt-3 border-l-2 pl-3 ${quoteFresh ? "border-live/60" : "border-danger/70"}`} aria-live="polite">
             <p className={`font-mono text-[9px] tracking-[0.1em] ${quoteFresh ? "text-live-soft" : "text-danger"}`}>
               {quoteFresh ? "FRESH QUOTE" : "QUOTE STALE · REFRESHING AUTOMATICALLY"}
             </p>
             <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-              <QuoteMetric label={`${hpToken?.symbol ?? "TOKEN"} ESTIMATE`} amount={quoteState.quote.bossHPOut} decimals={hpToken?.decimals ?? 18} unit={hpToken?.symbol ?? "HP"} />
-              <QuoteMetric label="MOCKUSD SPENT" amount={quoteState.quote.mockUSDSpent} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
-              <QuoteMetric label="MOCKUSD REFUND" amount={quoteState.quote.mockUSDRefunded} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
-              <QuoteMetric label="ATTACK TOKEN BOUGHT" amount={quoteState.quote.royBought} decimals={18} unit="Attack Token" />
-              <QuoteMetric label="ATTACK TOKEN SPENT" amount={quoteState.quote.roySpent} decimals={18} unit="Attack Token" />
-              <QuoteMetric label="ATTACK TOKEN REFUND" amount={quoteState.quote.royRefunded} decimals={18} unit="Attack Token" />
+              <QuoteMetric label={`${hpToken?.symbol ?? "TOKEN"} ESTIMATE`} amount={selectedQuoteState.quote.bossHPOut} decimals={hpToken?.decimals ?? 18} unit={hpToken?.symbol ?? "HP"} />
+              <QuoteMetric label="MOCKUSD SPENT" amount={selectedQuoteState.quote.mockUSDSpent} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
+              <QuoteMetric label="MOCKUSD REFUND" amount={selectedQuoteState.quote.mockUSDRefunded} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
+              <QuoteMetric label="ATTACK TOKEN BOUGHT" amount={selectedQuoteState.quote.royBought} decimals={18} unit="Attack Token" />
+              <QuoteMetric label="ATTACK TOKEN SPENT" amount={selectedQuoteState.quote.roySpent} decimals={18} unit="Attack Token" />
+              <QuoteMetric label="ATTACK TOKEN REFUND" amount={selectedQuoteState.quote.royRefunded} decimals={18} unit="Attack Token" />
             </div>
             <div className="mt-2 text-xs text-muted">
-              {quoteState.quote.bossDefeated
+              {selectedQuoteState.quote.bossDefeated
                 ? "This attack is predicted to defeat the boss."
-                : quoteState.quote.stageCleared
-                  ? `This attack is predicted to clear Stage ${quoteState.quote.stage + 1} and open Stage ${quoteState.quote.nextStage + 1}.`
-                  : `Stage ${quoteState.quote.stage + 1} remains active.`}
+                : selectedQuoteState.quote.stageCleared
+                  ? `This attack is predicted to clear Stage ${selectedQuoteState.quote.stage + 1} and open Stage ${selectedQuoteState.quote.nextStage + 1}.`
+                  : `Stage ${selectedQuoteState.quote.stage + 1} remains active.`}
               <span
                 className="ml-2 text-faint"
-                title={`Exact floors: ${displayAmount(quoteState.quote.minRoyOut, 18)} Attack Token and ${displayAmount(quoteState.quote.minBossHPOut, hpToken?.decimals ?? 18)} ${hpToken?.symbol ?? "HP"}`}
+                title={`Exact floors: ${displayAmount(selectedQuoteState.quote.minRoyOut, 18)} Attack Token and ${displayAmount(selectedQuoteState.quote.minBossHPOut, hpToken?.decimals ?? 18)} ${hpToken?.symbol ?? "HP"}`}
               >
-                Min ≈ {displayEstimate(quoteState.quote.minRoyOut, 18)} Attack Token + {displayEstimate(quoteState.quote.minBossHPOut, hpToken?.decimals ?? 18)} {hpToken?.symbol ?? "HP"} · block {quoteState.quote.quotedBlock.toString()}
+                Min ≈ {displayEstimate(selectedQuoteState.quote.minRoyOut, 18)} Attack Token + {displayEstimate(selectedQuoteState.quote.minBossHPOut, hpToken?.decimals ?? 18)} {hpToken?.symbol ?? "HP"} · block {selectedQuoteState.quote.quotedBlock.toString()}
               </span>
             </div>
             <details className="mt-2 text-[10px] text-faint">
               <summary className="cursor-pointer font-mono tracking-[0.08em]">EXACT DECIMAL VALUES</summary>
               <dl className="mt-1 grid grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2">
-                <ExactValue label={`${hpToken?.symbol ?? "Token"} output`} amount={quoteState.quote.bossHPOut} decimals={hpToken?.decimals ?? 18} unit={hpToken?.symbol ?? "HP"} />
-                <ExactValue label="MockUSD spent" amount={quoteState.quote.mockUSDSpent} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
-                <ExactValue label="MockUSD refund" amount={quoteState.quote.mockUSDRefunded} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
-                <ExactValue label="Attack Token bought" amount={quoteState.quote.royBought} decimals={18} unit="Attack Token" />
-                <ExactValue label="Attack Token spent" amount={quoteState.quote.roySpent} decimals={18} unit="Attack Token" />
-                <ExactValue label="Attack Token refund" amount={quoteState.quote.royRefunded} decimals={18} unit="Attack Token" />
-                <ExactValue label="Minimum Attack Token output" amount={quoteState.quote.minRoyOut} decimals={18} unit="Attack Token" />
-                <ExactValue label={`Minimum ${hpToken?.symbol ?? "HP"} output`} amount={quoteState.quote.minBossHPOut} decimals={hpToken?.decimals ?? 18} unit={hpToken?.symbol ?? "HP"} />
+                <ExactValue label={`${hpToken?.symbol ?? "Token"} output`} amount={selectedQuoteState.quote.bossHPOut} decimals={hpToken?.decimals ?? 18} unit={hpToken?.symbol ?? "HP"} />
+                <ExactValue label="MockUSD spent" amount={selectedQuoteState.quote.mockUSDSpent} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
+                <ExactValue label="MockUSD refund" amount={selectedQuoteState.quote.mockUSDRefunded} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
+                <ExactValue label="Attack Token bought" amount={selectedQuoteState.quote.royBought} decimals={18} unit="Attack Token" />
+                <ExactValue label="Attack Token spent" amount={selectedQuoteState.quote.roySpent} decimals={18} unit="Attack Token" />
+                <ExactValue label="Attack Token refund" amount={selectedQuoteState.quote.royRefunded} decimals={18} unit="Attack Token" />
+                <ExactValue label="Minimum Attack Token output" amount={selectedQuoteState.quote.minRoyOut} decimals={18} unit="Attack Token" />
+                <ExactValue label={`Minimum ${hpToken?.symbol ?? "HP"} output`} amount={selectedQuoteState.quote.minBossHPOut} decimals={hpToken?.decimals ?? 18} unit={hpToken?.symbol ?? "HP"} />
               </dl>
             </details>
             <p className="mt-1 font-mono text-[9px] text-faint">
               {quoteFresh ? `${quoteSecondsLeft}s remaining` : "Waiting for the automatic quote refresh"} · 1% output tolerance
             </p>
             <p className="mt-1 text-xs text-muted">
-              Supply pool fee: {quoteState.quote.supplyPoolFee / 10_000}% · Boss pool fee: {quoteState.quote.bossPoolFee / 10_000}%
+              Supply pool fee: {selectedQuoteState.quote.supplyPoolFee / 10_000}% · Boss pool fee: {selectedQuoteState.quote.bossPoolFee / 10_000}%
             </p>
           </div>
         )}
@@ -551,8 +561,8 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
                   <p className="mt-1 break-all font-mono text-[9px] text-faint">
                     MockUSD {live ? shortAddress(live.manifest.addresses.mockUSD) : "—"} → BossRouter {live ? shortAddress(live.manifest.addresses.router) : "—"} · unlimited approval
                   </p>
-                  {quoteFresh && attackApproval?.approvalNeeded && (
-                    <ActionButton disabled={!hasInputBalance || !arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord)} onClick={() => void submitApproval({ kind: "attack", maxMockUSD: quoteState.quote.maxMockUSD }, "Approve attack input")}>
+                  {quoteFresh && selectedQuoteState && attackApproval?.approvalNeeded && (
+                    <ActionButton disabled={!hasInputBalance || !arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord)} onClick={() => void submitApproval({ kind: "attack", maxMockUSD: selectedQuoteState.quote.maxMockUSD }, approvalActionLabel)}>
                       Approve MockUSD for BossRouter
                     </ActionButton>
                   )}
@@ -564,7 +574,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
             <ReadinessRow step="B" title="Attack" state={attackReady ? "ready" : active ? "waiting" : "closed"}>
               <p className="text-xs leading-relaxed text-muted" role="status">{attackBlockReason}</p>
               <ActionButton primary disabled={!attackReady} onClick={() => void attack()}>
-                ATTACK · STAGE {round ? round.currentStage + 1 : "—"}
+                {attackCommandLabel} · STAGE {round ? round.currentStage + 1 : "—"}
               </ActionButton>
             </ReadinessRow>
             </>}
@@ -743,10 +753,10 @@ function ConfirmedResult({ result, hpToken, claimToken, rewardToken }: {
   let text: string;
   switch (result.kind) {
     case "approval":
-      text = `Unlimited allowance set · ${shortAddress(result.token)} → ${shortAddress(result.spender)}`;
+      text = `${result.attackCap ? `Attack cap up to ${displayAmount(result.attackCap, MOCK_USD_DECIMALS)} MockUSD · ` : ""}Unlimited allowance set · ${shortAddress(result.token)} → ${shortAddress(result.spender)}`;
       break;
     case "attack":
-      text = `Confirmed ${displayAmount(result.result.bossHPOut, hpToken?.decimals ?? 18)} ${hpToken?.symbol ?? "HP"} output · ${displayAmount(result.result.mockUSDSpent, MOCK_USD_DECIMALS)} mUSD spent · ${displayAmount(result.result.royRefunded, 18)} Attack Token returned`;
+      text = `Confirmed ${displayAmount(result.result.bossHPOut, hpToken?.decimals ?? 18)} ${hpToken?.symbol ?? "HP"} output · ${displayAmount(result.result.mockUSDSpent, MOCK_USD_DECIMALS)} mUSD spent (cap ${displayAmount(result.maxMockUSD, MOCK_USD_DECIMALS)} MockUSD) · ${displayAmount(result.result.royRefunded, 18)} Attack Token returned`;
       break;
     case "reward":
       text = `${claimToken?.symbol ?? "HP"} reward amount ${displayAmount(result.hpAmount, claimToken?.decimals ?? 18)} · received ${displayAmount(result.payout, rewardToken?.decimals ?? 18)} ${rewardToken?.symbol ?? "reward token"}`;

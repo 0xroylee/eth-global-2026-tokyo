@@ -118,7 +118,7 @@ export function BossEntryPanel({
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/30 px-3 py-3">
             <div>
               <p className="font-mono text-[9px] tracking-[0.12em] text-dim">LIVE BATTLE</p>
-              <p className="mt-1 text-xs text-muted">Enter the arena. Each attack spends up to 1 MockUSD.</p>
+              <p className="mt-1 text-xs text-muted">Enter the arena. Choose an attack cap of up to 1, 5, or 10 MockUSD.</p>
             </div>
             <Link
               href={`/battle/${live.hookAddress}?network=${arena.network}`}
