@@ -12,11 +12,23 @@ export type GameEvents = {
   "gate:enter": { bossId: BossId };
   /** Scene finished booting and is ready for commands. */
   "scene:ready": Record<string, never>;
+  /** A map or sprite file failed while the scene was loading. */
+  "scene:error": Record<string, never>;
+  /** The player traveled the guide's required distance during the move step. */
+  "guide:moved": Record<string, never>;
+  /** Player walked into / out of the closed east route. */
+  "region:near": { exitId: "east-route" | null };
+  /** Player inspected the closed east route. */
+  "region:inspect": { exitId: "east-route" };
 };
+
+export type GuideSceneStep = "off" | "move" | "find" | "inspect";
 
 export type GameCommands = {
   /** React opened or closed a panel; the scene pauses movement input while open. */
   "ui:modal": { open: boolean };
+  /** Which part of the beginner guide the scene should track. */
+  "guide:step": { step: GuideSceneStep };
 };
 
 type Listener<T> = (payload: T) => void;
