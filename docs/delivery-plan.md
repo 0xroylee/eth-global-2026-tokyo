@@ -1,6 +1,18 @@
 # Boss Pool delivery plan
 
-Updated 26 September 2026. The no-burn direct-attack contracts, shared SDK, Next.js player app, and Phaser hub are implemented. Five focused Foundry cases pass. The fresh direct-attack local SDK journey passed with 14 successful transactions at commit `3450be7`. The earlier 18-transaction journey used enrollment-era contracts and is historical. Base Sepolia RPC access is verified, but there is no Boss Pool deployment there. Manual wallet-popup acceptance also remains open.
+Updated 27 September 2026. The no-burn direct-attack contracts, shared SDK, Next.js player app, and Phaser hub are implemented. Five focused Foundry cases pass. The fresh direct-attack local SDK journey passed with 14 successful transactions at commit `3450be7`. The earlier 18-transaction journey used enrollment-era contracts and is historical. Base Sepolia now hosts a factory-deployed live boss (`base-sepolia.json`, block 47332745), verified in `docs/evidence/base-sepolia-boss-factory-current.json`. Public `sepolia.base.org` RPC is rate-limited (429); swap to a keyed RPC before the demo. Manual wallet-popup acceptance also remains open.
+
+## Progress snapshot
+
+| Layer | Status | Notes |
+| --- | --- | --- |
+| Contracts / SDK | ✅ Done | No-burn direct attack, Hook, Factory, NFT, and `readActivity` (verified) |
+| Web / wallet | ✅ Done | `useBossPool` 5s polling, direct attack, receipt recovery |
+| Phaser hub | ✅ Done | Roster hub (12 gates) + sage NPC + ROO patrol FSM (merged to main) |
+| Battle | ✅ Done | Battle v2, by-hook routing, 5x/10x swap attacks, `BattleActivityLog` confirmed-attacks feed |
+| Boostpad | ✅ Done | Factory launch flow at `/boostpad` |
+| Testnet | 🟡 Live (at risk) | Base Sepolia factory boss is live; public RPC returns 429 — swap to a keyed RPC before the demo |
+| World Channel | 🟢 Implemented on `feat/world-channel` | Bottom-left global activity feed: real `readActivity` blended with a deterministic mock stream (pending review) |
 
 ## Outcome and scope
 
