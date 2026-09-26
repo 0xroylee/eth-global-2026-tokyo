@@ -5,12 +5,11 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { getDefaultBossHook } from "@boss-pool/chain";
-import type { BossDefinition } from "@/game/bosses";
+import { bossHookForNetwork, findBossPresentation, type BossDefinition } from "@/game/bosses";
 import { displayAmount, roundStatusLabel } from "@/lib/format";
 import { type useBossPool } from "@/lib/useBossPool";
 
 type Arena = ReturnType<typeof useBossPool>;
-const CAT_FORMS = ["/images/boss-cat-form-a.png", "/images/boss-cat-form-b.png", "/images/boss-cat-form-c.png"] as const;
 
 export function BossEntryPanel({
   boss,
@@ -27,12 +26,15 @@ export function BossEntryPanel({
   const closeRef = useRef<HTMLButtonElement>(null);
   const entryRef = useRef<HTMLAnchorElement>(null);
   const candidate = arena.deployment.kind === "live" ? arena.deployment : null;
-  const live = candidate && candidate.hookAddress.toLowerCase() === getDefaultBossHook(candidate.context.baseManifest).toLowerCase()
+  const defaultHook = candidate ? getDefaultBossHook(candidate.context.baseManifest) : undefined;
+  const expectedHook = bossHookForNetwork(boss, arena.selectedChainId, defaultHook);
+  const live = candidate && expectedHook && candidate.hookAddress.toLowerCase() === expectedHook.toLowerCase()
     ? candidate
     : null;
   const stage = live?.round.currentStage ?? 0;
-  const portrait = boss.id === "cat" ? CAT_FORMS[Math.min(stage, 2)] : boss.portrait;
-  const supported = boss.id === "cat";
+  const presentation = expectedHook ? findBossPresentation(arena.selectedChainId, expectedHook, arena.network === "local" ? defaultHook : undefined) : undefined;
+  const portrait = presentation?.stageImages[Math.min(stage, 2)] ?? boss.portrait;
+  const supported = boss.source === "chain" && (!boss.deployment || boss.deployment.chainId === arena.selectedChainId);
   const canEnter = supported && Boolean(live);
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export function BossEntryPanel({
       className="window-chrome panel-enter m-auto max-h-[calc(100dvh-2rem)] w-[min(560px,calc(100vw-2rem))] overflow-y-auto p-1 backdrop:bg-ink/70 backdrop:backdrop-blur-[2px]"
     >
       <div className="window-title flex items-center justify-between gap-3 py-1 pl-4 pr-1">
-        <p className="text-xs">{boss.locked ? "GATE LOCKED" : supported ? "BOSS GATE" : "FIXTURE ONLY"}</p>
+        <p className="text-xs">{boss.locked ? "GATE LOCKED" : supported ? "BOSS GATE" : "NETWORK UNAVAILABLE"}</p>
         <button
           ref={closeRef}
           type="button"
@@ -88,7 +90,7 @@ export function BossEntryPanel({
         </div>
 
         <div className="mt-5 border-t-2 border-[#2b4a8b]/20 pt-4">
-          <BossHealth boss={boss} deployment={arena.deployment} />
+          <BossHealth supported={supported} live={live} loading={arena.deployment.kind === "loading" || Boolean(candidate && !live)} />
         </div>
 
         {supported && live && (
@@ -118,7 +120,7 @@ export function BossEntryPanel({
         )}
         {!supported && (
           <p className="mt-4 font-mono text-xs leading-relaxed">
-            This gate is a visual fixture. No contract or attack route is deployed for it.
+            This boss is not configured for the selected network. Select Base Sepolia to enter its battle.
           </p>
         )}
       </div>
@@ -126,22 +128,22 @@ export function BossEntryPanel({
   );
 }
 
-function BossHealth({ boss, deployment }: { boss: BossDefinition; deployment: Arena["deployment"] }) {
-  if (boss.id !== "cat") {
+function BossHealth({ supported, live, loading }: { supported: boolean; live: Extract<Arena["deployment"], { kind: "live" }> | null; loading: boolean }) {
+  if (!supported) {
     return (
       <Row label="BOSS HP" badge="NO CONTRACT YET">
         <Bar fraction={null} />
       </Row>
     );
   }
-  if (deployment.kind !== "live") {
+  if (!live) {
     return (
-      <Row label="BOSS HP" badge={deployment.kind === "loading" ? "CHECKING CHAIN" : "LIVE DATA UNAVAILABLE"}>
+      <Row label="BOSS HP" badge={loading ? "CHECKING CHAIN" : "LIVE DATA UNAVAILABLE"}>
         <Bar fraction={null} />
       </Row>
     );
   }
-  const { round } = deployment;
+  const { round } = live;
   const stage = round.currentStage;
   const factory = round.encounterMode === "factory";
   const cap = factory ? round.stageVolumeTarget[stage] ?? 0n : round.stageCapacity[stage] ?? 0n;

@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "network": "base-sepolia",
+  "chainId": 84532,
+  "name": "Macro Whale",
+  "factory": "0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7",
+  "contractSourceRevision": "d0ad8d87ca5bab80c927e7412bd2a200a75549c5",
+  "sourceRevision": "345394e70fd62fad72d2f908aed5fa88b5e2dcf9",
+  "token": "0xF32C5d00e6d972Df60240Ed0E82996768c17B7e6",
+  "tokenDetails": {
+    "name": "Boss HP",
+    "symbol": "BHP",
+    "decimals": 18,
+    "totalSupply": "10000000000000000000000",
+    "deploymentTxHash": "0xf624b6c8f7216dc0779a1ea79ba26e8d4517e6d7f1b8ae615c2970f79d9c7b5e",
+    "deploymentBlock": 47346388
+  },
+  "config": {
+    "token": "0xF32C5d00e6d972Df60240Ed0E82996768c17B7e6",
+    "tokenAllocation": "10000000000000000000000",
+    "prizeBps": 1000,
+    "volumeTargetMockUSD": "60000000",
+    "deadline": "0",
+    "maxAttackTokenPerMockUSDX128": "3773494643879877973300397881192335861032084586495274"
+  },
+  "quote": {
+    "prizeAmount": "1000000000000000000000",
+    "battleTokenBudget": "9000000000000000000000",
+    "saleHPBudget": "9000000000000000000000",
+    "requiredBattleTokenFunding": "9000000000000000000000",
+    "estimatedAttackToken": "665358245510843421504",
+    "stageOneHP": "1500000000000000000000",
+    "hpPriceTick": -26040,
+    "maxRoyPerMockUSDX128": "3773494643879877973300397881192335861032084586495274"
+  },
+  "hash": "0x17ae5c2b885c417259e8697053b0a0f0f2ec92a9d22a488186d2cefb411e4d63",
+  "bossId": "0xa3995cf451dc32c98c93097f89b0b7f7d8f7cd37fa4b33c4b3e15956b7400f05",
+  "maker": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+  "hook": "0x13F91b1F75B676B97B4DE3Db7fd2eD8Ab87FEAC0",
+  "router": "0x4cd243BC8006952600ce243f0d7d4a9E945BB35e",
+  "collectibles": "0xd1030b42A73935eD034A2E8CA72d49EcBA8B288F",
+  "blockNumber": 47346397,
+  "launchLogIndex": 53,
+  "userSalt": "0xe16322168874931c54246e53f80c2adc8e9102702c8832ff8b628970aee43e90",
+  "hookSalt": "0x000000000000000000000000000000000000000000000000000000000000073b",
+  "routerCreationCodeHash": "0x60b4e72101c0eece991872c4c7295a4b2ccbf8d81598f842409cd1b66c71bd7f",
+  "hookCreationCodeHash": "0x5ca09a209d8456bf912313dbc75fd6e81c23183ccbcf4cf51b644de9ca13689d",
+  "verification": {
+    "verifiedAt": "2026-09-26T22:18:57.994Z",
+    "block": "47346406",
+    "status": 1,
+    "stage": 0,
+    "totalVolume": "0",
+    "deadline": "0",
+    "originalPrize": "1000000000000000000000",
+    "totalSupply": "10000000000000000000000",
+    "bossHPInHook": "1000000000000000000000",
+    "bossHPInRouter": "0",
+    "bossHPInPoolManager": "9000000000000000000000",
+    "stageLiquidity": [
+      "26745344651178619169522",
+      "26745344651178619169522",
+      "26745344651178619169522"
+    ],
+    "stageVolumeTarget": [
+      "10000000",
+      "20000000",
+      "30000000"
+    ],
+    "remainingSellableHP": "8999999999999999999999",
+    "initialSaleBudget": "9000000000000000000000",
+    "minimumLiquidity": "26745344651178619169522",
+    "poolLiquidity": "26745344651178619169522",
+    "owner": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+    "codeMatches": {
+      "BossHook": true,
+      "BossRouter": true,
+      "BossCollectibles": true,
+      "BossHP": true
+    },
+    "attackQuote": {
+      "requestedMaxMockUSD": "1000000",
+      "chainId": 84532,
+      "deploymentTxHash": "0x17ae5c2b885c417259e8697053b0a0f0f2ec92a9d22a488186d2cefb411e4d63",
+      "router": "0x4cd243BC8006952600ce243f0d7d4a9E945BB35e",
+      "hook": "0x13F91b1F75B676B97B4DE3Db7fd2eD8Ab87FEAC0",
+      "quotedBlock": "47346415",
+      "quotedAt": "1790461118",
+      "expiresAt": "1790461418",
+      "stage": 0,
+      "maxMockUSD": "1000000",
+      "mockUSDSpent": "1000000",
+      "mockUSDRefunded": "0",
+      "royBought": "10050416061256437358",
+      "roySpent": "10050416061256437358",
+      "royRefunded": "0",
+      "bossHPOut": "135247021996648838983",
+      "minRoyOut": "9949911900643872984",
+      "minBossHPOut": "133894551776682350593",
+      "slippageBps": 100,
+      "supplyPoolFee": 3000,
+      "bossPoolFee": 3000,
+      "stageCleared": false,
+      "bossDefeated": false,
+      "nextStage": 0
+    }
+  },
+  "operations": [
+    {
+      "kind": "token-deployment",
+      "transactionHash": "0xf624b6c8f7216dc0779a1ea79ba26e8d4517e6d7f1b8ae615c2970f79d9c7b5e"
+    },
+    {
+      "kind": "approval",
+      "transactionHash": "0xfdf6405d3db2115156b0e646fd9c08b88c388f9d7bd7488f6db447cbc20d1ff0",
+      "calldataHash": "0x7386653647f0e16bdb2ef3c83d6ae8b3cd23c8d9cecf9a19d8bf29dbdee200a4"
+    },
+    {
+      "kind": "launch",
+      "transactionHash": "0x17ae5c2b885c417259e8697053b0a0f0f2ec92a9d22a488186d2cefb411e4d63",
+      "calldataHash": "0xefc0576c54964c86a24435f17cdc5a468383fd47adf1e20b6ea2f46e0c301778"
+    }
+  ],
+  "playerTransactionsSent": 0,
+  "royDefaultPreserved": true,
+  "presentation": {
+    "portrait": "/images/boss-macro-whale-portrait.png",
+    "stages": 3,
+    "sameArtworkEachStage": true
+  },
+  "forkPreflight": {
+    "rpcUrl": "http://127.0.0.1:18552",
+    "forkBlock": 47346165,
+    "passed": true
+  }
+}

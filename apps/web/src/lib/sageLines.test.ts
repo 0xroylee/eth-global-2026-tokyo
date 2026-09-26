@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BOSSES } from "@/game/bosses";
+import { BOSSES } from "../game/bosses";
 import { roundStatusLabel } from "./format";
 import { SAGE_DEFEATED_STORAGE_KEY, SAGE_TALKED_STORAGE_KEY, sageLines } from "./sageLines";
 
@@ -13,11 +13,12 @@ describe("sageLines", () => {
     expect(BOSSES).toHaveLength(GATES);
   });
 
-  test("a first visit introduces the challengers and the one awake gate", () => {
+  test("a first visit introduces the challengers and both awake gates", () => {
     const lines = sageLines({ firstVisit: true, defeated: false });
     expect(lines).toHaveLength(2);
     expect(lines.join("")).toContain(`${CHALLENGERS}`);
     expect(lines.join("")).toContain("Roy");
+    expect(lines.join("")).toContain("Macro Whale");
   });
 
   test("a repeat visit points at the hidden gates, not a live ticker", () => {
@@ -28,11 +29,12 @@ describe("sageLines", () => {
     expect(lines[0]).not.toContain("SOL");
   });
 
-  test("a defeated cat leaves eleven gates waiting", () => {
+  test("Roy's defeat leaves Whale available and ten hidden gates waiting", () => {
     const lines = sageLines({ firstVisit: false, defeated: true });
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain(`${GATES - 1}`);
+    expect(lines[0]).toContain(`${CHALLENGERS}`);
     expect(lines[0]).toContain("Roy");
+    expect(lines[0]).toContain("Macro Whale");
   });
 
   test("the introduction outranks a defeat so a new player still hears it", () => {

@@ -66,10 +66,6 @@ export function GameShell() {
   const inspectMarket = useCallback(() => setMarketOpen(true), []);
 
   useEffect(() => {
-    arena.selectDefaultEncounter(arena.network);
-  }, [arena.network, arena.selectDefaultEncounter]); // Returning from a direct battle restores the hub's registered demo Hook.
-
-  useEffect(() => {
     const offNear = bridge.on("gate:near", ({ bossId }) => setNearBoss(bossId));
     const offEnter = bridge.on("gate:enter", ({ bossId }) => enterGate(bossId));
     const offRouteNear = bridge.on("region:near", ({ exitId }) => setNearRoute(exitId !== null));
@@ -131,12 +127,17 @@ export function GameShell() {
   }, [guide.panelOpened, openBoss]);
 
   useEffect(() => {
-    if (openBoss === "cat") arena.selectDefaultEncounter(arena.network);
-  }, [arena.network, arena.selectDefaultEncounter, openBoss]);
+    const boss = openBoss ? findBoss(openBoss) : undefined;
+    if (boss?.deployment && boss.deployment.chainId === arena.selectedChainId) {
+      arena.selectEncounter(arena.network, boss.deployment.hookAddress);
+    } else {
+      arena.selectDefaultEncounter(arena.network);
+    }
+  }, [arena.network, arena.selectedChainId, arena.selectDefaultEncounter, arena.selectEncounter, openBoss]);
 
   useEffect(() => {
     // Real chain state is the only thing allowed to move the sage's script on.
-    if (deployment.kind === "live" && deployment.round.status === CAT_DEFEATED_STATUS) markCatDefeated();
+    if (isHubEncounter(deployment) && deployment.round.status === CAT_DEFEATED_STATUS) markCatDefeated();
     if (isHubEncounter(deployment)) {
       bridge.send("round:state", {
         status: deployment.round.status,
@@ -555,7 +556,7 @@ function SagePrompt({ hidden, onTalk }: { hidden: boolean; onTalk: () => void })
   );
 }
 
-/** Only the gate with contract semantics owns the battle-entry panel; every other gate shows the roster card. */
+/** Gates with contract semantics own the battle-entry panel; other gates show the roster card. */
 function isBattleGate(bossId: BossId): boolean {
   return findBoss(bossId).source === "chain";
 }
@@ -602,7 +603,7 @@ function markCatDefeated() {
   }
 }
 
-/** A hub encounter is the standalone demo Hook: only it owns the sage's round narration. */
+/** The default Roy encounter owns the sage's round narration. */
 function isHubEncounter(state: ReturnType<typeof useBossPool>["deployment"]): state is Extract<ReturnType<typeof useBossPool>["deployment"], { kind: "live" }> {
   return state.kind === "live" && state.hookAddress.toLowerCase() === getDefaultBossHook(state.context.baseManifest).toLowerCase();
 }

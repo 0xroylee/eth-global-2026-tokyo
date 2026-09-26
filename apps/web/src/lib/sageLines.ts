@@ -1,4 +1,4 @@
-import { BOSSES } from "@/game/bosses";
+import { BOSSES } from "../game/bosses";
 
 /** Set once the player has closed the sage dialog; absent means a first visit. */
 export const SAGE_TALKED_STORAGE_KEY = "boss-pool:sage-talked:v1";
@@ -8,7 +8,7 @@ export const SAGE_DEFEATED_STORAGE_KEY = "boss-pool:defeated:v1";
 export type SageState = {
   /** The player has never closed the sage dialog. */
   firstVisit: boolean;
-  /** Roy, the only gate with a contract, is defeated. */
+  /** The default Roy encounter is defeated. */
   defeated: boolean;
 };
 
@@ -29,15 +29,15 @@ export function sageLines(state: SageState): string[] {
   if (state.firstVisit) {
     return [
       `Young one, welcome to the Boss BoostPad garden. ${challengers} challengers from Base are waiting ahead, and they will take everyone's sweetest dreams.`,
-      "Follow the stone road north. Only Roy has awakened so far. Go cross blades with him first.",
+      "Roy and Macro Whale have awakened. Choose either gate to begin your battle.",
     ];
   }
   if (state.defeated) {
     return [
-      `You bested Roy. The other ${BOSSES.length - 1} are still waiting for their contracts to come down. The roster changes again, so visit another day.`,
+      `You bested Roy. Macro Whale has its own pool and prize. The other ${BOSSES.filter((boss) => boss.source !== "chain").length} gates are still waiting for their contracts.`,
     ];
   }
   return [
-    `Still those ${challengers} shadows. They share one face until a real pool arrives.`,
+    `Roy and Macro Whale are ready to fight. Those ${challengers} shadows share one face until their pools arrive.`,
   ];
 }

@@ -1,0 +1,38 @@
+{
+  "chainId": 84532,
+  "defaultBossHook": "0x13F91b1F75B676B97B4DE3Db7fd2eD8Ab87FEAC0",
+  "bossFactory": "0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7",
+  "addresses": {
+    "hook": "0x13F91b1F75B676B97B4DE3Db7fd2eD8Ab87FEAC0",
+    "router": "0x4cd243BC8006952600ce243f0d7d4a9E945BB35e",
+    "bossHP": "0xF32C5d00e6d972Df60240Ed0E82996768c17B7e6",
+    "roy": "0x6e5390D3231beb061c1E49916806F2f26B3Feb22",
+    "mockUSD": "0x184B037F95A8E7a6E956AACad2244E5ded40d487",
+    "collectibles": "0xd1030b42A73935eD034A2E8CA72d49EcBA8B288F",
+    "poolManager": "0x1EF1e7e79B14AFB530d9671A79B7B173FE41a1c3"
+  },
+  "bossFactoryDeployedAtBlock": 47341945,
+  "previousBossFactories": [
+    {
+      "address": "0x353749ffa9640c4152dd28068c416adfc2eb168e",
+      "deployedAtBlock": 47334087
+    },
+    {
+      "address": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
+      "deployedAtBlock": 47332647
+    }
+  ],
+  "bossOrigin": {
+    "kind": "factory",
+    "factoryAddress": "0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7",
+    "factoryDeployedAtBlock": 47341945,
+    "bossId": "0xa3995cf451dc32c98c93097f89b0b7f7d8f7cd37fa4b33c4b3e15956b7400f05",
+    "launchTxHash": "0x17ae5c2b885c417259e8697053b0a0f0f2ec92a9d22a488186d2cefb411e4d63",
+    "launchLogIndex": 53,
+    "launchBlockNumber": 47346397
+  },
+  "schemaVersion": 1,
+  "network": "base-sepolia",
+  "deployedAtBlock": 47346397,
+  "deploymentTxHash": "0x17ae5c2b885c417259e8697053b0a0f0f2ec92a9d22a488186d2cefb411e4d63"
+}
