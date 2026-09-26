@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   BossFactorySdkError,
+  BASE_SEPOLIA_CHAIN,
   createBaseSepoliaPublicClient,
   createBaseSepoliaWalletClient,
   createBossFactorySdk,
@@ -21,7 +22,7 @@ import {
   type FactoryLaunchResult,
 } from "@boss-pool/chain";
 import { WalletControl } from "./WalletControl";
-import { WalletProvider, useWallet } from "@/wallet/WalletProvider";
+import { useWallet } from "@/wallet/WalletProvider";
 
 const BASE_SEPOLIA_RPC_URL =
   process.env.NEXT_PUBLIC_BOSS_POOL_BASE_SEPOLIA_RPC_URL ?? "https://sepolia.base.org";
@@ -33,17 +34,14 @@ const configuredFactoryAddress = rawFactoryAddress && isAddress(rawFactoryAddres
 type LaunchQuoteState = { config: FactoryLaunchConfig; quote: FactoryLaunchQuote };
 
 export function BossFactoryLaunchPage() {
-  return (
-    <WalletProvider>
-      <LaunchForm />
-    </WalletProvider>
-  );
+  return <LaunchForm />;
 }
 
 function LaunchForm() {
   const { state: walletState } = useWallet();
-  const account = walletState.status === "connected" ? walletState.account : undefined;
-  const provider = walletState.status === "connected" ? walletState.selected.provider : undefined;
+  const onBaseSepolia = walletState.status === "connected" && walletState.chainId === BASE_SEPOLIA_CHAIN.id;
+  const account = onBaseSepolia ? walletState.account : undefined;
+  const provider = onBaseSepolia ? walletState.selected.provider : undefined;
   const [factoryAddress, setFactoryAddress] = useState(configuredFactoryAddress);
   const publicClient = useMemo(() => createBaseSepoliaPublicClient(BASE_SEPOLIA_RPC_URL), []);
   useEffect(() => {
@@ -240,7 +238,7 @@ function LaunchForm() {
             <span className="rounded-md border border-[#f5b04a]/35 bg-[#f5b04a]/[0.06] px-2 py-1 font-mono text-[9px] tracking-[0.14em] text-[#ffd28a]">
               BASE SEPOLIA · TESTNET
             </span>
-            <WalletControl onModalChange={ignoreModalChange} />
+            <WalletControl />
           </div>
         </header>
 
@@ -480,5 +478,3 @@ function errorMessage(error: unknown): string {
   }
   return error instanceof Error ? error.message : "The request failed. Check the wallet and network, then try again.";
 }
-
-function ignoreModalChange() {}

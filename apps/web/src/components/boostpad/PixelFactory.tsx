@@ -74,6 +74,7 @@ export function PixelFactory({ pad, overlay = false }: { pad: BoostPadForm; over
                         <button
                           type="button"
                           onClick={() => void arena.connect().catch(() => undefined)}
+                          disabled={arena.wallet.busy || arena.wallet.status === "checking" || arena.wallet.status === "missing"}
                           className="mt-2 bg-[#092B61] px-3 py-2 text-[16px] leading-none text-white transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] disabled:opacity-40"
                         >
                           {arena.wallet.status === "missing" ? "NO WALLET" : "CONNECT WALLET"}

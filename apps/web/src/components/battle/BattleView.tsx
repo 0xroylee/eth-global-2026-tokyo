@@ -126,7 +126,12 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
             <option value="local">Local chain</option>
             <option value="robinhood-testnet">Historical · read only</option>
           </select>
-          <button type="button" className={BUTTON} onClick={account && !arena.networkMismatch ? openActions : connectOrSwitch}>
+          <button
+            type="button"
+            className={BUTTON}
+            onClick={account && !arena.networkMismatch ? openActions : connectOrSwitch}
+            disabled={arena.wallet.busy || arena.wallet.status === "checking" || arena.wallet.status === "missing"}
+          >
             {!account ? "CONNECT WALLET" : arena.networkMismatch ? "SWITCH NETWORK" : `${account.slice(0, 6)}…${account.slice(-4)}`}
           </button>
           <button type="button" className={BUTTON} onClick={openActions}>{arena.pendingRecord ? "CHECK TRANSACTION" : "BATTLE DETAILS"}</button>
@@ -162,7 +167,12 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
           <h2 id="battle-actions-title" className="font-pixel text-sm">{defeated ? "REWARDS" : "SWAP ATTACK · 1 MockUSD MAX"}</h2>
           <button type="button" autoFocus className="min-h-[44px] border border-white/30 px-3 text-xs" onClick={() => actionsDialog.current?.close()}>CLOSE</button>
         </div>
-        {(!account || arena.networkMismatch) && <button type="button" onClick={connectOrSwitch} className="mt-3 min-h-[44px] border border-white/30 px-3 text-sm">
+        {(!account || arena.networkMismatch) && <button
+          type="button"
+          onClick={connectOrSwitch}
+          disabled={arena.wallet.busy || arena.wallet.status === "checking" || arena.wallet.status === "missing"}
+          className="mt-3 min-h-[44px] border border-white/30 px-3 text-sm disabled:opacity-50"
+        >
           {!account ? "Connect wallet" : "Switch wallet network"}
         </button>}
         {arena.wallet.error && <p role="status" className="mt-2 break-words text-sm text-danger">{arena.wallet.error}</p>}

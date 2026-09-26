@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useBossPool } from "@/lib/useBossPool";
 import { validateBossForm, type BossFormInput, type BossHandoff, type StageImageId } from "@/lib/boostPad";
+import { useArena } from "@/components/BossPoolProvider";
 
 const emptyForm = (): BossFormInput => ({
   token: "",
@@ -15,7 +15,7 @@ const emptyForm = (): BossFormInput => ({
 
 /** Shared create-form state for the website page and the pixel factory. */
 export function useBoostPadForm() {
-  const arena = useBossPool();
+  const arena = useArena();
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<BossFormInput>(emptyForm);
   const [errors, setErrors] = useState<ReturnType<typeof validateBossForm>["errors"]>({});

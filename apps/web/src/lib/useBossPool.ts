@@ -20,6 +20,7 @@ import {
   type Address,
   type BossPoolSdk,
   type DeploymentManifest,
+  type EIP1193Provider,
   type PendingActionKind,
   type PendingOperation,
   type PendingRequest,
@@ -27,8 +28,8 @@ import {
   type SupportedChainId,
   type WaitResult,
 } from "@boss-pool/chain";
-import { isEip1193Provider, normalizeProviderDetail } from "@/wallet/discovery";
-import { createWalletClient, custom, defineChain, UserRejectedRequestError, type EIP1193Provider, type WalletClient } from "viem";
+import { useWallet } from "@/wallet/WalletProvider";
+import { createWalletClient, custom, defineChain, UserRejectedRequestError, type WalletClient } from "viem";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type NetworkKey = "local" | "base-sepolia" | "robinhood-testnet";
@@ -46,7 +47,7 @@ type WalletState = {
   provider?: EIP1193Provider;
   account?: Address;
   chainId?: number;
-  status: "checking" | "missing" | "disconnected" | "connected";
+  status: "checking" | "missing" | "disconnected" | "choosing" | "connected";
   error?: string;
   busy?: boolean;
 };
@@ -82,30 +83,37 @@ export type DeploymentState =
       readAt: number;
     };
 
-declare global {
-  interface Window {
-    ethereum?: EIP1193Provider;
-  }
-}
-
 const REFRESH_MS = 5_000;
 const PENDING_STORAGE_KEY = "boss-pool.pending-write.v2";
 
 export function useBossPool() {
   const [network, setNetwork] = useState<NetworkKey>("base-sepolia");
-  const [wallet, setWallet] = useState<WalletState>({ status: "checking" });
+  const { state: sharedWallet, requestConnect, switchToChain } = useWallet();
   const [deployment, setDeployment] = useState<DeploymentState>({ kind: "loading", network: "base-sepolia" });
   const [refreshVersion, setRefreshVersion] = useState(0);
   const contextRef = useRef<VerifiedContext | null>(null);
   const pendingRef = useRef<StoredPending | null>(null);
   const writeLock = useRef(false);
-  const walletAttempt = useRef(0);
   const [pendingRecord, setPendingRecord] = useState<StoredPending | null>(null);
   const [writeState, setWriteState] = useState<WriteState>({ status: "idle" });
 
   const selectedChainId: SupportedChainId = chainIdForNetwork(network);
   const fallbackRpcUrl = rpcUrlForNetwork(network);
   const targetRpcUrl = deployment.kind === "live" && deployment.network === network ? deployment.rpcUrl : fallbackRpcUrl;
+  const selectedWallet = "selected" in sharedWallet ? sharedWallet.selected : undefined;
+  const walletAccount = "account" in sharedWallet ? sharedWallet.account : undefined;
+  const walletChainId = "chainId" in sharedWallet ? sharedWallet.chainId ?? undefined : undefined;
+  const wallet: WalletState = {
+    provider: selectedWallet?.provider,
+    account: walletAccount,
+    chainId: walletChainId,
+    status: sharedWallet.status === "discovering" ? "checking"
+      : sharedWallet.status === "unavailable" ? "missing"
+        : sharedWallet.status === "choosing" ? "choosing"
+          : walletAccount ? "connected" : "disconnected",
+    error: sharedWallet.status === "error" ? sharedWallet.message : undefined,
+    busy: sharedWallet.status === "connecting" || sharedWallet.status === "choosing",
+  };
   const walletChain = useMemo(
     () => defineChain({
       id: selectedChainId,
@@ -115,63 +123,6 @@ export function useBossPool() {
     }),
     [network, selectedChainId, targetRpcUrl],
   );
-
-  useEffect(() => {
-    const provider = window.ethereum;
-    if (!provider) {
-      setWallet({ status: "missing" });
-      return;
-    }
-
-    let active = true;
-    const updateChain = (value: string) => {
-      if (!active) return;
-      const id = parseChainId(value);
-      setWallet((current) => ({ ...current, provider, chainId: id, status: current.account ? "connected" : "disconnected" }));
-    };
-    const updateAccounts = (accounts: readonly Address[]) => {
-      if (!active) return;
-      setWallet((current) => ({
-        ...current,
-        provider,
-        account: accounts[0],
-        status: accounts[0] ? "connected" : "disconnected",
-        error: undefined,
-      }));
-    };
-    const disconnected = () => {
-      if (!active) return;
-      setWallet({ provider, status: "disconnected" });
-    };
-
-    const attempt = ++walletAttempt.current;
-    setWallet({ provider, status: "checking" });
-    provider.on("accountsChanged", updateAccounts);
-    provider.on("chainChanged", updateChain);
-    provider.on("disconnect", disconnected);
-    void Promise.all([
-      provider.request({ method: "eth_accounts" }),
-      provider.request({ method: "eth_chainId" }),
-    ]).then(([accounts, chainId]) => {
-      if (!active || attempt !== walletAttempt.current) return;
-      const account = Array.isArray(accounts) && isAddressValue(accounts[0]) ? accounts[0] : undefined;
-      setWallet({
-        provider,
-        account,
-        chainId: typeof chainId === "string" ? parseChainId(chainId) : undefined,
-        status: account ? "connected" : "disconnected",
-      });
-    }).catch((error: unknown) => {
-      if (active && attempt === walletAttempt.current) setWallet({ provider, status: "disconnected", error: errorMessage(error) });
-    });
-
-    return () => {
-      active = false;
-      provider.removeListener("accountsChanged", updateAccounts);
-      provider.removeListener("chainChanged", updateChain);
-      provider.removeListener("disconnect", disconnected);
-    };
-  }, []);
 
   useEffect(() => {
     const stored = readStoredPending();
@@ -268,80 +219,20 @@ export function useBossPool() {
       : readyContext.publicSdk;
   }, [readyContext, walletClient]);
 
-  const connect = useCallback(async () => {
-    const providers = await discoverWalletProviders(wallet.provider);
-    const provider = providers[0];
-    if (!provider) {
-      setWallet({ status: "missing", error: "No injected wallet was found in this browser." });
-      return;
-    }
-    const attempt = ++walletAttempt.current;
-    setWallet((current) => ({
-      ...current,
-      provider,
-      busy: true,
-      error: undefined,
-      status: current.account ? "connected" : "disconnected",
-    }));
-    try {
-      const accounts = await withTimeout(requestWalletAccounts(provider), 12_000);
-      if (attempt !== walletAttempt.current) return;
-      const account = Array.isArray(accounts) && isAddressValue(accounts[0]) ? accounts[0] : undefined;
-      const chainId = await provider.request({ method: "eth_chainId" }).catch(() => undefined);
-      if (attempt !== walletAttempt.current) return;
-      setWallet({
-        provider,
-        account,
-        chainId: typeof chainId === "string" ? parseChainId(chainId) : undefined,
-        status: account ? "connected" : "disconnected",
-        error: account ? undefined : "The wallet did not return an account. Open it, then press Connect Wallet again.",
-      });
-    } catch (error) {
-      if (attempt !== walletAttempt.current) return;
-      setWallet((current) => ({
-        ...current,
-        provider,
-        busy: false,
-        error: walletErrorMessage(error),
-        status: current.account ? "connected" : "disconnected",
-      }));
-      throw error;
-    }
-  }, [wallet.provider]);
+  const connect = useCallback(() => requestConnect(), [requestConnect]);
 
   const switchToSelectedNetwork = useCallback(async () => {
-    const provider = wallet.provider;
-    if (!provider) throw new Error("Connect an injected wallet before switching networks.");
-    const chainHex = `0x${selectedChainId.toString(16)}`;
-    const switchChain = () => provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: chainHex }] });
-    try {
-      try {
-        await switchChain();
-      } catch (error) {
-        if (providerErrorCode(error) !== 4902) throw error;
-        await provider.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: chainHex,
-            chainName: networkName(network),
-            nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-            rpcUrls: [targetRpcUrl],
-          }],
-        });
-        await switchChain();
-      }
-      const chainId = await provider.request({ method: "eth_chainId" });
-      if (typeof chainId === "string") {
-        setWallet((current) => ({ ...current, provider, chainId: parseChainId(chainId), status: current.account ? "connected" : "disconnected", error: undefined }));
-      }
-    } catch (error) {
-      setWallet((current) => ({ ...current, error: walletErrorMessage(error) }));
-      throw error;
-    }
-  }, [wallet.provider, selectedChainId, network, targetRpcUrl]);
+    if (!wallet.provider) throw new Error("Connect an injected wallet before switching networks.");
+    await switchToChain({
+      id: selectedChainId,
+      name: networkName(network),
+      rpcUrls: [targetRpcUrl],
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    });
+  }, [network, selectedChainId, switchToChain, targetRpcUrl, wallet.provider]);
 
   const refresh = useCallback(() => setRefreshVersion((value) => value + 1), []);
-  const networkMismatch = wallet.chainId !== undefined && wallet.chainId !== selectedChainId;
+  const networkMismatch = Boolean(wallet.account && wallet.chainId !== selectedChainId);
 
   const waitForPending = useCallback(async <T,>(
     operation: PendingOperation<T>,
@@ -592,82 +483,12 @@ function sameDeployment(
   });
 }
 
-function parseChainId(value: string): number | undefined {
-  try {
-    const id = Number(BigInt(value));
-    return Number.isSafeInteger(id) ? id : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 function isAddressValue(value: unknown): value is Address {
   return typeof value === "string" && /^0x[\da-fA-F]{40}$/.test(value);
 }
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "The chain request failed.";
-}
-
-function walletErrorMessage(error: unknown): string {
-  return isUserRejected(error) ? "Wallet request was rejected." : errorMessage(error);
-}
-
-function discoverWalletProviders(current?: EIP1193Provider): Promise<EIP1193Provider[]> {
-  return new Promise((resolve) => {
-    const found: { provider: EIP1193Provider; rank: number }[] = [];
-    const add = (provider: unknown, rank: number) => {
-      if (!isEip1193Provider(provider) || found.some((entry) => entry.provider === provider)) return;
-      found.push({ provider, rank });
-    };
-    const onAnnounce = (event: Event) => {
-      const wallet = normalizeProviderDetail((event as CustomEvent<unknown>).detail);
-      if (!wallet) return;
-      add(wallet.provider, wallet.info.rdns === "io.metamask" ? 0 : 1);
-    };
-    window.addEventListener("eip6963:announceProvider", onAnnounce);
-    window.dispatchEvent(new Event("eip6963:requestProvider"));
-    window.setTimeout(() => {
-      window.removeEventListener("eip6963:announceProvider", onAnnounce);
-      const ethereum = window.ethereum as (EIP1193Provider & { providers?: unknown[] }) | undefined;
-      for (const provider of ethereum?.providers ?? []) add(provider, providerRank(provider));
-      add(ethereum, providerRank(ethereum));
-      add(current, 3);
-      found.sort((left, right) => left.rank - right.rank);
-      resolve(found.map((entry) => entry.provider));
-    }, 250);
-  });
-}
-
-function providerRank(provider: unknown): number {
-  return provider && typeof provider === "object" && "isMetaMask" in provider && provider.isMetaMask ? 1 : 2;
-}
-
-async function requestWalletAccounts(provider: EIP1193Provider): Promise<unknown> {
-  try {
-    await provider.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] });
-  } catch (error) {
-    if (isUserRejected(error)) throw error;
-  }
-  return provider.request({ method: "eth_requestAccounts" });
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      reject(new Error("The wallet did not respond. Open the wallet extension, then press Connect Wallet again."));
-    }, ms);
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
 }
 
 function providerErrorCode(error: unknown): number | undefined {

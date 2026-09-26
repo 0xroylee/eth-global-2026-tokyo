@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  BASE_SEPOLIA_CHAIN,
-  parseWalletAccounts,
-  parseWalletChainId,
-  switchToBaseSepolia,
-  walletErrorMessage,
-  type Address,
-} from "@boss-pool/chain";
+import { parseWalletAccounts, parseWalletChainId, providerErrorCode, walletErrorMessage, type Address } from "@boss-pool/chain";
 import {
   createContext,
   useCallback,
@@ -19,7 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { appendProvider, isEip1193Provider, legacyProviderDetail, normalizeProviderDetail } from "./discovery";
-import type { DiscoveredWallet, WalletContextValue, WalletState } from "./types";
+import type { DiscoveredWallet, SwitchableWalletChain, WalletContextValue, WalletState } from "./types";
 
 declare global {
   interface WindowEventMap {
@@ -38,8 +31,7 @@ function accountState(
   account: Address,
   chainId: number | null,
 ): WalletState {
-  if (chainId === BASE_SEPOLIA_CHAIN.id) return { status: "connected", providers, selected, account, chainId: 84532 };
-  return { status: "wrong-chain", providers, selected, account, chainId };
+  return { status: "connected", providers, selected, account, chainId };
 }
 
 function disconnectedState(providers: DiscoveredWallet[]): WalletState {
@@ -50,7 +42,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<WalletState>({ status: "discovering", providers: [] });
   const stateRef = useRef(state);
   const activeRef = useRef<ActiveProvider | null>(null);
-  // Bumped whenever a new request sequence starts so stale async results are ignored.
   const opRef = useRef(0);
 
   useEffect(() => {
@@ -73,7 +64,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           setState((s) => disconnectedState(s.providers));
           return;
         }
-        setState((s) => accountState(s.providers, detail, accounts[0]!, "chainId" in s ? (s.chainId ?? null) : null));
+        setState((s) => accountState(
+          s.providers,
+          detail,
+          accounts[0]!,
+          "chainId" in s ? (s.chainId ?? null) : null,
+        ));
       };
       const onChainChanged = (value: unknown) => {
         const chainId = parseWalletChainId(value);
@@ -111,7 +107,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [detach],
   );
 
-  // Discovery never prompts: EIP-6963 announcements first, then a bare window.ethereum fallback.
+  // Discovery never prompts; connect() asks permission only after an explicit user action.
   useEffect(() => {
     let discovered: DiscoveredWallet[] = [];
     const onAnnounce = (event: CustomEvent<unknown>) => {
@@ -127,17 +123,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     window.addEventListener("eip6963:announceProvider", onAnnounce);
     window.dispatchEvent(new Event("eip6963:requestProvider"));
 
-    const settle = window.setTimeout(() => {
-      if (discovered.length === 0) {
-        const legacy = (window as { ethereum?: unknown }).ethereum;
-        if (isEip1193Provider(legacy)) discovered = [legacyProviderDetail(legacy)];
-      }
-      const providers = discovered;
-      setState((s) => (s.status === "discovering" ? (providers.length ? disconnectedState(providers) : { status: "unavailable", providers }) : s));
-      if (providers.length === 1) void reconnect(providers[0]!);
-    }, 0);
-
-    // Silent reconnect: eth_accounts only returns accounts the user already authorized. Never eth_requestAccounts here.
     const reconnect = async (detail: DiscoveredWallet) => {
       const op = ++opRef.current;
       try {
@@ -151,6 +136,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // A failed silent read leaves the app disconnected; the user can still connect explicitly.
       }
     };
+
+    const settle = window.setTimeout(() => {
+      if (discovered.length === 0) {
+        const legacy = (window as { ethereum?: unknown }).ethereum;
+        if (isEip1193Provider(legacy)) discovered = [legacyProviderDetail(legacy)];
+      }
+      const providers = discovered;
+      setState((s) => (s.status === "discovering" ? (providers.length ? disconnectedState(providers) : { status: "unavailable", providers }) : s));
+      if (providers.length === 1) void reconnect(providers[0]!);
+    }, 0);
 
     return () => {
       window.removeEventListener("eip6963:announceProvider", onAnnounce);
@@ -184,7 +179,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [attach, detach],
   );
 
-  const switchToBase = useCallback(async () => {
+  const requestConnect = useCallback(async () => {
+    const current = stateRef.current;
+    if (current.status === "discovering" || current.status === "connecting" || current.status === "choosing") return;
+    if (current.providers.length === 1) {
+      await connect(current.providers[0]!.info.uuid);
+    } else if (current.providers.length > 1) {
+      setState({ status: "choosing", providers: current.providers });
+    }
+  }, [connect]);
+
+  const cancelConnect = useCallback(() => {
+    setState((s) => s.status === "choosing" ? disconnectedState(s.providers) : s);
+  }, []);
+
+  const switchToChain = useCallback(async (chain: SwitchableWalletChain) => {
     const active = activeRef.current;
     const current = stateRef.current;
     if (!active || !("account" in current) || !current.account) return;
@@ -192,9 +201,32 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const previousAccount = current.account;
     const previousChainId = current.chainId ?? null;
     const op = ++opRef.current;
-    setState((s) => ({ status: "connecting", providers: s.providers, selected: detail }));
+    setState((s) => ({
+      status: "connecting",
+      providers: s.providers,
+      selected: detail,
+      account: previousAccount,
+      chainId: previousChainId,
+    }));
+    const chainIdHex = `0x${chain.id.toString(16)}`;
+    const switchChain = () => detail.provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: chainIdHex }] });
     try {
-      await switchToBaseSepolia(detail.provider);
+      try {
+        await switchChain();
+      } catch (error) {
+        if (providerErrorCode(error) !== 4902) throw error;
+        await detail.provider.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: chainIdHex,
+            chainName: chain.name,
+            nativeCurrency: chain.nativeCurrency,
+            rpcUrls: chain.rpcUrls,
+            blockExplorerUrls: chain.blockExplorerUrls,
+          }],
+        });
+        await switchChain();
+      }
       const chainId = parseWalletChainId(await detail.provider.request({ method: "eth_chainId" }));
       const accounts = parseWalletAccounts(await detail.provider.request({ method: "eth_accounts" }));
       if (op !== opRef.current) return;
@@ -214,6 +246,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         account: previousAccount,
         chainId: previousChainId,
       }));
+      throw error;
     }
   }, [detach]);
 
@@ -233,8 +266,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<WalletContextValue>(
-    () => ({ state, connect, switchToBase, disconnect, clearError }),
-    [state, connect, switchToBase, disconnect, clearError],
+    () => ({ state, connect, requestConnect, cancelConnect, switchToChain, disconnect, clearError }),
+    [state, connect, requestConnect, cancelConnect, switchToChain, disconnect, clearError],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
