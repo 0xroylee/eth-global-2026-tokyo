@@ -20,7 +20,7 @@
 | 現行文件 | 現行約束 | 本計畫取代方式 | 狀態 |
 |---|---|---|---|
 | `docs/superpowers/specs/2026-09-26-rpg-hub-art-direction-design.md:64` | Out of scope：「add new bosses」 | 新增 10 隻 Launch Boost roster Boss | **需批准** |
-| 同上 `:32` | 「The three gate markers retain their current boss IDs」 | markers 擴為 12 門；`locked` fixture 移除 | **需批准** |
+| 同上 `:32` | 「The three gate markers retain their current boss IDs」 | markers 擴為 12 門；`locked` 佔位 Boss（id=`"locked"`）移除（`locked: boolean` 欄位 Phase 1 保留為 deprecated，§5.1） | **需批准** |
 | `docs/superpowers/plans/2026-09-26-hub-completion-pass.md:20` | 「No … new bosses」 | 同上 | **需批准** |
 | 同上 `:23` | 「No … NPC conversations」 | 新增老智者對話系統（§6） | **需批准** |
 | 同上 `:21-22` | 「Do not edit `BossEntryPanel.tsx` or battle implementation」 | **維持不變**——非 cat 門改開新元件 `BossRosterCard`（D6、§5.4），完全不碰 partner 的 battle-entry 界線 | 不需批准（遵守） |
@@ -40,7 +40,7 @@
 
 | # | 決策 | 考慮過的選項 | 理由 | 狀態 |
 |---|---|---|---|---|
-| D1 | Roster 組成 = cat + macro-whale + 10 Launch Boost = **12 門**；`locked` fixture 移除 | (a) 12 門；(b) 10 新 + cat = 11 門；(c) 10 門取代現有 fixture | 使用者「至少頭 10 個都拿出來」是加總語義；macro-whale 為已投資資產、與新名單同屬 no-contract fixture、零合約成本；12 = 1 playable + 1 fixture + 10 roster 的乾淨敘事 | 建議 |
+| D1 | Roster 組成 = cat + macro-whale + 10 Launch Boost = **12 門**；`locked` 佔位 Boss（id=`"locked"`）移除（`locked: boolean` 欄位 Phase 1 保留為 deprecated，§5.1） | (a) 12 門；(b) 10 新 + cat = 11 門；(c) 10 門取代現有 fixture | 使用者「至少頭 10 個都拿出來」是加總語義；macro-whale 為已投資資產、與新名單同屬 no-contract fixture、零合約成本；12 = 1 playable + 1 fixture + 10 roster 的乾淨敘事 | 建議 |
 | D2 | 呈現方式 = 混合：**11 定點 + 1 巡邏（ROO）** | 全定點／全漫遊／混合 | 研究 §3.2 FromSoftware 證據：純漫遊傷害可發現性；但 1 隻巡邏的活絡感 CP 值最高（研究 §3.4 55-entity 先例，效能零顧慮）。選 ROO：榜單敘事「沒人知道他是什麼」＝遊蕩者人設，老智者台詞「只有那隻不守規矩」直接化用 | 建議 |
 | D3 | 老智者 = 純腳本對話（Phase 1）；LLM 雙軌為 Phase 3 可選 | 純腳本／LLM-only／雙軌 | demo 只有一次機會，腳本零網路風險；研究 §3.5 結論：LLM 必須腳本兜底。Phase 1 不實作 LLM | 建議 |
 | D4 | 解鎖語義 = 10 隻全開（demo 友善）；`status` 三態 `active / no-contract / locked`；擊敗狀態僅 cat 可發生（唯一部署合約），roster 門顯示 `NO CONTRACT` chip | 全開／逐步解鎖（Demon's Souls 式） | hackathon demo 需 30 秒內逛完 12 門；逐步解鎖價值低於完整名單展示。真實進度只來自 cat 的 `round:state`（`bridge.ts:31-37`） | 建議 |
@@ -134,7 +134,7 @@ gate 矩形維持 3×2 tile（GATE 48×32，`HubScene.ts:17`）。頂列 9 門�
 其他座標決策：
 
 - **SPAWN 不動** (20,25)；**SAGE** marker (20,21)（spawn 北 4 tile、石徑旁）；中央 clearing（cols 15-25, rows 10-20，`generate-hub-map.ts:53-56`）保留。
-- **POND 移位**：原 (4,9,6,6)（`generate-hub-map.ts:100-101`）移到左下 (2,24,6,6)——cols 2-7、rows 24-29（含外緣 row 29 阻斷，外圈全封斷言仍成立）；原 pond 區還原草皮，供 spawn→西側動線。
+- **POND 移位**：原 (4,20,6,6)（`generate-hub-map.ts:102-103`；即 cols 4-9、rows 20-25）移到左下 (2,24,6,6)——cols 2-7、rows 24-29（含外緣 row 29 阻斷，外圈全封斷言仍成立）；原 pond 區還原草皮，供 spawn→西側動線。
 - **東路 future route 保留**：cols 33-38、rows 12-14（`generate-hub-map.ts:69-72`）；robin(35,18) approach（rows 20-23）不衝突。
 - **ROO 巡邏路徑（Phase 2）**：手挑 waypoint＝roo 門前石徑段 cols 11-13、rows 6-14（不進任何 gate approach rect；§8.2）。
 - **動線重畫**：中央 clearing 北緣 → 頂列每門各留 3 寬石徑直下（`reserveRoute` 每門一筆）；spawn→clearing 既有 jog 石徑保留（`generate-hub-map.ts:59-61`）；西列兩門接 clearing 西緣。
@@ -164,8 +164,10 @@ export type BossDefinition = {
   portrait: string;
   /** 新增：crop 規格移出 HubScene 硬編碼；null 表示無 portrait 可裁（畫字首盾牌）。 */
   crop: { x: number; y: number; w: number; h: number; targetHeight: number } | null;
-  /** 取代 locked: boolean（研究 §4.6 第 4 條：三態需求）。 */
+  /** 三態來源（研究 §4.6 第 4 條）。 */
   status: BossStatus;
+  /** @deprecated Phase 1 保留以維持 `BossEntryPanel` eyebrow（:71）相容；由 `status` 同步（`= status === "locked"`），partner 對齊後 Phase 2 移除。 */
+  locked: boolean;
   /** 新增：gate glow / plate 描邊色，取代 GATE_COLORS 窮舉。 */
   accent: string;                              // hex，如 "#f5b04a"
   /** 新增：資料源區分。source:"chain"=有合約語義（僅 cat）；"venue"=展示型。 */
@@ -180,7 +182,7 @@ export type BossDefinition = {
 };
 ```
 
-- `locked` → `status` 遷移觸點：`hubGuide.ts:22` `isUnlocked` 改判 `status !== "locked"`；`HubScene.ts` gate 渲染 `boss.locked` 三處（:293、:299、:303-304）與 `chooseHintGate`（:633）；`BossEntryPanel.tsx:88` eyebrow 的 `boss.locked` 分支（該檔仍不編輯——cat/macro-whale 的 status 值設定需保持 `BossEntryPanel` 現有分支不變，即 cat=`active`、macro-whale=`no-contract`，eyebrow 邏輯由 partner 後續自行對齊）。
+- `locked` → `status` 遷移策略（Phase 1 保留相容欄位，型別見上方）：`BossDefinition.locked: boolean` 保留為 **deprecated 欄位**，由 `status` 同步（`locked = status === "locked"`；Phase 1 全 12 門皆非 locked → 恆 `false`）。遷移觸點：`hubGuide.ts:22` `isUnlocked` 改判 `status !== "locked"`；`HubScene.ts` gate 渲染 `boss.locked` 三處（:289、:292、:301）與 `chooseHintGate`（:633）；`BossEntryPanel.tsx:71` eyebrow 的 `boss.locked` 分支——**該檔仍零編輯**：Phase 1 cat=`active`、macro-whale=`no-contract`（對應 `locked:false`），eyebrow 讀到的值與現況完全一致（`GATE LOCKED` 分支不會出現，`BOSS GATE`／`FIXTURE ONLY` 行為不變，DoD §12-4 的零 diff 可驗證）；partner 對齊後 Phase 2 移除 `locked` 欄位。
 - `BossId` 放寬為 `string` 的影響：`isBossId`（`bosses.ts:38-40`）改為 string 驗證；bridge payloads（`bridge.ts:17-21`）、`GameShell` state、`hubGuide` 型別隨之；`GATE_COLORS: Record<BossId, number>`（`HubScene.ts:24-28`）**刪除**，改讀 `boss.accent`。
 
 ### 5.2 Roster 資料檔規格（`apps/web/src/game/boss-roster.json`，新檔）
@@ -202,7 +204,7 @@ curated snapshot（D5）：10 筆、頂層附 `snapshotDate` 與 `source` 註記
 }
 ```
 
-- `bosses.ts` 組合成 `BOSSES = [...CORE_BOSSES(cat, macro-whale), ...ROSTER.map(toDefinition)]`；`toDefinition` 補 `crop: null`、`portrait: ""`、`status: "no-contract"`、`source: "venue"`、`rosterMeta`。
+- `bosses.ts` 組合成 `BOSSES = [...CORE_BOSSES(cat, macro-whale), ...ROSTER.map(toDefinition)]`；`toDefinition` 補 `crop: null`、`portrait: ""`、`status: "no-contract"`、`locked: false`（deprecated 同步）、`source: "venue"`、`rosterMeta`。
 - 換榜＝換 JSON（整批替換成本，研究 §2.3 第 4 點）；TS import JSON 由 Next.js/tsconfig 原生支援。
 
 ### 5.3 hub.json markers 的 gate 物件規格
@@ -308,7 +310,7 @@ export type GameEvents = {
 | # | 現況（file:line） | 改成 |
 |---|---|---|
 | 1 | `bosses.ts:2` `BossId` union 3 值 | `type BossId = string`；`BOSSES` 12 筆；`BossDefinition` 新欄位（§5.1） |
-| 2 | `bosses.ts:13-33` 3 筆含 `locked` | `CORE_BOSSES`（cat=`active`、macro-whale=`no-contract`）+ `boss-roster.json` 映射（§5.2） |
+| 2 | `bosses.ts:13-35` 3 筆（含 `locked` 佔位 Boss） | `CORE_BOSSES`（cat=`active`、macro-whale=`no-contract`；`locked:false` 欄位由 status 同步保留）+ `boss-roster.json` 映射（§5.2） |
 | 3 | `HubScene.ts:24-28` `GATE_COLORS` Record 窮舉 | 刪除；`buildGates` 讀 `boss.accent`（Phaser `Display.Color.HexStringToColor`） |
 | 4 | `HubScene.ts:121-122` crop 硬編碼 2 組 | `for (const boss of BOSSES) if (boss.crop && boss.portrait) makeCroppedTexture(this, \`portrait-${boss.id}\`, \`portrait-master-${boss.id}\`, boss.crop, boss.crop.targetHeight)` |
 | 5 | `HubScene.ts:264-358` `buildGates` 的 `locked` 分支與名牌 | status 三態渲染 + ticker 名牌 + `LB #N` caption + status chip；`portrait === ""` 時畫字首盾牌（§7.2c） |
