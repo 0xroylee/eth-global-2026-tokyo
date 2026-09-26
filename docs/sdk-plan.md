@@ -121,15 +121,15 @@ Filter decoded logs by the configured emitter before using [typed ABI event pars
 
 React keeps one public round poller, refreshes after receipts, and clears stale player results after wallet changes. Keep the bounded same-block read retry for the reproduced Robinhood error. Game state comes from confirmed reads and receipts. Pending animation does not decrement HP. Use transaction hash and log index to avoid replaying the same confirmed effect twice.
 
-## Delivery order for the two teammates
+## Historical delivery order from the original standalone plan
 
-| Slice | Owner | Deliverable and acceptance |
+| Slice | Status | Original deliverable and current evidence |
 | --- | --- | --- |
 | 1. Prove public quotes | Implemented and contract-reviewed | Quote parity, rollback behavior, stage-cap refunds, and clearing paths have focused coverage. The standalone fresh-wallet local journey is recorded; current Roy public-chain gameplay remains unverified. |
 | 2. Read a verified round through the SDK | Implemented | The SDK supports local, Base Sepolia, and historical Robinhood manifests with one-block reads. Base Sepolia selects the current Factory Roy deployment. |
 | 3. Attack through shared operations | Implemented | Fresh wallets attack directly with quote-before-approval, Router allowance, authenticated simulation, and stale-stage requotes. |
-| 4. Redeem HP and claim NFTs | A owns operations; B owns screens | Reuse frozen-denominator math, HP surrender, and independent NFT eligibility. Show actual payout from receipts. Extends BP07, issue #8. |
-| 5. Use the SDK in the existing game and exercise | A owns CLI evidence; B owns React/Phaser | Replace duplicate polling, feed confirmed round/results across the existing bridge, and make the existing two-wallet script call the SDK on a new real testnet round. Verify the public page and disconnected-wallet states. Hand the browser-wallet popup checklist to the user. Extends BP06/BP11, issues #7 and #12. |
+| 4. Redeem HP and claim NFTs | Implemented | Standalone claims use frozen-denominator math and surrender BossHP; Factory claims consume per-player reward credit and pay the MEME prize without surrendering purchased tokens. Victory-NFT eligibility is independent. The standalone local journey is recorded. |
+| 5. Use the SDK in the existing game and exercise | Implemented; current Roy checks remain open | The SDK is integrated with the game and shared exercise. The Base Sepolia Factory and default Roy deployment are verified, but the current Roy gameplay journey and manual browser-wallet popup acceptance remain unverified. |
 
 B can prepare wallet state and controlled UI components once result shapes are agreed. Contract quote implementation is the dependency for final attack wiring. Do not build a second fake SDK while waiting.
 
