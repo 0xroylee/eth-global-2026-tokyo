@@ -29,6 +29,33 @@ const SAGE = {
   /** Upper body down to the robe hem: drops the boots and the art's name plate. */
   crop: { x: 233, y: 83, w: 697, h: 960, targetHeight: 30 },
 } as const;
+/**
+ * The hub's one roaming body: ROO, the roster gate whose tagline is "it does not
+ * stay put". Waypoints are hand-picked tile centres on ROO's own stone spur
+ * (`generate-hub-map.ts` reserves cols 11-13, rows 4-14), all of them below that
+ * gate's approach zone. `buildRoamer` still drops any point that lands in a gate
+ * approach or the sage's zone, so a future map redraw cannot park it in a doorway.
+ * There is no pathfinding: each leg is one quadratic curve.
+ */
+const ROAMER = {
+  bossId: "roo",
+  /** Patrol loop in order; index 0 is also where reduced motion parks it. */
+  waypoints: [
+    { col: 12, row: 8 },
+    { col: 11, row: 11 },
+    { col: 13, row: 11 },
+    { col: 12, row: 14 },
+  ],
+  /** World pixels per second along the curve. */
+  speed: 20,
+  /** Pause between legs, in milliseconds. */
+  idleMin: 1_000,
+  idleMax: 4_000,
+  /** How far the control point sits off the leg's midpoint, perpendicular to it. */
+  bend: 12,
+  radius: 4.5,
+} as const;
+
 /** Overhead tiles (fences, canopies) draw above every y-sorted sprite. */
 const OVERHEAD_DEPTH = 5_000;
 /** Labels sit above every y-sorted prop and the overhead layer. */
@@ -123,6 +150,15 @@ export class HubScene extends Phaser.Scene {
   private sageBaseY = 0;
   private sageZone: Phaser.Geom.Rectangle | null = null;
   private nearSage = false;
+  private roamer: Phaser.GameObjects.Container | null = null;
+  private roamerLabel: Phaser.GameObjects.Text | null = null;
+  private roamerPath: Phaser.Math.Vector2[] = [];
+  private roamerTarget = 0;
+  private roamerBend = 1;
+  private roamerTween: Phaser.Tweens.Tween | null = null;
+  private roamerIdle: Phaser.Time.TimerEvent | null = null;
+  /** Reused by the leg tween, so walking allocates nothing per frame. */
+  private readonly roamerPoint = new Phaser.Math.Vector2();
   private unsubscribe: (() => void)[] = [];
   private atmosphere!: HubAtmosphere;
   private crispLabels: Phaser.GameObjects.Text[] = [];
@@ -156,6 +192,14 @@ export class HubScene extends Phaser.Scene {
     this.sageBob = null;
     this.sageZone = null;
     this.nearSage = false;
+    // Scene shutdown tears these down; drop the handles so a restart cannot reuse them.
+    this.roamer = null;
+    this.roamerLabel = null;
+    this.roamerPath = [];
+    this.roamerTarget = 0;
+    this.roamerBend = 1;
+    this.roamerTween = null;
+    this.roamerIdle = null;
     this.crispLabels = [];
     this.registerWalk();
     // Crop specs live on the boss definition, so adding a portrait needs no scene edit.
@@ -197,6 +241,7 @@ export class HubScene extends Phaser.Scene {
     this.physics.add.collider(this.player, collision);
     this.physics.add.collider(this.player, gateBodies);
     this.buildSage(map);
+    this.buildRoamer();
 
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.cameras.main.setRoundPixels(true);
@@ -236,7 +281,12 @@ export class HubScene extends Phaser.Scene {
       this.bridge.onCommand("ui:modal", ({ open }) => {
         this.modalOpen = open;
         this.resetKeyboardState();
-        if (open) this.showIdle();
+        if (open) {
+          this.showIdle();
+          this.holdRoamer();
+        } else {
+          this.releaseRoamer();
+        }
         if (!this.input.keyboard) return;
         this.input.keyboard.enabled = !open;
         // Drop keys that went up while Phaser was ignoring the keyboard, so closing a panel does not resume a drift.
@@ -263,6 +313,13 @@ export class HubScene extends Phaser.Scene {
       this.sage = null;
       this.sageZone = null;
       this.nearSage = false;
+      this.roamerTween?.stop();
+      this.roamerTween = null;
+      this.roamerIdle?.remove();
+      this.roamerIdle = null;
+      this.roamer = null;
+      this.roamerLabel = null;
+      this.roamerPath = [];
       this.unsubscribe.forEach((u) => u());
       this.unsubscribe = [];
       document.removeEventListener("focusin", handleFocusIn);
@@ -307,6 +364,15 @@ export class HubScene extends Phaser.Scene {
               w: (this.sage.body as Phaser.Physics.Arcade.StaticBody).width,
               h: (this.sage.body as Phaser.Physics.Arcade.StaticBody).height,
             },
+          }
+        : null,
+      roamer: this.roamer
+        ? {
+            x: this.roamer.x,
+            y: this.roamer.y,
+            target: this.roamerTarget,
+            path: this.roamerPath.length,
+            moving: this.roamerTween !== null,
           }
         : null,
       cameraZoom: this.cameras.main.zoom,
@@ -599,6 +665,7 @@ export class HubScene extends Phaser.Scene {
       this.showIdle();
       if (this.nearGate) this.startGatePulse(this.nearGate);
       this.applySageBob();
+      this.applyRoamerMotion();
       this.applyTileAnimation();
     };
     apply();
@@ -667,6 +734,138 @@ export class HubScene extends Phaser.Scene {
       repeat: -1,
       ease: "Sine.easeInOut",
     });
+  }
+
+  /**
+   * ROO leaves its own gate and walks the stone spur below it. The shrine stays
+   * built and interactive: it is the roamer's home, not its body, and it is the
+   * only way to open the gate.
+   */
+  private buildRoamer() {
+    const gate = this.gates.find((candidate) => candidate.boss.id === ROAMER.bossId);
+    if (!gate) return;
+
+    const tile = HUB_TILESET.tileSize;
+    // A gate approach or the sage's talk zone would leave ROO hovering in a doorway.
+    const sageZone = this.sageZone;
+    const forbidden: Phaser.Geom.Rectangle[] = [
+      ...this.gates.map((candidate) => candidate.zone),
+      ...(sageZone ? [sageZone] : []),
+    ];
+    this.roamerPath = ROAMER.waypoints
+      .map(({ col, row }) => new Phaser.Math.Vector2(col * tile + tile / 2, row * tile + tile / 2))
+      .filter((point) => !forbidden.some((rect) => Phaser.Geom.Rectangle.Contains(rect, point.x, point.y)));
+    const start = this.roamerPath[0];
+    if (!start || this.roamerPath.length < 2) {
+      this.roamerPath = [];
+      return;
+    }
+
+    const accent = accentColor(gate.boss.accent);
+    // A small ghost in ROO's accent: the shape says "not a gate", the accent says which one.
+    this.roamer = this.add.container(start.x, start.y, [
+      this.add.circle(0, 0, ROAMER.radius, 0x1b1f2e, 0.92).setStrokeStyle(1, accent, 0.95),
+      this.add.circle(-1.6, -0.9, 0.9, accent, 0.95),
+      this.add.circle(1.6, -0.9, 0.9, accent, 0.95),
+    ]);
+
+    const label = this.add
+      .text(start.x, start.y + 6, gate.boss.ticker, {
+        fontFamily: labelFontFamily(),
+        fontSize: "5px",
+        color: gate.boss.accent,
+        letterSpacing: 0.6,
+        resolution: ZOOM,
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(LABEL_DEPTH + 1);
+    this.roamerLabel = label;
+    this.crispLabels.push(label);
+
+    this.applyRoamerMotion();
+  }
+
+  /** Park the marker and its label, y-sorted against the player. */
+  private parkRoamer(x: number, y: number) {
+    this.roamer?.setPosition(x, y).setDepth(y);
+    this.roamerLabel?.setPosition(x, y + 6);
+  }
+
+  /**
+   * Reduced motion parks ROO at the gate-front waypoint: the marker stays, the
+   * loop does not. Same deal as the sage's bob, one level up (it travels).
+   */
+  private applyRoamerMotion() {
+    if (!this.roamer) return;
+    this.roamerTween?.stop();
+    this.roamerTween = null;
+    this.roamerIdle?.remove();
+    this.roamerIdle = null;
+    this.roamerTarget = 0;
+    this.roamerBend = 1;
+    const start = this.roamerPath[0];
+    if (!start) return;
+    this.parkRoamer(start.x, start.y);
+    if (this.reduceMotion || this.modalOpen) return;
+    this.startRoamerIdle();
+  }
+
+  /** FSM: `idle(random 1-4s) -> pick(next waypoint) -> curve(20px/s)` and back. */
+  private startRoamerIdle() {
+    this.roamerTween = null;
+    this.roamerIdle?.remove();
+    this.roamerIdle = null;
+    if (!this.roamer || this.roamerPath.length < 2 || this.reduceMotion) return;
+    this.roamerIdle = this.time.delayedCall(
+      Phaser.Math.Between(ROAMER.idleMin, ROAMER.idleMax),
+      () => this.stepRoamer(),
+    );
+  }
+
+  /** One leg of the loop: a quadratic curve bowed off the straight line. */
+  private stepRoamer() {
+    this.roamerIdle = null;
+    const roamer = this.roamer;
+    // Walking is the whole cue, so reduced motion and open panels park the loop.
+    if (!roamer || this.reduceMotion || this.modalOpen) return;
+
+    const from = new Phaser.Math.Vector2(roamer.x, roamer.y);
+    this.roamerTarget = (this.roamerTarget + 1) % this.roamerPath.length;
+    const to = this.roamerPath[this.roamerTarget]!;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const span = Math.hypot(dx, dy) || 1;
+    // Bowing the midpoint sideways, alternating per leg, is what reads as wandering.
+    this.roamerBend = -this.roamerBend;
+    const control = new Phaser.Math.Vector2(
+      (from.x + to.x) / 2 + (-dy / span) * ROAMER.bend * this.roamerBend,
+      (from.y + to.y) / 2 + (dx / span) * ROAMER.bend * this.roamerBend,
+    );
+    const curve = new Phaser.Curves.QuadraticBezier(from, control, to);
+    const progress = { t: 0 };
+    this.roamerTween = this.tweens.add({
+      targets: progress,
+      t: 1,
+      duration: Math.max(1, (curve.getLength() / ROAMER.speed) * 1_000),
+      ease: "Linear",
+      onUpdate: () => {
+        const point = curve.getPoint(progress.t, this.roamerPoint);
+        this.parkRoamer(point.x, point.y);
+      },
+      onComplete: () => this.startRoamerIdle(),
+    });
+  }
+
+  /** A dialog or panel holds the roamer where it stands instead of letting it drift behind it. */
+  private holdRoamer() {
+    this.roamerTween?.pause();
+    this.roamerIdle?.remove();
+    this.roamerIdle = null;
+  }
+
+  private releaseRoamer() {
+    if (this.roamerTween) this.roamerTween.resume();
+    else this.startRoamerIdle();
   }
 
   private updateMovement() {
