@@ -27,6 +27,12 @@ export type BossPresentation = {
   stageImages: readonly [string, string, string];
 };
 
+/** Shared face for every gate that has no contract behind it. */
+export const HIDDEN_BOSS_PORTRAIT = "/images/boss-hidden-crowned-shadow-master.png";
+
+/** Crop of the crowned figure on the 1254² master, sized like the other gate portraits. */
+export const HIDDEN_BOSS_CROP: BossCrop = { x: 150, y: 70, w: 980, h: 1060, targetHeight: 28 };
+
 export const POOL_UNIS_PRESENTATION: BossPresentation = {
   name: "Pool Unis",
   japaneseName: "プール・ユニス",
@@ -97,11 +103,11 @@ const CORE_BOSSES: readonly BossDefinition[] = [
   },
   {
     id: "macro-whale",
-    name: "Macro Whale",
-    ticker: "WHALE",
-    tagline: "Moves markets with a single splash.",
-    portrait: "/images/boss-macro-whale-portrait.png",
-    crop: { x: 160, y: 80, w: 940, h: 940, targetHeight: 28 },
+    name: "Hidden Boss",
+    ticker: "HIDDEN",
+    tagline: "A crowned shadow. No pool is deployed here.",
+    portrait: HIDDEN_BOSS_PORTRAIT,
+    crop: HIDDEN_BOSS_CROP,
     status: "no-contract",
     locked: false,
     accent: "#5aa9ff",
@@ -113,11 +119,11 @@ const CORE_BOSSES: readonly BossDefinition[] = [
 function toDefinition(entry: RosterEntry): BossDefinition {
   return {
     id: entry.id,
-    name: entry.name,
-    ticker: entry.ticker,
-    tagline: entry.tagline,
-    portrait: "",
-    crop: null,
+    name: "Hidden Boss",
+    ticker: "HIDDEN",
+    tagline: "A crowned shadow. No pool is deployed here.",
+    portrait: HIDDEN_BOSS_PORTRAIT,
+    crop: HIDDEN_BOSS_CROP,
     status: "no-contract",
     locked: false,
     accent: entry.accent,
