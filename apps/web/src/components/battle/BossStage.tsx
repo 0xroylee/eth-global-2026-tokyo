@@ -9,10 +9,11 @@ import type { BossVisualState } from "@/lib/battle";
  * Boss sprite, painted directly on the battlefield. The PNGs are transparent;
  * this box has no fill, so the lake shows around the character.
  */
-export function BossStage({ stage, stageImages, state }: {
+export function BossStage({ stage, stageImages, state, reducedMotion = false }: {
   stage: 1 | 2 | 3;
   stageImages: readonly [string, string, string];
   state: BossVisualState;
+  reducedMotion?: boolean;
 }) {
   const [beat, setBeat] = useState<"left" | "right" | null>(null);
   const [entering, setEntering] = useState(false);
@@ -20,14 +21,14 @@ export function BossStage({ stage, stageImages, state }: {
   const idle = state === "idle" && !entering;
 
   useEffect(() => {
-    if (state !== "hit") {
+    if (state !== "hit" || reducedMotion) {
       setBeat(null);
       return;
     }
     setBeat("left");
     const timer = window.setTimeout(() => setBeat("right"), 120);
     return () => window.clearTimeout(timer);
-  }, [state]);
+  }, [reducedMotion, state]);
 
   useEffect(() => {
     if (prevState.current === "transition" && state !== "transition") {

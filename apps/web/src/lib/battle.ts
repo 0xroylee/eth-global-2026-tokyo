@@ -47,6 +47,68 @@ export function confirmedBattleAttack(
 
 export type ConfirmedBattleAttack = NonNullable<ReturnType<typeof confirmedBattleAttack>>;
 
+export const SEEN_ATTACK_LIMIT = 100;
+export const SEEN_ATTACK_KEY = "boss-pool.seen-attack-effects.v1";
+
+type SeenStorage = {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+};
+
+export type SeenAttackMemory = { ids: string[] };
+
+/** Charging, submitted, or receipt-checking for this encounter's attack. Approval and other actions stay null. */
+export function attackWaitPhase(
+  state: WriteState,
+  network: NetworkKey,
+  hookAddress: string | undefined,
+): "charging" | "pending" | "checking" | null {
+  if (!writeStateMatchesEncounter(state, network, hookAddress)) return null;
+  if (state.status === "prompting") return state.requestKind === "attack" ? "charging" : null;
+  if (state.status === "pending" && state.record.request.kind === "attack") return "pending";
+  if (state.status === "unresolved" && state.record.request.kind === "attack") return "checking";
+  return null;
+}
+
+export function rememberSeenAttackId(id: string, memory: SeenAttackMemory, storage: SeenStorage | null): boolean {
+  let ids = memory.ids;
+  if (storage) {
+    try {
+      const raw = storage.getItem(SEEN_ATTACK_KEY);
+      const parsed = raw ? JSON.parse(raw) as unknown : [];
+      if (Array.isArray(parsed)) ids = parsed.filter((entry): entry is string => typeof entry === "string");
+    } catch {
+      ids = memory.ids;
+    }
+  }
+  if (ids.includes(id)) {
+    memory.ids = ids.slice(-SEEN_ATTACK_LIMIT);
+    return false;
+  }
+  const next = [...ids, id].slice(-SEEN_ATTACK_LIMIT);
+  memory.ids = next;
+  try {
+    storage?.setItem(SEEN_ATTACK_KEY, JSON.stringify(next));
+  } catch {
+    // The in-memory list still blocks a replay in this page session.
+  }
+  return true;
+}
+
+/** Persist the id before playback. A cancelled start leaves it unseen so StrictMode can play on the surviving run. */
+export function attackPlaybackChoice(input: {
+  id: string;
+  hidden: boolean;
+  cancelled: boolean;
+  memory: SeenAttackMemory;
+  storage: SeenStorage | null;
+}): "cancelled" | "static" | "play" {
+  if (input.cancelled) return "cancelled";
+  const fresh = rememberSeenAttackId(input.id, input.memory, input.storage);
+  if (!fresh || input.hidden) return "static";
+  return "play";
+}
+
 export function writeStateMatchesEncounter(state: WriteState, network: NetworkKey, hookAddress: string | undefined): boolean {
   if (state.status === "idle") return true;
   if (!hookAddress) return false;

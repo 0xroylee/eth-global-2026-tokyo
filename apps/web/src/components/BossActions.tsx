@@ -312,7 +312,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
   async function submitApproval(action: ApprovalAction, label: string) {
     if (!sdk) return;
     try {
-      const confirmed = await arena.runPending(label, () => sdk.approve(action));
+      const confirmed = await arena.runPending(label, () => sdk.approve(action), "approval");
       if (confirmed?.status === "confirmed") {
         setLastResult({
           kind: "approval",
@@ -330,7 +330,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
   async function claimReward() {
     if (!sdk || hpAmount === null || hpAmount <= 0n || !account) return;
     try {
-      const confirmed = await arena.runPending("Claim encounter reward", () => sdk.claimReward(hpAmount));
+      const confirmed = await arena.runPending("Claim encounter reward", () => sdk.claimReward(hpAmount), "claimReward");
       if (confirmed?.status === "confirmed") {
         setLastResult({ kind: "reward", hash: confirmed.hash, hpAmount: confirmed.result.hpAmount, payout: confirmed.result.payout });
       }
@@ -342,7 +342,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
   async function claimVictoryNFT() {
     if (!sdk) return;
     try {
-      const confirmed = await arena.runPending("Claim victory NFT", () => sdk.claimVictoryNFT());
+      const confirmed = await arena.runPending("Claim victory NFT", () => sdk.claimVictoryNFT(), "claimVictoryNFT");
       if (confirmed?.status === "confirmed") {
         setLastResult({ kind: "nft", hash: confirmed.hash, tokenId: confirmed.result.tokenId });
       }
@@ -355,7 +355,7 @@ export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(funct
     if (!sdk || !quoteFresh || !quoteState) return;
     setQuoteError(null);
     try {
-      const confirmed = await arena.runPending("Attack", () => sdk.attack(quoteState.quote));
+      const confirmed = await arena.runPending("Attack", () => sdk.attack(quoteState.quote), "attack");
       if (confirmed?.status === "confirmed") {
         setLastResult({ kind: "attack", hash: confirmed.hash, result: confirmed.result });
       }
