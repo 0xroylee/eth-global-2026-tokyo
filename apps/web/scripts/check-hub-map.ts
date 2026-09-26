@@ -125,6 +125,9 @@ const waterGids = new Set<number>([
   HUB_TILESET.gid.waterEdgeS,
   HUB_TILESET.gid.waterEdgeW,
   HUB_TILESET.gid.waterCorner,
+  HUB_TILESET.gid.waterCornerNE,
+  HUB_TILESET.gid.waterCornerSW,
+  HUB_TILESET.gid.waterCornerSE,
 ]);
 const isWater = (col: number, row: number) => col >= 0 && row >= 0 && col < WIDTH && row < HEIGHT && waterGids.has(ground.data[row * WIDTH + col]!);
 let waterCells = 0;

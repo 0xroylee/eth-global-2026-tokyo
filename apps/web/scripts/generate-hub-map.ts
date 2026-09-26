@@ -105,6 +105,9 @@ fillRect(POND.col, POND.row, POND.w, POND.h, (c, r) => {
   const e = c === POND.col + POND.w - 1;
   let gid: number;
   if (n && w) gid = G.waterCorner;
+  else if (n && e) gid = G.waterCornerNE;
+  else if (s && w) gid = G.waterCornerSW;
+  else if (s && e) gid = G.waterCornerSE;
   else if (n) gid = G.waterEdgeN;
   else if (s) gid = G.waterEdgeS;
   else if (w) gid = G.waterEdgeW;
