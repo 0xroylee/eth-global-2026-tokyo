@@ -1,20 +1,20 @@
 # Boss Pool domain language
 
-Boss Pool is a sponsor-funded fight where players buy a boss's token through authorized swaps. Factory bosses sell an existing meme token as HP and record prize credit for the buyer separately. The standalone demo sells fixed-supply BossHP whose eligible tokens carry reward rights. Attacks do not burn tokens.
-
-**Boss Factory**:
-A permissionless launchpad that creates and funds one isolated encounter per launch, using a creator-selected ERC-20 as HP. The creator supplies the prize and staged token allocation.
-
-**Meme-token HP**:
-The actual existing ERC-20 purchased from a factory boss's pool and delivered to the player. Its transfers do not move earned prize credit. HP measures purchased token units, not a separate token wrapper.
-
-**Reward credit**:
-An attacker's unclaimed purchase amount in one factory boss. After victory it can be consumed for a proportional prize while the player keeps the purchased tokens. Existing token balances and activity in other bosses provide no credit.
-
-The language below describes the standalone BossHP demo unless it specifies a factory boss. See [Boss Factory](docs/boss-factory.md) for its contract interface and accounting.
+Boss Pool is a sponsor-funded fight where players spend Attack Token to buy a boss token. The standalone BossHP demo has transferable reward rights; Factory encounters record prize credit separately for each attacker. Attacks do not burn tokens.
 
 Attack Token is the name used in product copy and documentation. Existing compatibility identifiers such as `RoyToken`, `roy`, and `royBought` refer to this same token. ABI names, manifest keys, and historical deployment records retain those identifiers. New deployments use `Attack Token` for both the ERC-20 name and symbol; existing deployments retain their original metadata.
 
+**Boss Factory**:
+A permissionless launchpad that creates an isolated encounter for an existing creator-selected ERC-20. The creator deposits a chosen allocation, funds a prize, and sets a MockUSD volume target.
+
+**Meme-token HP**:
+The actual ERC-20 sold by a Factory boss and delivered to players. Attacks create per-boss reward credit; ordinary balances and transfers do not create that credit.
+
+**Reward credit**:
+An attacker's unclaimed MEME purchase amount for one Factory boss. After victory, it can be consumed for a proportional share of that boss's MEME prize while the player keeps purchased tokens.
+
+
+The language below describes the standalone BossHP demo unless it specifies a Factory boss. See [Boss Factory](docs/boss-factory.md) for that mode's interface and accounting.
 
 ## Language
 
