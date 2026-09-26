@@ -9,7 +9,7 @@
       "tagline": "Tokenized stock market on Uniswap.",
       "rank": 1,
       "category": "DeFi",
-      "accent": "#c8a1ff"
+      "accent": "#4dac00"
     },
     {
       "id": "roo",
@@ -18,7 +18,7 @@
       "tagline": "No one knows what it is. It does not stay put.",
       "rank": 2,
       "category": "Meme",
-      "accent": "#87e8d8"
+      "accent": "#3ee1fe"
     },
     {
       "id": "robinpepe",
@@ -27,7 +27,7 @@
       "tagline": "Pepe crossed with Robin Hood.",
       "rank": 3,
       "category": "Meme",
-      "accent": "#73e561"
+      "accent": "#b8dd0b"
     },
     {
       "id": "hoodcats",
@@ -36,7 +36,7 @@
       "tagline": "Three cats in hooded cloaks.",
       "rank": 4,
       "category": "Meme",
-      "accent": "#ef9fb3"
+      "accent": "#feb1c8"
     },
     {
       "id": "ad",
@@ -45,7 +45,7 @@
       "tagline": "Doge, assembled by a model.",
       "rank": 5,
       "category": "Meme / AI",
-      "accent": "#3939d0"
+      "accent": "#f7511f"
     },
     {
       "id": "pons",
@@ -54,7 +54,7 @@
       "tagline": "Launchpad token Uniswap called out.",
       "rank": 6,
       "category": "Launchpad",
-      "accent": "#dc6adc"
+      "accent": "#fb80fc"
     },
     {
       "id": "robin",
@@ -63,7 +63,7 @@
       "tagline": "A frog in a feathered cap.",
       "rank": 7,
       "category": "Meme",
-      "accent": "#32bd71"
+      "accent": "#9e71fe"
     },
     {
       "id": "agrippa",
@@ -72,7 +72,7 @@
       "tagline": "Launched on Bankr, very online.",
       "rank": 8,
       "category": "Meme / Bankr",
-      "accent": "#e9499e"
+      "accent": "#cb6fa2"
     },
     {
       "id": "musebook",
@@ -81,7 +81,7 @@
       "tagline": "Content and social, on chain.",
       "rank": 9,
       "category": "Content / Social",
-      "accent": "#d0e6b3"
+      "accent": "#0ed893"
     },
     {
       "id": "aeva",
@@ -90,7 +90,7 @@
       "tagline": "An asset-native L1.",
       "rank": 10,
       "category": "L1",
-      "accent": "#e2e25a"
+      "accent": "#03a8a0"
     }
   ]
 }
