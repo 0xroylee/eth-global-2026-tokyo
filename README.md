@@ -21,7 +21,7 @@ The user confirmed this replacement for the earlier physical/magic design:
 
 ## Status
 
-The private Bun workspace, generated contract client, and local deployment flow are in place. The shared real-v4 Foundry fixture covers standalone attacks, public quotes, and volume-targeted Boss Factory launches. The Next.js arena and `@boss-pool/chain` SDK support public reads, direct-attack quotes, and player transactions. Factory launch UI and testnet deployment remain outstanding. Base Sepolia has a separate team-owned non-production fixture; it does not yet include a Boss Factory round. See the [contract usage guide](docs/contract-usage.md), [Boss Factory](docs/boss-factory.md), [SDK verification record](docs/sdk-verification.md), and [historical foundation report](docs/testnet-verification.md).
+The private Bun workspace, generated contract client, and local deployment flow are in place. The shared real-v4 Foundry fixture covers standalone attacks, public quotes, and volume-targeted Boss Factory launches. The Next.js arena and `@boss-pool/chain` SDK support public reads, direct-attack quotes, player transactions, and Factory launches. The creator form is available at `/launch`; no Boss Factory address is configured on Base Sepolia yet, and the player fight flow for Factory bosses remains outstanding. See the [contract usage guide](docs/contract-usage.md), [Boss Factory](docs/boss-factory.md), [SDK verification record](docs/sdk-verification.md), and [historical foundation report](docs/testnet-verification.md).
 
 The app uses Next.js App Router, Tailwind CSS, direct viem, and Phaser. Manual browser-wallet popup checks remain separate from automated local and testnet verification. See [apps/web/AGENTS.md](apps/web/AGENTS.md) for frontend rules.
 

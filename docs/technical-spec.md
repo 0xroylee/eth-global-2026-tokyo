@@ -1,6 +1,6 @@
 # Boss Pool technical specification
 
-Status (26 September 2026): The no-burn standalone contracts, shared viem SDK, volume-based Boss Factory, and real-v4 Foundry fixture are implemented. The local fixture covers volume gates, quote simulation, MEME prizes, and transition rollback. The player UI does not yet launch factory rounds. Base Sepolia has a verified standalone Boss Pool fixture at block `47325823`; no Factory deployment or player E2E is verified there. See the [contract usage guide](contract-usage.md), [Boss Factory reference](boss-factory.md), [SDK verification record](sdk-verification.md), and [historical foundation report](testnet-verification.md).
+Status (26 September 2026): The no-burn standalone contracts, shared viem SDK, volume-based Boss Factory, Factory launch SDK and creator form, and real-v4 Foundry fixture are implemented. The local fixture covers volume gates, quote simulation, MEME prizes, and transition rollback. Base Sepolia has a verified standalone Boss Pool fixture at block `47325823`; no Factory address is configured, and no Factory deployment or player E2E is verified there. The Factory fight UI remains outstanding. See the [contract usage guide](contract-usage.md), [Boss Factory reference](boss-factory.md), [SDK verification record](sdk-verification.md), and [historical foundation report](testnet-verification.md).
 
 ## Factory volume settlement
 

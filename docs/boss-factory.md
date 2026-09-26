@@ -84,7 +84,7 @@ Damage is the purchased meme-token amount. Actual traded input and output appear
 
 The factory deployment script is `contracts/script/DeployBossFactory.s.sol:DeployBossFactory`. It reads `BOSS_POOL_MANAGER`, `BOSS_MOCK_USD_TOKEN`, and `BOSS_ATTACK_TOKEN`, and pins hashes from the current compiled artifacts. It supports local chain 31337 and Base Sepolia 84532. Base Sepolia uses `TESTNET_DEPLOYER_PRIVATE_KEY`, as the standalone deployment does. It creates no tokens, market liquidity, or boss encounters.
 
-Contracts, the factory deployment script, and generated client ABIs are in place. The game UI and `DeployBossPool` script still target the standalone demo. No factory launch form or network deployment has been produced.
+The creator form is available at `/launch`. Configure `NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_ADDRESS` after deploying the factory. The chain SDK reads the submitted token's metadata and wallet balance, quotes the launch, checks the compiled Router and Hook bytecode against the factory, mines a valid hook salt, requests the required MEME approval, and submits the launch. Token choices are entered by contract address; ERC-20 does not provide wallet-wide token discovery. Base Sepolia does not yet have a Factory deployment, and the player attack/claim UI for Factory rounds is not implemented.
 
 ## Local verification
 
