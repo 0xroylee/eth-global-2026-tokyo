@@ -273,4 +273,82 @@ export type GameEvents = {
 - **fallback**：`AbortSignal.timeout(4s)` 或非 200 → 回傳 `sageLines(state)` 腳本（D3 的雙軌核心）；UI 不顯示「AI 中」字樣，只顯示台詞。
 - 明確不做：其餘 10 隻 Boss 不接 LLM（研究 §3.5 結論）。
 
+## 7. 資產清單與取得策略
+
+### 7.1 老智者 sprite：`npc-thesis-wizard.png`
+
+- 實測尺寸 1186×1327（`file` 實證）；紫袍法師、符合老智者人設（研究 §4.4）。
+- **授權未確認**：該檔**無伴隨 `.txt` 記錄**（對照 `player-compact-walk-master.txt` 生成 prompt 慣例）。驗證 actions：
+  1. 向資產作者確認來源與授權，補一份 `npc-thesis-wizard.txt`（同 `player-compact-walk-master.txt` 格式）。
+  2. 若授權不明 → 備案：以 `player-you-master.png`（1254×1254，實測）或 code-drawn 圖形替代；**demo 前完成**。
+- crop 規格：`makeCroppedTexture`（`textures.ts:7-42`）沿用，targetHeight ≈ 30；crop 框以「上半身 + 袍角」為準，實作時於瀏覽器調 1–2 次定稿。
+
+### 7.2 10 隻 Boss portrait：來源策略選項（D9）
+
+| 選項 | 優點 | 風險 | demo 建議 |
+|---|---|---|---|
+| (a) 真實項目 logo | 認得出來、最「真」 | 商標/版權風險、各專案圖檔品質參差、榜單漂移後失效 | **不建議**（除非逐家取得書面同意，hackathon 不可行） |
+| (b) 生成式 AI 統一風格頭像（emblem） | 風格統一、可控、無商標風險 | 生成 pipeline 時間、與既有 pixel 語彙不合的風險 | Phase 2 可選（需附生成 prompt `.txt`，同 §7.1 慣例） |
+| (c) code-drawn 盾牌 + ticker 字首 | 零資產、零風險、立即可用 | 視覺樸素 | **Phase 1 採用** |
+
+- 採用 (c) 的盾牌＝延伸 locked 門的鎖頭圖案語彙（`HubScene.ts:293-299`）：圓角盾形 + accent 描邊 + ticker 首兩字母（crisp、`resolution: ZOOM`）。
+- (b) 的驗收規則：emblem **不是 logo 重繪**（避免商標暗示），以「敘事象徵」定位（如 ROO＝問號袋鼠剪影）；檔名 `boss-roster-{id}-emblem.png` 進 `public/images/`，game-ready crop 產物照舊由 runtime 管線裁出。
+
+### 7.3 Tileset 是否新增元素
+
+- **建議：不新增**。gate 神社、名牌、chip 全是程式碼畫的（`HubScene.ts:264-358`），sage 是 sprite；無 tile 需求。
+- 若要新增（Phase 2 擊敗雕像等）：atlas 256×128 需改尺寸、`hubTiles.ts` 常數與 `check-hub-map.ts:40-44` 的 tileset 斷言全要同步——**GID 合約「未用格位保持透明」**（現有 128 tile 未滿額）可以不加 tile 改以 code-drawn 呈現。本計畫一律不新增 tile。
+
+## 8. 技術設計（檔案級修改指引）
+
+> 本節 file:line 由 architect 於 2026-09-26 實讀源碼驗證。修改清單假設 §1.2 已批准。
+
+### 8.1 data-driven 化清單（3-gate 假設的所有硬編碼點）
+
+| # | 現況（file:line） | 改成 |
+|---|---|---|
+| 1 | `bosses.ts:2` `BossId` union 3 值 | `type BossId = string`；`BOSSES` 12 筆；`BossDefinition` 新欄位（§5.1） |
+| 2 | `bosses.ts:13-33` 3 筆含 `locked` | `CORE_BOSSES`（cat=`active`、macro-whale=`no-contract`）+ `boss-roster.json` 映射（§5.2） |
+| 3 | `HubScene.ts:24-28` `GATE_COLORS` Record 窮舉 | 刪除；`buildGates` 讀 `boss.accent`（Phaser `Display.Color.HexStringToColor`） |
+| 4 | `HubScene.ts:121-122` crop 硬編碼 2 組 | `for (const boss of BOSSES) if (boss.crop && boss.portrait) makeCroppedTexture(this, \`portrait-${boss.id}\`, \`portrait-master-${boss.id}\`, boss.crop, boss.crop.targetHeight)` |
+| 5 | `HubScene.ts:264-358` `buildGates` 的 `locked` 分支與名牌 | status 三態渲染 + ticker 名牌 + `LB #N` caption + status chip；`portrait === ""` 時畫字首盾牌（§7.2c） |
+| 6 | `HubScene.ts:326-333` cat-only stage label | cat 分支保留（唯一 live）；roster/macro-whale 加靜態 status chip；`renderCatStageLabel`（:534-556）不動 |
+| 7 | `hubGuide.ts:22` `isUnlocked` 用 `findBoss(id).locked` | `status !== "locked"` |
+| 8 | `HubScene.ts:632-648` `chooseHintGate` 對 unlocked 取最近 | 邏輯不變（12 門皆 unlocked 時取最近，仍正確）；僅型別隨 `BossId=string` 調整 |
+| 9 | `check-hub-map.ts:68` 3 gate、`:72` bossIds 清單 | 12 gate + `import { BOSSES }` 集合相等（§4.3） |
+| 10 | `generate-hub-map.ts:10-14` `GATES` 3 筆 | 12 筆 + sage marker + pond/route/cluster 重畫（§4.2） |
+| 11 | `GameShell.tsx:36-38` gate 事件接線 | 新增 `npc:near`/`npc:talk` 接線與 `SageDialog`/`SagePrompt` 渲染（§6.3）；`overlayOpen` 加 `sageOpen` |
+
+### 8.2 巡邏狀態機規格（Phase 2；ROO 一隻）
+
+- **不做 pathfinding**（研究 §3.4：瓶頸是 AI/尋路不是繪製）。FSM：`idle(1–4s 隨機) → pick(waypoint 依序或隨機) → bezier(tween, 20px/s, 控制點=中點垂直偏移 ±12) → idle`。
+- waypoint 清單＝§4.2 的 roo 石徑段 tile 中心（cols 11-13、rows 6-14），手挑、排除任何 gate approach rect（含自己門前的 5×4）。
+- **碰撞**：巡邏者加 static arcade body？——**不需要**：waypoint 全在 `reserveRoute` 石徑上（generator 保證 walkable）；與玩家無交互（走過即分離，無 push）。唯一約束：不進 gate approach 區與不與 sage zone 重疊。
+- **與 gate 的互斥**：巡邏路徑不觸碰 12 門的 approach rect 集合（`Gate.zone`）；FSM 選點時用 `Phaser.Geom.Rectangle.Contains` 過濾（既有工具）。
+- `reduceMotion`：不移動（停在門前，僅保留 glow）。
+- 呈現：gate 門面保留（「家」的語義，D2）；巡邏 sprite 用 roo 的 emblem/盾牌小圖或直接 ghost 圓形（Phase 2 定稿）。
+
+### 8.3 效能備註
+
+- 沿用既有架構即可（研究 §3.4）：12 門一次性建構在 `create()`、1 隻巡邏 tween 由 Phaser 管理、無 per-frame allocation、無 object pool 需求（門為常駐物件不 create/destroy）。
+- 動畫幀注意：crop 圖共 3 張 master（cat/whale/sage）已載入，roster 門無圖載入（字首盾牌 code-drawn）——啟動載入量不增反減。
+
+## 9. 分期計畫
+
+### Phase 1 — MVP：老智者 + 12 門 + data-driven（本次交付核心）
+
+內容：§5 資料模型、§4 地圖重畫、§8.1 data-driven、sage entity + 對話、`BossRosterCard`、HUD chip。
+**可 demo 成果**：spawn 第一眼見老智者；E 對話（打字機、兩段式跳過、重複可開）；頂列 9 門天際線 + 西 2 東 1；逐門 E 開 roster card（ticker/名次/敘事）；cat 門 battle entry 不回歸。
+
+### Phase 2 — 進度感
+
+內容：ROO 巡邏（§8.2）、cat DEFEATED 後 sage 台詞切換（§6.4）、status chip 微調、（可選）emblem 美術。
+**可 demo 成果**：ROO 在石徑上遊蕩；老智者指路台詞「只有那隻不守規矩」；擊敗 cat 後台詞更新。
+
+### Phase 3 — 可選加分
+
+內容：LLM 雙軌（§6.5，含 `/api/sage` route + 腳本兜底）；`scripts/fetch-trending.ts`（GeckoTerminal 刷新 `boss-roster.json` 供開發期使用，demo 一律跑快照，研究 §2.3）。
+**可 demo 成果**：老智者自由回答（世界觀事實不亂編）；榜單換批只需一鍵。
+
+
 
