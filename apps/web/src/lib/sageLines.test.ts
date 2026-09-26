@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BOSSES } from "@/game/bosses";
+import { roundStatusLabel } from "./format";
 import { SAGE_DEFEATED_STORAGE_KEY, SAGE_TALKED_STORAGE_KEY, sageLines } from "./sageLines";
 
 /** The Launch Boost roster the sage counts, and the hub's total gate count. */
@@ -40,5 +41,12 @@ describe("sageLines", () => {
   test("the storage keys stay the ones the shell reads and writes", () => {
     expect(SAGE_TALKED_STORAGE_KEY).toBe("boss-pool:sage-talked:v1");
     expect(SAGE_DEFEATED_STORAGE_KEY).toBe("boss-pool:defeated:v1");
+  });
+
+  // The shell writes the defeated marker on `round.status === 3`. That literal is
+  // only correct while this label holds, and a live round is the only thing that
+  // can produce it — so pin the mapping here instead of trusting the comment.
+  test("the defeat the marker is written on is still status 3", () => {
+    expect(roundStatusLabel(3)).toBe("Defeated");
   });
 });
