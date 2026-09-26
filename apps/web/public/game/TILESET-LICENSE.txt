@@ -1,70 +1,13 @@
-Pack: Tiny Town (1.1)
-Author: Kenney (www.kenney.nl)
-Source: https://kenney.nl/assets/tiny-town
-Download: https://kenney.nl/media/pages/assets/tiny-town/a415fbeb49-1735736916/kenney_tiny-town.zip
-License: CC0 1.0 Universal
-Confirmed on: 2026-09-26
+Asset: Boss Pool RPG Hub environment atlas
+File: tiles.png
+Dimensions: 256x128 pixels
+Grid: 16x16 pixels, 16 columns x 8 rows, margin 0, spacing 0
+Origin: Original artwork created for Boss Pool
+Created: 2026-09-26
 
-From the pack's bundled License.txt:
+The supplied RPG screenshot was used only as broad visual direction for palette,
+density, path treatment, environmental layering, and warmth. No screenshot tile
+or identifiable artwork was copied, traced, or included.
 
-	License: (Creative Commons Zero, CC0)
-	http://creativecommons.org/publicdomain/zero/1.0/
-
-	This content is free to use in personal, educational and commercial projects.
-	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
-
-The pack page (https://kenney.nl/assets/tiny-town) also states "CC0 licensed!"
-and "Creative Commons CC0".
-
-File in this folder: tiles.png is the pack's Tilemap/tilemap_packed.png,
-192x176 px, 16x16 tiles, 12 columns x 11 rows, margin 0, spacing 0.
-(The pack's other sheet, tilemap.png, has 1px spacing and is not used.)
-
-Used as a fixture hub tileset. Boss Pool character art is separate and is
-not part of this pack.
-
-------------------------------------------------------------------------
-Tile index notes (1-based Tiled gids, firstgid 1, row-major, 12 columns)
-
-Read from the sheet on 2026-09-26.
-
-Trees, sprouts, mushrooms, fences and the sign have transparent backgrounds,
-so they go on the `props` (under player) or `overhead` (over player) layer
-with grass left on `ground` beneath them.
-
-Grass
-- 1   plain grass
-- 2   grass, light speckle
-- 3   grass with two yellow flowers
-- 44  grass/cobble patch (decor)
-
-Dirt path (3x3 autotile block, outer edge has grass on that side)
-- 13 14 15   top-left, top, top-right
-- 25 26 27   left, centre (plain dirt), right
-- 37 38 39   bottom-left, bottom, bottom-right
-- 40 41 42 43  dirt with small speckle / weed (centre variants)
-
-Cobblestone (grey, 2 rows)
-- 49 50 51   top-left, top, top-right
-- 61 62 63   bottom-left, bottom, bottom-right
-
-Trees (block movement; put on collision layer too)
-- 5   orange round tree, single tile
-- 6   green round tree, single tile
-- 17  orange tall tree, single tile
-- 29  green tall tree, single tile
-- 8, 9, 20, 21   green pine canopy pieces (2x2)
-- 10, 11, 22, 23 orange pine canopy pieces (2x2)
-
-Small decor (walkable, ground layer)
-- 18  green sprout
-- 30  red mushrooms
-
-Fence (blocks movement)
-- 45 46 47 48   top row: corner, post, post, corner
-- 57 59 69 71   vertical fence
-- 81 82 83      horizontal fence pieces
-- 84  wooden sign
-
-There is no water tile in this pack. The plan's pond becomes a cobblestone
-plaza (49-63) with a fence around it, which still blocks movement.
+This atlas is part of the Boss Pool project. Existing character and boss artwork
+in public/images is separate from this environment atlas.
