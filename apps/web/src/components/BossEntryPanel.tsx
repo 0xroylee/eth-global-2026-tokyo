@@ -59,7 +59,11 @@ export function BossEntryPanel({
           <div className="flex items-start gap-4">
             <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-ink">
               {boss.portrait ? (
-                <img src={boss.portrait} alt="" className="size-full object-cover object-top" />
+                <img
+                  src={boss.portrait}
+                  alt=""
+                  className="size-full object-cover object-top [image-rendering:pixelated]"
+                />
               ) : (
                 <span className="font-mono text-2xl text-dim">?</span>
               )}
