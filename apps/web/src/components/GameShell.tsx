@@ -8,6 +8,7 @@ import { SAGE_DEFEATED_STORAGE_KEY, SAGE_TALKED_STORAGE_KEY, sageLines, type Sag
 import { useHubGuide } from "@/lib/useHubGuide";
 import { useBossPool, type NetworkKey } from "@/lib/useBossPool";
 import { BossEntryPanel } from "./BossEntryPanel";
+import { BossRosterCard } from "./BossRosterCard";
 import { FullscreenControl } from "./FullscreenControl";
 import { GameCanvas, type CanvasPhase } from "./GameCanvas";
 import { HubGuide, ReplayGuide } from "./HubGuide";
@@ -304,7 +305,7 @@ export function GameShell() {
         </div>
       </div>
 
-      {openBoss && (
+      {openBoss && isBattleGate(openBoss) && (
         <BossEntryPanel
           boss={findBoss(openBoss)}
           arena={arena}
@@ -314,6 +315,7 @@ export function GameShell() {
           onSwitch={switchWallet}
         />
       )}
+      {openBoss && !isBattleGate(openBoss) && <BossRosterCard boss={findBoss(openBoss)} onClose={closeBoss} />}
       {routeOpen && <HubRouteNotice onClose={closeRoute} />}
       {helpOpen && <HubHelp onClose={closeHelp} onReplay={replayFromHelp} />}
       {sageOpen && <SageDialog lines={sageScript} onClose={closeSage} />}
@@ -399,6 +401,11 @@ function SagePrompt({ hidden }: { hidden: boolean }) {
       {hidden ? "" : "E · TALK TO THE SAGE"}
     </span>
   );
+}
+
+/** Only the playable gate owns the battle-entry panel; every other gate shows the roster card. */
+function isBattleGate(bossId: BossId): boolean {
+  return bossId === "cat";
 }
 
 function hasTalkedToSage(): boolean {
