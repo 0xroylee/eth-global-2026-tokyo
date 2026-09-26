@@ -48,11 +48,17 @@ export function GameShell() {
     setSageOpen(false);
   }, []);
 
+  // The bridge listeners and the on-screen prompts share these. A click and an interact
+  // key must run the same side effects: panel routing plus the guide's panelOpened effect
+  // that rides on `openBoss`.
+  const enterGate = useCallback((bossId: BossId) => setOpenBoss(bossId), []);
+  const inspectRoute = useCallback(() => setRouteOpen(true), []);
+
   useEffect(() => {
     const offNear = bridge.on("gate:near", ({ bossId }) => setNearBoss(bossId));
-    const offEnter = bridge.on("gate:enter", ({ bossId }) => setOpenBoss(bossId));
+    const offEnter = bridge.on("gate:enter", ({ bossId }) => enterGate(bossId));
     const offRouteNear = bridge.on("region:near", ({ exitId }) => setNearRoute(exitId !== null));
-    const offRouteInspect = bridge.on("region:inspect", () => setRouteOpen(true));
+    const offRouteInspect = bridge.on("region:inspect", () => inspectRoute());
     const offSageNear = bridge.on("npc:near", ({ npcId }) => setNearSage(npcId === "sage"));
     const offSageTalk = bridge.on("npc:talk", ({ npcId }) => {
       // Read the payload instead of assuming the sage: a second NPC lands here later.
@@ -66,7 +72,7 @@ export function GameShell() {
       offSageNear();
       offSageTalk();
     };
-  }, [bridge, openSage]);
+  }, [bridge, enterGate, inspectRoute, openSage]);
 
   useEffect(() => {
     guide.syncModal(overlayOpen);
@@ -185,7 +191,7 @@ export function GameShell() {
               disabled={overlayOpen || canvasPhase === "error"}
               onClick={(event) => {
                 blurOnMouseClick(event);
-                setOpenBoss("cat");
+                enterGate("cat");
               }}
               aria-label="Open Boss actions for Roy the cat"
               className="rounded-lg border border-[#f5b04a]/35 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-[#ffd28a] disabled:opacity-40"
@@ -308,9 +314,9 @@ export function GameShell() {
         <div className="mt-auto flex flex-col gap-2">
           <div className="flex flex-wrap items-end justify-center gap-2">
             <span className="rounded-md bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.14em] text-dim">WASD / ARROWS · MOVE</span>
-            <GatePrompt bossId={nearBoss} hidden={!showBossPrompt} />
-            <SagePrompt hidden={!showSagePrompt} />
-            <RoutePrompt hidden={!showRoutePrompt} />
+            <GatePrompt bossId={nearBoss} hidden={!showBossPrompt} onEnter={enterGate} />
+            <SagePrompt hidden={!showSagePrompt} onTalk={openSage} />
+            <RoutePrompt hidden={!showRoutePrompt} onInspect={inspectRoute} />
           </div>
           <div className="pointer-events-auto flex flex-wrap items-center gap-2">
             <button
@@ -392,48 +398,75 @@ function GlobalWriteNotice({ state }: { state: ReturnType<typeof useBossPool>["w
   return <p className="text-xs text-muted" role="status">{message}{state.status !== "prompting" && state.hash ? ` · ${state.hash}` : ""}</p>;
 }
 
-function GatePrompt({ bossId, hidden }: { bossId: BossId | null; hidden: boolean }) {
+function GatePrompt({
+  bossId,
+  hidden,
+  onEnter,
+}: {
+  bossId: BossId | null;
+  hidden: boolean;
+  onEnter: (bossId: BossId) => void;
+}) {
   const boss = bossId ? findBoss(bossId) : null;
   const visible = boss !== null && !hidden;
   return (
-    <span
+    <button
+      type="button"
+      // Disabled keeps the faded-out prompt out of the tab order; opacity alone stays focusable.
+      disabled={!visible}
       aria-live="polite"
       aria-hidden={!visible}
-      className={`rounded-md border border-white/12 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
-        visible ? "translate-y-0 opacity-100" : "pointer-events-none absolute translate-y-1 opacity-0"
+      onClick={(event) => {
+        blurOnMouseClick(event);
+        if (boss) onEnter(boss.id);
+      }}
+      className={`cursor-pointer rounded-md border border-white/12 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
+        visible ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none absolute translate-y-1 opacity-0"
       }`}
     >
       {visible && boss ? (boss.locked ? "E · INSPECT LOCKED GATE" : `E · ENTER ${boss.name.toUpperCase()}`) : ""}
-    </span>
+    </button>
   );
 }
 
-function RoutePrompt({ hidden }: { hidden: boolean }) {
+function RoutePrompt({ hidden, onInspect }: { hidden: boolean; onInspect: () => void }) {
   return (
-    <span
+    <button
+      type="button"
+      disabled={hidden}
       aria-live="polite"
       aria-hidden={hidden}
-      className={`rounded-md border border-[#c48a45]/50 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-[#f3e2c4] transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
-        hidden ? "pointer-events-none absolute translate-y-1 opacity-0" : "translate-y-0 opacity-100"
+      onClick={(event) => {
+        blurOnMouseClick(event);
+        onInspect();
+      }}
+      className={`cursor-pointer rounded-md border border-[#c48a45]/50 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-[#f3e2c4] transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
+        hidden ? "pointer-events-none absolute translate-y-1 opacity-0" : "pointer-events-auto translate-y-0 opacity-100"
       }`}
     >
       {hidden ? "" : "E · INSPECT ROUTE"}
-    </span>
+    </button>
   );
 }
 
 /** The sage is a conversation, not a gate: the prompt says so and never says "enter". */
-function SagePrompt({ hidden }: { hidden: boolean }) {
+function SagePrompt({ hidden, onTalk }: { hidden: boolean; onTalk: () => void }) {
   return (
-    <span
+    <button
+      type="button"
+      disabled={hidden}
       aria-live="polite"
       aria-hidden={hidden}
-      className={`rounded-md border border-white/12 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
-        hidden ? "pointer-events-none absolute translate-y-1 opacity-0" : "translate-y-0 opacity-100"
+      onClick={(event) => {
+        blurOnMouseClick(event);
+        onTalk();
+      }}
+      className={`cursor-pointer rounded-md border border-white/12 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
+        hidden ? "pointer-events-none absolute translate-y-1 opacity-0" : "pointer-events-auto translate-y-0 opacity-100"
       }`}
     >
       {hidden ? "" : "E · TALK TO THE SAGE"}
-    </span>
+    </button>
   );
 }
 
