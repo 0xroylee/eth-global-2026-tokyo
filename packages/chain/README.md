@@ -205,7 +205,9 @@ Approvals use the fixed map and request unlimited allowances: attack MockUSD to 
 
 `transferBossHP`, `claimReward`, `claimVictoryNFT`, and `faucetMockUSD` follow the same submitted-hash then `wait()` pattern. `previewReward` uses the frozen original prize and eligible BossHP denominator after defeat. A token transferee can claim without attacking; optional victory-NFT eligibility depends on that account's attack history.
 
-Each pending operation exposes a JSON-safe `request` with transaction hash, chain, account, target, calldata, and operation kind. `resumePending(request)` recovers a pending result without resubmitting. Viem replacement detection accepts only the same sender, target, calldata, zero value, and expected contract events. A timeout returns `status: "unresolved"`; it does not mean the transaction failed.
+Each pending operation exposes a JSON-safe `request` with transaction hash, chain, account, target, calldata, and operation kind. `resumePending(request)` recovers a pending result without resubmitting. Receipt and replacement checks require the requested account, target, calldata, zero value, and expected contract events. A timeout returns `status: "unresolved"`; it does not mean the transaction failed.
+
+Both SDKs support direct transactions and Base Sepolia relayed approvals and actions through MetaMask's [DelegationManager v1.3.0](https://github.com/MetaMask/delegation-framework/blob/v1.3.0/documents/Deployments.md). The relayed path requires one delegation redemption in single-call, revert-on-failure mode. Validation checks the root delegator and exact inner target, zero value, and calldata, then validates the expected contract events. Other wallet wrappers and batches remain unsupported. Existing saved requests use the same recovery path without another wallet submission.
 
 Use `DecodedContractEvent` results instead of decoding receipt logs in UI code. Logs are filtered to verified contract emitters and include the transaction hash and log index for effect deduplication. Broad contract errors remain unchanged; the SDK only maps known stale quote, stage, expiry, and slippage conditions to requote results.
 
