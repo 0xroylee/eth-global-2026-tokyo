@@ -28,7 +28,11 @@ export function BossEntryPanel({
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const actionRef = useRef<HTMLButtonElement>(null);
-  const live = arena.deployment.kind === "live" ? arena.deployment : null;
+  const candidate = arena.deployment.kind === "live" ? arena.deployment : null;
+  const live = candidate && candidate.context.deployment.encounterMode === "standalone" &&
+    candidate.hookAddress.toLowerCase() === candidate.context.baseManifest.addresses.hook.toLowerCase()
+    ? candidate
+    : null;
   const stage = live?.round.currentStage ?? 0;
   const portrait = boss.id === "cat" ? CAT_FORMS[Math.min(stage, 2)] : boss.portrait;
   const supported = boss.id === "cat";
@@ -110,14 +114,14 @@ export function BossEntryPanel({
             {arena.wallet.busy ? "SWITCHING NETWORK…" : `SWITCH WALLET TO ${arena.selectedChainId}`}
           </button>
         )}
-        {supported && (
+        {supported && live && (
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/30 px-3 py-3">
             <div>
               <p className="font-mono text-[9px] tracking-[0.12em] text-dim">LIVE BATTLE</p>
               <p className="mt-1 text-xs text-muted">Enter the arena. Each attack spends up to 1 MockUSD.</p>
             </div>
             <Link
-              href={`/battle?network=${arena.network}`}
+              href={`/battle/${live.hookAddress}?network=${arena.network}`}
               className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog transition-colors hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               ENTER BATTLE

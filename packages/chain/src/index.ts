@@ -25,6 +25,8 @@ export {
   parseBaseSepoliaDeployment,
   parseLocalDeployment,
   verifyDeployment,
+  resolveBossDeployment,
+  DeploymentResolutionError,
 } from "./deployment";
 export type {
   BaseSepoliaDeploymentManifest,
@@ -35,6 +37,10 @@ export type {
   SupportedChainId,
   TestnetDeploymentManifest,
   VerifiedDeployment,
+  DeploymentProvenance,
+  EncounterMode,
+  FactoryBossOrigin,
+  TokenMetadata,
 } from "./deployment";
 export { readPlayer, readRound, readState } from "./reads";
 export type { BossPoolSnapshot, PlayerSnapshot, RoundSnapshot } from "./reads";

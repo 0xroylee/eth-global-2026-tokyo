@@ -7,6 +7,7 @@ import {
   DEFAULT_LOCAL_RPC_URL,
   fetchBaseSepoliaDeployment,
   fetchLocalDeployment,
+  resolveBossDeployment,
   BASE_SEPOLIA_CHAIN_ID,
   LOCAL_CHAIN_ID,
   parseDeployment,
@@ -25,13 +26,15 @@ import {
   type WaitResult,
 } from "@boss-pool/chain";
 import { useWallet } from "@/wallet/WalletProvider";
-import { createWalletClient, custom, defineChain, UserRejectedRequestError, type WalletClient } from "viem";
+import { createWalletClient, custom, defineChain, getAddress, isAddress, UserRejectedRequestError, type WalletClient } from "viem";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type NetworkKey = "local" | "base-sepolia";
 
 type VerifiedContext = {
   key: NetworkKey;
+  hookAddress: Address;
+  baseManifest: DeploymentManifest;
   manifest: DeploymentManifest;
   rpcUrl: string;
   publicClient: ReturnType<typeof createPublicClientForNetwork>;
@@ -50,6 +53,9 @@ type WalletState = {
 
 type StoredPending = {
   network: NetworkKey;
+  /** Older standalone records omit this and belong to their manifest Hook. */
+  hookAddress?: Address;
+  baseManifest?: DeploymentManifest;
   manifest: DeploymentManifest;
   request: PendingRequest;
   submittedAt: number;
@@ -57,19 +63,21 @@ type StoredPending = {
 
 export type WriteState =
   | { status: "idle" }
-  | { status: "prompting"; action: string; network: NetworkKey; manifest: DeploymentManifest }
+  | { status: "prompting"; action: string; network: NetworkKey; hookAddress: Address; manifest: DeploymentManifest }
   | { status: "pending"; action: string; record: StoredPending }
   | { status: "unresolved"; action: string; record: StoredPending; message: string }
   | { status: "confirmed"; action: string; record: StoredPending; result: unknown }
-  | { status: "rejected" | "requote" | "reverted" | "replaced" | "failed"; action: string; hash?: string; message: string };
+  | { status: "rejected" | "requote" | "reverted" | "replaced" | "failed"; action: string; hash?: string; message: string; network?: NetworkKey; hookAddress?: Address };
 
 export type DeploymentState =
-  | { kind: "loading"; network: NetworkKey }
-  | { kind: "not-deployed"; network: NetworkKey }
-  | { kind: "error"; network: NetworkKey; message: string }
+  | { kind: "loading"; network: NetworkKey; selectionId: string; hookAddress?: string }
+  | { kind: "not-deployed"; network: NetworkKey; selectionId: string; hookAddress?: string }
+  | { kind: "error"; network: NetworkKey; selectionId: string; hookAddress?: string; message: string }
   | {
       kind: "live";
       network: NetworkKey;
+      selectionId: string;
+      hookAddress: Address;
       manifest: DeploymentManifest;
       rpcUrl: string;
       context: VerifiedContext;
@@ -83,9 +91,11 @@ const REFRESH_MS = 5_000;
 const PENDING_STORAGE_KEY = "boss-pool.pending-write.v2";
 
 export function useBossPool() {
-  const [network, setNetwork] = useState<NetworkKey>("base-sepolia");
+  const [selection, setSelection] = useState<{ network: NetworkKey; hookAddress?: string }>({ network: "base-sepolia" });
+  const { network, hookAddress: requestedHookAddress } = selection;
+  const selectionId = `${network}:${requestedHookAddress?.toLowerCase() ?? "<default>"}`;
   const { state: sharedWallet, requestConnect, switchToChain } = useWallet();
-  const [deployment, setDeployment] = useState<DeploymentState>({ kind: "loading", network: "base-sepolia" });
+  const [deployment, setDeployment] = useState<DeploymentState>({ kind: "loading", network: "base-sepolia", selectionId: "base-sepolia:<default>" });
   const [refreshVersion, setRefreshVersion] = useState(0);
   const contextRef = useRef<VerifiedContext | null>(null);
   const pendingRef = useRef<StoredPending | null>(null);
@@ -136,28 +146,44 @@ export function useBossPool() {
   useEffect(() => {
     let active = true;
     let timer: number | undefined;
-    contextRef.current = contextRef.current?.key === network ? contextRef.current : null;
+    const sameRequestedEncounter = (value: VerifiedContext | null) => Boolean(value && value.key === network &&
+      (requestedHookAddress
+        ? value.hookAddress.toLowerCase() === requestedHookAddress.toLowerCase()
+        : value.hookAddress.toLowerCase() === value.baseManifest.addresses.hook.toLowerCase()));
+    contextRef.current = sameRequestedEncounter(contextRef.current) ? contextRef.current : null;
     setDeployment((current) => {
-      if (current.kind === "live" && current.network === network) {
+      if (current.kind === "live" && current.selectionId === selectionId && current.network === network && sameRequestedEncounter(current.context)) {
         const sameAccount = current.player?.account.toLowerCase() === wallet.account?.toLowerCase();
         return sameAccount ? current : { ...current, player: undefined };
       }
-      if (current.kind === "loading" && current.network === network) return current;
-      return { kind: "loading", network };
+      if (current.kind === "loading" && current.selectionId === selectionId) return current;
+      return { kind: "loading", network, selectionId, hookAddress: requestedHookAddress };
     });
 
+    if (requestedHookAddress && !isAddress(requestedHookAddress, { strict: false })) {
+      setDeployment({ kind: "error", network, selectionId, hookAddress: requestedHookAddress, message: "Boss Hook address is invalid." });
+      return () => { active = false; };
+    }
+
     const poll = async () => {
+      let resolvedHookAddress = requestedHookAddress;
       try {
         const manifest = await fetchDeploymentForNetwork(network);
+        if (!active) return;
         const rpcUrl = deploymentRpcUrl(network, manifest.chainId === LOCAL_CHAIN_ID ? manifest.rpcUrl : undefined);
+        const targetHook = requestedHookAddress ? getAddress(requestedHookAddress.toLowerCase()) : manifest.addresses.hook;
+        resolvedHookAddress = targetHook;
+        const encounterManifest = withFactoryOverride(manifest);
         let context = contextRef.current;
-        if (!context || !sameDeployment(context, network, manifest, rpcUrl)) {
+        if (!context || !sameDeployment(context, network, encounterManifest, rpcUrl, targetHook)) {
           const publicClient = createPublicClientForNetwork(selectedChainId, rpcUrl);
-          const verified = await verifyDeployment(publicClient, manifest);
+          const verified = await resolveBossDeployment(publicClient, encounterManifest, targetHook);
           if (!active) return;
           context = {
             key: network,
-            manifest,
+            hookAddress: targetHook,
+            baseManifest: encounterManifest,
+            manifest: verified.manifest,
             rpcUrl,
             publicClient,
             deployment: verified,
@@ -172,12 +198,14 @@ export function useBossPool() {
           setDeployment((current) => ({
             kind: "live",
             network,
+            selectionId,
+            hookAddress: context.hookAddress,
             manifest: context.manifest,
             rpcUrl: context.rpcUrl,
             context,
             round: snapshot.round,
             player: snapshot.player,
-            readAt: current.kind === "live" && current.network === network &&
+            readAt: current.kind === "live" && current.network === network && current.hookAddress.toLowerCase() === context.hookAddress.toLowerCase() &&
               current.manifest.deploymentTxHash === context.manifest.deploymentTxHash &&
               current.round.blockTimestamp === snapshot.round.blockTimestamp ? current.readAt : Date.now(),
           }));
@@ -186,9 +214,9 @@ export function useBossPool() {
         if (!active) return;
         const message = errorMessage(error);
         if (message.includes("_DEPLOYMENT_MISSING")) {
-          setDeployment({ kind: "not-deployed", network });
+          setDeployment({ kind: "not-deployed", network, selectionId, hookAddress: resolvedHookAddress });
         } else {
-          setDeployment({ kind: "error", network, message });
+          setDeployment({ kind: "error", network, selectionId, hookAddress: resolvedHookAddress, message });
         }
       } finally {
         if (active) timer = window.setTimeout(poll, REFRESH_MS);
@@ -200,14 +228,21 @@ export function useBossPool() {
       active = false;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [network, refreshVersion, selectedChainId, wallet.account, wallet.chainId]);
+  }, [network, requestedHookAddress, selectionId, refreshVersion, selectedChainId, wallet.account, wallet.chainId]);
 
   const walletClient: WalletClient | undefined = useMemo(() => {
     if (!wallet.provider || !wallet.account || wallet.chainId !== selectedChainId) return undefined;
     return createWalletClient({ account: wallet.account, chain: walletChain, transport: custom(wallet.provider) });
   }, [wallet.provider, wallet.account, wallet.chainId, selectedChainId, walletChain]);
 
-  const readyContext = deployment.kind === "live" ? deployment.context : null;
+  const selectedHookMatches = deployment.kind === "live" && deployment.selectionId === selectionId && deployment.network === network &&
+    (requestedHookAddress
+      ? deployment.hookAddress.toLowerCase() === requestedHookAddress.toLowerCase()
+      : deployment.hookAddress.toLowerCase() === deployment.context.baseManifest.addresses.hook.toLowerCase());
+  const selectedDeployment: DeploymentState = deployment.selectionId === selectionId
+    ? deployment
+    : { kind: "loading", network, selectionId, hookAddress: requestedHookAddress };
+  const readyContext = selectedHookMatches && deployment.kind === "live" ? deployment.context : null;
   const sdk = useMemo(() => {
     if (!readyContext) return undefined;
     return walletClient
@@ -216,6 +251,16 @@ export function useBossPool() {
   }, [readyContext, walletClient]);
 
   const connect = useCallback(() => requestConnect(), [requestConnect]);
+
+  const selectNetwork = useCallback((nextNetwork: NetworkKey) => {
+    setSelection((current) => ({ ...current, network: nextNetwork }));
+  }, []);
+  const selectEncounter = useCallback((nextNetwork: NetworkKey, nextHookAddress: string) => {
+    setSelection({ network: nextNetwork, hookAddress: nextHookAddress });
+  }, []);
+  const selectDefaultEncounter = useCallback((nextNetwork: NetworkKey) => {
+    setSelection({ network: nextNetwork });
+  }, []);
 
   const switchToSelectedNetwork = useCallback(async () => {
     if (!wallet.provider) throw new Error("Connect an injected wallet before switching networks.");
@@ -259,17 +304,22 @@ export function useBossPool() {
     action: string,
     submit: () => Promise<PendingOperation<T> | SkippedApproval>,
   ): Promise<WaitResult<T> | SkippedApproval | undefined> => {
-    const origin = deployment.kind === "live" && deployment.network === network ? deployment.context : null;
+    const origin = selectedHookMatches && deployment.kind === "live" ? deployment.context : null;
     if (writeLock.current || pendingRef.current) {
-      setWriteState({ status: "failed", action, message: "Resolve the submitted transaction before starting another wallet action." });
       return undefined;
     }
     if (!origin) {
-      setWriteState({ status: "failed", action, message: "The selected deployment is not currently verified." });
+      setWriteState({
+        status: "failed",
+        action,
+        network,
+        hookAddress: requestedHookAddress && isAddress(requestedHookAddress, { strict: false }) ? getAddress(requestedHookAddress.toLowerCase()) : undefined,
+        message: "The selected deployment is not currently verified.",
+      });
       return undefined;
     }
     writeLock.current = true;
-    setWriteState({ status: "prompting", action, network: origin.key, manifest: origin.manifest });
+    setWriteState({ status: "prompting", action, network: origin.key, hookAddress: origin.hookAddress, manifest: origin.manifest });
     try {
       const operation = await submit();
       if (isSkippedApproval(operation)) {
@@ -279,6 +329,8 @@ export function useBossPool() {
       }
       const record: StoredPending = {
         network: origin.key,
+        hookAddress: origin.hookAddress,
+        baseManifest: origin.baseManifest,
         manifest: origin.manifest,
         request: operation.request,
         submittedAt: Date.now(),
@@ -307,12 +359,12 @@ export function useBossPool() {
         pendingRef.current = null;
         setPendingRecord(null);
       }
-      setWriteState({ status, action, hash, message: errorMessage(error) });
+      setWriteState({ status, action, hash, network: origin.key, hookAddress: origin.hookAddress, message: errorMessage(error) });
       throw error;
     } finally {
       writeLock.current = false;
     }
-  }, [network, deployment, waitForPending]);
+  }, [network, requestedHookAddress, deployment, selectedHookMatches, waitForPending]);
 
   const resumePending = useCallback(async () => {
     const record = pendingRef.current;
@@ -320,10 +372,12 @@ export function useBossPool() {
     writeLock.current = true;
     setWriteState({ status: "pending", action: record.request.kind, record });
     try {
+      const recordHook = record.hookAddress ?? record.manifest.addresses.hook;
       const context = deployment.kind === "live" && deployment.network === record.network &&
-        sameDeployment(deployment.context, record.network, record.manifest, deployment.rpcUrl)
+        deployment.hookAddress.toLowerCase() === recordHook.toLowerCase() &&
+        sameDeployment(deployment.context, record.network, record.baseManifest ?? record.manifest, deployment.rpcUrl, recordHook)
         ? deployment.context
-        : await loadVerifiedContext(record.network, record.manifest);
+        : await loadVerifiedContext(record.network, record.manifest, recordHook, record.baseManifest);
       const operation = context.publicSdk.resumePending(record.request);
       await waitForPending(operation, record);
     } catch (error) {
@@ -352,12 +406,16 @@ export function useBossPool() {
 
   return {
     network,
-    selectNetwork: setNetwork,
+    requestedHookAddress,
+    selectedHookAddress: deployment.selectionId === selectionId ? deployment.hookAddress : undefined,
+    selectNetwork,
+    selectEncounter,
+    selectDefaultEncounter,
     selectedChainId,
-    deployment,
+    deployment: selectedDeployment,
     wallet,
     sdk,
-    canWrite: Boolean(wallet.account && walletClient && sdk),
+    canWrite: Boolean(wallet.account && walletClient && sdk && selectedHookMatches),
     networkMismatch,
     connect,
     switchToSelectedNetwork,
@@ -369,16 +427,27 @@ export function useBossPool() {
   };
 }
 
-async function loadVerifiedContext(network: NetworkKey, originManifest?: DeploymentManifest): Promise<VerifiedContext> {
-  const manifest = originManifest ?? await fetchDeploymentForNetwork(network);
+async function loadVerifiedContext(
+  network: NetworkKey,
+  originManifest?: DeploymentManifest,
+  originHook?: Address,
+  originBaseManifest?: DeploymentManifest,
+): Promise<VerifiedContext> {
+  const fetchedManifest = originManifest ?? await fetchDeploymentForNetwork(network);
   const chainId = chainIdForNetwork(network);
-  if (manifest.chainId !== chainId) throw new Error("Saved deployment identity does not match its originating network.");
-  const rpcUrl = deploymentRpcUrl(network, manifest.chainId === LOCAL_CHAIN_ID ? manifest.rpcUrl : undefined);
+  if (fetchedManifest.chainId !== chainId) throw new Error("Saved deployment identity does not match its originating network.");
+  const baseManifest = originBaseManifest ?? (originManifest ? originManifest : withFactoryOverride(fetchedManifest));
+  const rpcUrl = deploymentRpcUrl(network, fetchedManifest.chainId === LOCAL_CHAIN_ID ? fetchedManifest.rpcUrl : undefined);
   const publicClient = createPublicClientForNetwork(chainId, rpcUrl);
-  const deployment = await verifyDeployment(publicClient, manifest);
+  const hookAddress = originHook ?? fetchedManifest.addresses.hook;
+  const deployment = originManifest
+    ? await verifyDeployment(publicClient, originManifest)
+    : await resolveBossDeployment(publicClient, baseManifest, hookAddress);
   return {
     key: network,
-    manifest,
+    hookAddress,
+    baseManifest,
+    manifest: deployment.manifest,
     rpcUrl,
     publicClient,
     deployment,
@@ -410,6 +479,24 @@ function deploymentRpcUrl(network: NetworkKey, manifestRpcUrl?: string): string 
   return network === "local" ? process.env.NEXT_PUBLIC_BOSS_POOL_LOCAL_RPC_URL ?? manifestRpcUrl ?? DEFAULT_LOCAL_RPC_URL : rpcUrlForNetwork(network);
 }
 
+function withFactoryOverride<T extends DeploymentManifest>(manifest: T): T {
+  const rawAddress = process.env.NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_ADDRESS;
+  if (!rawAddress || manifest.chainId !== BASE_SEPOLIA_CHAIN_ID) return manifest;
+  if (!isAddress(rawAddress, { strict: false })) {
+    throw new Error("The configured Boss Factory address is invalid.");
+  }
+  const rawBlock = process.env.NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_DEPLOYED_AT_BLOCK;
+  const deployedAtBlock = rawBlock === undefined || rawBlock.trim() === "" ? Number.NaN : Number(rawBlock);
+  if (!Number.isSafeInteger(deployedAtBlock) || deployedAtBlock < 0) {
+    throw new Error("A valid NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_DEPLOYED_AT_BLOCK is required with the configured Factory address.");
+  }
+  return {
+    ...manifest,
+    bossFactory: getAddress(rawAddress),
+    bossFactoryDeployedAtBlock: deployedAtBlock,
+  } as T;
+}
+
 function isSkippedApproval<T>(value: PendingOperation<T> | SkippedApproval): value is SkippedApproval {
   return "status" in value && value.status === "skipped";
 }
@@ -427,6 +514,13 @@ function readStoredPending(): StoredPending | null {
       !item.request || typeof item.request !== "object" || typeof item.submittedAt !== "number" || !item.manifest
     ) return null;
     const manifest = parseDeployment(item.manifest);
+    const baseManifest = item.baseManifest === undefined ? undefined : parseDeployment(item.baseManifest);
+    const hookAddress = item.hookAddress === undefined
+      ? undefined
+      : typeof item.hookAddress === "string" && isAddress(item.hookAddress, { strict: false })
+        ? getAddress(item.hookAddress.toLowerCase())
+        : null;
+    if (hookAddress === null) return null;
     const request = item.request as Partial<PendingRequest>;
     const kinds: readonly PendingActionKind[] = ["approval", "attack", "claimReward", "claimVictoryNFT", "faucetMockUSD"];
     if (
@@ -437,7 +531,7 @@ function readStoredPending(): StoredPending | null {
     ) return null;
     const expectedChainId = chainIdForNetwork(item.network);
     if (request.chainId !== expectedChainId || manifest.chainId !== expectedChainId) return null;
-    return { network: item.network, manifest, submittedAt: item.submittedAt, request: request as PendingRequest };
+    return { network: item.network, hookAddress, baseManifest, manifest, submittedAt: item.submittedAt, request: request as PendingRequest };
   } catch {
     return null;
   }
@@ -464,12 +558,16 @@ function sameDeployment(
   key: NetworkKey,
   next: DeploymentManifest,
   rpcUrl: string,
+  hookAddress: string,
 ): boolean {
   if (
-    current.key !== key || current.rpcUrl !== rpcUrl || current.manifest.chainId !== next.chainId ||
-    current.manifest.deploymentTxHash.toLowerCase() !== next.deploymentTxHash.toLowerCase()
+    current.key !== key || current.hookAddress.toLowerCase() !== hookAddress.toLowerCase() ||
+    current.rpcUrl !== rpcUrl || current.manifest.chainId !== next.chainId ||
+    current.baseManifest.deploymentTxHash.toLowerCase() !== next.deploymentTxHash.toLowerCase() ||
+    current.baseManifest.bossFactory?.toLowerCase() !== next.bossFactory?.toLowerCase() ||
+    current.baseManifest.bossFactoryDeployedAtBlock !== next.bossFactoryDeployedAtBlock
   ) return false;
-  const oldAddresses = current.manifest.addresses;
+  const oldAddresses = current.baseManifest.addresses;
   return Object.keys(oldAddresses).every((name) => {
     const address = name as keyof typeof oldAddresses;
     return oldAddresses[address].toLowerCase() === next.addresses[address].toLowerCase();
