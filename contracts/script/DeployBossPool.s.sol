@@ -55,10 +55,20 @@ contract DeployBossPool is Script {
     );
 
     function run() external {
-        address deployer = tx.origin;
+        address deployer;
+        if (block.chainid == 31337) {
+            deployer = tx.origin;
+            vm.startBroadcast();
+        } else if (block.chainid == 46_630) {
+            uint256 deployerKey = vm.envUint("TESTNET_DEPLOYER_PRIVATE_KEY");
+            deployer = vm.addr(deployerKey);
+            require(deployer == tx.origin, "testnet sender mismatch");
+            vm.startBroadcast(deployerKey);
+        } else {
+            revert("unsupported chain");
+        }
         uint256 deadline = block.timestamp + 2 hours;
 
-        vm.startBroadcast();
         Deployment memory deployment;
         deployment.deployer = deployer;
         deployment.manager = new PoolManager(deployer);
@@ -159,6 +169,7 @@ contract DeployBossPool is Script {
 
     function _logDeployment(Deployment memory deployment, SeedConfig memory seed) private view {
         string memory summary = string.concat("{\"chainId\":", vm.toString(block.chainid));
+        summary = string.concat(summary, ",\"deployer\":\"", vm.toString(deployment.deployer), "\"");
         summary = string.concat(summary, ",\"addresses\":", _addressesJson(deployment));
         summary = string.concat(summary, ",\"pools\":", _poolsJson(deployment.router));
         summary = string.concat(summary, ",\"config\":", _configJson(deployment, seed));
