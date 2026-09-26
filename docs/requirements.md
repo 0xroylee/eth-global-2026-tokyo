@@ -1,4 +1,16 @@
-# Boss Pool requirements
+# Boss BoostPad requirements
+
+Boss BoostPad creates a pool for a token the creator already holds and turns that pool into a boss raid. Fighters swap to attack, each attack adds to that token's swap volume, and they share a creator-funded prize.
+
+## Public description
+
+Demo: https://web-smoky-tau-35.vercel.app/
+
+**Short:** Boss BoostPad turns a token pool into a boss raid. Fighters swap to attack and share the prize.
+
+**Description:** A token sitting in a normal pool gives traders nothing to defeat and no shared prize. Boss BoostPad creates a pool for a token the creator already holds and turns that pool into a boss raid on Uniswap v4. The creator sets the pool in the blacksmith: pool size, a volume target, a prize share, and a portrait for each stage. Fighters attack by swapping through the pools, so each attack adds to that token's swap volume. Swaps outside the fight do not count. Clearing a stage unlocks the next liquidity. After the final stage, eligible fighters share the creator-funded prize. The garden hub, workshop, and battle run in the browser.
+
+**How it's made:** The boss is a Uniswap v4 hook. An attack is one routed swap, from MockUSD through Attack Token into the creator's existing token, and the hook counts that swap as damage and volume. The Boss Factory contract creates the pool, escrows the creator-funded prize, and releases the next stage's liquidity when the current stage is cleared. The browser app is Next.js and Phaser: a walkable garden hub, a blacksmith workshop where the creator sets the pool, and a turn-based battle. Wallet calls use viem on Base Sepolia. The hook is the notable part: swap output is the attack, with no token burn and no separate damage ledger.
 
 Status: attacks count purchases without burns, and reward shares follow eligible BossHP rather than a per-wallet damage total. The worked claim default is transferable tokens surrendered into permanent custody; the frozen-balance alternative remains available. [BP01](bp01-foundation.md) records the local no-burn contract foundation. The browser battle consumes the live SDK and Base Sepolia has a verified deployment manifest. A manual browser-wallet transaction journey remains unverified; the earlier Robinhood deployment is historical.
 
