@@ -27,7 +27,7 @@ export const BOSSES: readonly BossDefinition[] = [
     tagline: "Moves markets with a single splash.",
     portrait: "/images/boss-macro-whale-portrait.png",
     gate: { x: 1140, y: 250 },
-    locked: false,
+    locked: true,
   },
   {
     id: "locked",

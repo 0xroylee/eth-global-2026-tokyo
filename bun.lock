@@ -21,6 +21,7 @@
         "phaser": "4.2.1",
         "react": "19.3.0",
         "react-dom": "19.3.0",
+        "viem": "2.56.9",
       },
       "devDependencies": {
         "@tailwindcss/postcss": "4.3.3",

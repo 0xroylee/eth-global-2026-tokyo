@@ -1,6 +1,6 @@
 # Frontend contract SDK plan
 
-Approved for implementation on 26 September 2026. This plan extends the existing private `@boss-pool/chain` workspace. The user accepted public pre-enrollment quotes and a router-native quote entry with a fresh testnet deployment. Use GPT-6 Luna at xhigh for implementation and GPT-6 Sol at high for independent review.
+Approved for implementation on 26 September 2026. This plan extends the existing private `@boss-pool/chain` workspace. The user accepted public pre-enrollment quotes and a router-native quote entry with a fresh testnet deployment. Use GPT-6 Luna at xhigh for implementation and GPT-6 Sol at high for independent review. The user later selected CLI testnet plus page testing for this delivery and will perform the real browser-wallet popup acceptance manually.
 
 ## Confirmed scope
 
@@ -126,7 +126,7 @@ React keeps one public round poller, refreshes after receipts, and clears stale 
 | 2. Read one real round through the SDK | A, then B consumes | Add local/testnet configuration, state-independent deployment verification, one-block round/player reads, and browser-safe exports. Preserve public reads without wallet connection and completed/expired-round reads. Extends BP02 and BP06, issues #3 and #7. |
 | 3. Enroll and attack through shared operations | A owns SDK; B owns wallet UI | Extract approvals, simulation, submission, and typed receipts. Ship quote-before-approval, unlimited allowance prompts, final authenticated simulation, and stale-stage requotes. Extends BP03/BP04, issues #4 and #5. |
 | 4. Redeem HP and claim NFTs | A owns operations; B owns screens | Reuse frozen-denominator math, HP surrender, and independent NFT eligibility. Show actual payout from receipts. Extends BP07, issue #8. |
-| 5. Use the SDK in the existing game and exercise | A owns CLI evidence; B owns React/Phaser | Replace duplicate polling, feed confirmed round/results across the existing bridge, and make the existing two-wallet script call the SDK. Complete one browser-wallet rehearsal on a new real testnet round. Extends BP06/BP11, issues #7 and #12. |
+| 5. Use the SDK in the existing game and exercise | A owns CLI evidence; B owns React/Phaser | Replace duplicate polling, feed confirmed round/results across the existing bridge, and make the existing two-wallet script call the SDK on a new real testnet round. Verify the public page and disconnected-wallet states. Hand the browser-wallet popup checklist to the user. Extends BP06/BP11, issues #7 and #12. |
 
 B can prepare wallet state and controlled UI components once result shapes are agreed. Contract quote implementation is the dependency for final attack wiring. Do not build a second fake SDK while waiting.
 
@@ -138,6 +138,6 @@ Reuse the existing two-wallet scenario, replacing its transaction implementation
 
 Add a focused contract regression only for the new quote trust boundary: a quote cannot persist an unpaid attack or swallow a real transition failure. Combine representative partial and clearing cases with existing fixtures. Do not add one test per SDK wrapper or a broad mock matrix.
 
-Run the existing typecheck and production web build to catch browser imports of Node or signer code. Use one browser-wallet journey to verify allowance prompts, rejection, stale quotes, account/chain changes, receipt recovery, and confirmed Phaser updates. Reuse viem for provider and receipt mechanics instead of rebuilding them.
+Run the existing typecheck and production web build to catch browser imports of Node or signer code. Verify public quoting, network selection, canonical state display, and missing-wallet handling in the browser. Record allowance prompts, rejection, account/chain changes, and popup interactions as the user's manual acceptance checklist. Do not claim those wallet interactions were automated. Reuse viem for provider and receipt mechanics instead of rebuilding them.
 
 The SDK milestone is complete when the frontend and CLI use the same player operations, a fresh testnet journey succeeds, and a teammate can follow the usage example without assembling ABIs or decoding logs inside components.

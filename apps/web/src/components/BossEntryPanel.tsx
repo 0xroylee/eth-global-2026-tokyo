@@ -5,18 +5,26 @@
 import { useEffect, useRef } from "react";
 import type { BossDefinition } from "@/game/bosses";
 import { displayAmount, roundStatusLabel } from "@/lib/format";
-import type { DeploymentState } from "@/lib/useLocalRound";
+import { type useBossPool } from "@/lib/useBossPool";
+import { BossActions } from "./BossActions";
+
+type Arena = ReturnType<typeof useBossPool>;
+const CAT_FORMS = ["/images/boss-cat-form-a.png", "/images/boss-cat-form-b.png", "/images/boss-cat-form-c.png"] as const;
 
 export function BossEntryPanel({
   boss,
-  deployment,
+  arena,
   onClose,
 }: {
   boss: BossDefinition;
-  deployment: DeploymentState;
+  arena: Arena;
   onClose: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const live = arena.deployment.kind === "live" ? arena.deployment : null;
+  const stage = live?.round.currentStage ?? 0;
+  const portrait = boss.id === "cat" ? CAT_FORMS[Math.min(stage, 2)] : boss.portrait;
+  const supported = boss.id === "cat";
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -34,44 +42,54 @@ export function BossEntryPanel({
       aria-labelledby="boss-entry-title"
       className="absolute inset-0 z-20 grid place-items-center bg-ink/70 p-4 backdrop-blur-[2px]"
     >
-      <div className="panel-enter w-full max-w-[420px] rounded-2xl border border-white/12 bg-panel/95 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.6)]">
-        <div className="flex items-start gap-4">
-          <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-ink">
-            {boss.portrait ? (
-              <img src={boss.portrait} alt="" className="size-full object-cover object-top" />
-            ) : (
-              <span className="font-mono text-2xl text-dim">?</span>
-            )}
+      <div className="panel-enter max-h-full w-full max-w-[560px] overflow-y-auto rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)] sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-ink">
+              {portrait ? (
+                <img src={portrait} alt="" className="size-full object-cover object-top" />
+              ) : (
+                <span className="font-mono text-2xl text-dim">?</span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="eyebrow mb-1">{boss.locked ? "GATE LOCKED" : supported ? "BOSS GATE" : "FIXTURE ONLY"}</p>
+              <h2 id="boss-entry-title" className="text-2xl font-semibold tracking-[-0.03em]">
+                {boss.name}
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed text-muted">{boss.tagline}</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="eyebrow mb-1">{boss.locked ? "GATE LOCKED" : "BOSS GATE"}</p>
-            <h2 id="boss-entry-title" className="text-2xl font-semibold tracking-[-0.03em]">
-              {boss.name}
-            </h2>
-            <p className="mt-1 text-sm leading-relaxed text-muted">{boss.tagline}</p>
-          </div>
-        </div>
-
-        <div className="hairline mt-5 border-t pt-4">
-          <BossHealth boss={boss} deployment={deployment} />
-        </div>
-
-        <div className="mt-5 flex gap-2">
-          <button
-            type="button"
-            disabled
-            title="Battle arena is the next build step"
-            className="flex-1 rounded-lg bg-accent/20 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-accent-soft opacity-60"
-          >
-            {boss.locked ? "LOCKED" : "ENTER BATTLE · NEXT STEP"}
-          </button>
           <button
             ref={closeRef}
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-white/12 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-fog transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.97]"
+            aria-label="Close boss actions"
+            className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
-            BACK · ESC
+            CLOSE
+          </button>
+        </div>
+
+        <div className="hairline mt-5 border-t pt-4">
+          <BossHealth boss={boss} deployment={arena.deployment} />
+        </div>
+
+        {supported ? (
+          <BossActions arena={arena} />
+        ) : (
+          <p className="mt-4 rounded-lg border border-white/8 px-3 py-3 text-xs leading-relaxed text-muted">
+            This gate is a visual fixture. No contract or attack route is deployed for it.
+          </p>
+        )}
+
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-auto rounded-lg border border-white/12 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-fog transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 active:scale-[0.97]"
+          >
+            CLOSE · ESC
           </button>
         </div>
       </div>
@@ -79,7 +97,7 @@ export function BossEntryPanel({
   );
 }
 
-function BossHealth({ boss, deployment }: { boss: BossDefinition; deployment: DeploymentState }) {
+function BossHealth({ boss, deployment }: { boss: BossDefinition; deployment: Arena["deployment"] }) {
   // Only the cat is backed by the deployed round today.
   if (boss.id !== "cat") {
     return (

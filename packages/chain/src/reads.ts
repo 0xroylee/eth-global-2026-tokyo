@@ -1,4 +1,4 @@
-import type { Address, PublicClient } from "viem";
+import { BlockNotFoundError, type Address, type PublicClient } from "viem";
 import {
   bossHpAbi,
   bossPoolHookAbi,
@@ -234,6 +234,7 @@ async function withLatestSupportedBlock<T>(
     } catch (error) {
       if (!isUnsupportedBlockError(error) || unsupportedCount >= 2) throw error;
       unsupportedCount++;
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
 }
@@ -244,11 +245,17 @@ function isUnsupportedBlockError(error: unknown): boolean {
   let current: unknown = error;
   while (current && typeof current === "object" && !visited.has(current)) {
     visited.add(current);
-    const record = current as { message?: unknown; shortMessage?: unknown; cause?: unknown };
+    if (current instanceof BlockNotFoundError) return true;
+    const record = current as { message?: unknown; name?: unknown; shortMessage?: unknown; cause?: unknown };
+    if (record.name === "BlockNotFoundError") return true;
     if (typeof record.message === "string") messages.push(record.message);
     if (typeof record.shortMessage === "string") messages.push(record.shortMessage);
     current = record.cause;
   }
-  return /block (?:number )?not found|unknown block|header not found|historical state unavailable|state unavailable at block|unsupported block(?: number| parameter)?|block range.*not supported/i
-    .test(messages.join(" "));
+  const message = messages.join(" ");
+  return (
+    (/block/i.test(message) && /could not be found|not found/i.test(message)) ||
+    /unknown block|header not found|historical state unavailable|state unavailable at block|unsupported block(?: number| parameter)?|block range.*not supported/i
+      .test(message)
+  );
 }
