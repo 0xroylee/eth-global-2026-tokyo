@@ -76,7 +76,9 @@ export function SageDialog({ lines, onClose }: { lines: string[]; onClose: () =>
       }
       if (event.key !== "e" && event.key !== "E" && event.key !== "Enter" && event.key !== " ") return;
       const target = event.target;
-      if (target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+      // A focused control owns these keys: let the browser activate it (its onClick runs the
+      // same action) instead of advancing the line on top of it.
+      if (target instanceof HTMLElement && target.closest("button, a, input, textarea, select, [contenteditable]")) {
         return;
       }
       event.preventDefault();
@@ -127,7 +129,17 @@ export function SageDialog({ lines, onClose }: { lines: string[]; onClose: () =>
           >
             {nextLabel}
           </button>
-          <span className="font-mono text-[9px] tracking-[0.12em] text-dim">ESC · CLOSE</span>
+          <button
+            type="button"
+            onClick={(event) => {
+              // Pointer clicks blur so the button does not swallow the next Enter.
+              if (event.detail > 0) event.currentTarget.blur();
+              onClose();
+            }}
+            className="rounded-lg border border-white/12 px-3 py-2.5 font-mono text-[9px] tracking-[0.12em] text-dim transition-opacity duration-150 ease-[var(--ease-out-strong)] hover:bg-white/5 hover:text-fog active:scale-[0.97] motion-reduce:transition-opacity motion-reduce:active:scale-100"
+          >
+            ESC · CLOSE
+          </button>
         </div>
       </div>
     </div>
