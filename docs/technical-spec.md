@@ -96,7 +96,7 @@ Preserve the existing approval, simulation, receipt, and stale-stage rules. Atta
 
 ### Live battle page context
 
-`/mock-battle` now consumes the live SDK while retaining its existing URL. [Live battle page requirements](requirements.md#live-battle-page) owns the user flow. The route uses the selected verified deployment and has no simulated-damage fallback.
+`/battle` consumes the live SDK. Existing `/mock-battle` links permanently redirect to `/battle`, preserving `network=local` or defaulting to `network=base-sepolia`. [Live battle page requirements](requirements.md#live-battle-page) owns the user flow. The route uses the selected verified deployment and has no simulated-damage fallback.
 
 The page represents one shared, deployed Boss Pool round. The lake arena, player sprite, Pool Unis boss forms, pixel windows, command menu, and dialog describe that encounter. Pool Unis in the nameplate is the boss identity; its displayed level follows the stage. Attack Token is the payment currency. On-chain stage indices are zero-based; labels and artwork use stages 1 through 3. The Silkscreen battle frames use a responsive grid so the HUD, nameplate, portrait, boss, commands, and dialogue stay separate on narrow or short screens.
 
@@ -104,7 +104,7 @@ The existing integration code provides the starting points:
 
 | File | Current responsibility | Role in the live page |
 | --- | --- | --- |
-| [`mock-battle/page.tsx`](../apps/web/src/app/mock-battle/page.tsx) | Reads the selected network from route parameters and renders `BattlePage`; exit navigates to `/`. | Route entry for the live battle controller. |
+| [`battle/page.tsx`](../apps/web/src/app/battle/page.tsx) | Reads the selected network from route parameters and renders `BattlePage`; exit navigates to `/`. | Route entry for the live battle controller. |
 | [`BattleView.tsx`](../apps/web/src/components/battle/BattleView.tsx) | `BattlePage` selects the route's network. `BattleView` renders the arena, controls, native action dialog, and confirmed effects. | Round and player state come from the shared provider and SDK. |
 | [`BossPoolProvider.tsx`](../apps/web/src/components/BossPoolProvider.tsx) | Owns one `useBossPool` instance in the root layout. | Wallet prompts, the write lock, and receipt recovery survive route navigation. |
 | [`useBossPool.ts`](../apps/web/src/lib/useBossPool.ts) | Verifies deployments, manages the injected wallet, polls every five seconds, and saves pending requests. | Existing owner of SDK access, refresh, `runPending`, and `resumePending`. |
