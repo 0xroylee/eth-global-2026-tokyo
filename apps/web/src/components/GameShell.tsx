@@ -10,6 +10,7 @@ import { SAGE_DEFEATED_STORAGE_KEY, SAGE_TALKED_STORAGE_KEY, sageLines, type Sag
 import { useHubGuide } from "@/lib/useHubGuide";
 import type { useBossPool, NetworkKey } from "@/lib/useBossPool";
 import { useArena } from "./BossPoolProvider";
+import { BossContractList } from "./BossContractList";
 import { BossEntryPanel } from "./BossEntryPanel";
 import { BossRosterCard } from "./BossRosterCard";
 import { FullscreenControl } from "./FullscreenControl";
@@ -35,10 +36,11 @@ export function GameShell() {
   const [nearRoute, setNearRoute] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [canvasPhase, setCanvasPhase] = useState<CanvasPhase>("loading");
   const guide = useHubGuide(bridge, nearBoss);
   const welcomeOpen = guide.hydrated && guide.state.step === "welcome" && canvasPhase !== "error";
-  const gameDialogOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen;
+  const gameDialogOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen || actionsOpen;
   const overlayOpen = gameDialogOpen || sageOpen || Boolean(arena.wallet.busy);
   const sageScript = useMemo(() => sageLines(sageState), [sageState]);
 
@@ -102,6 +104,7 @@ export function GameShell() {
         setShowChain(false);
         setRouteOpen(false);
         setHelpOpen(false);
+        setActionsOpen(false);
         if (welcomeOpen) guide.start();
         // Resume before this same keydown reaches Phaser's window listener.
         bridge.send("ui:modal", { open: false });
@@ -226,10 +229,9 @@ export function GameShell() {
               disabled={overlayOpen || canvasPhase === "error"}
               onClick={(event) => {
                 blurOnMouseClick(event);
-                arena.selectDefaultEncounter(arena.network);
-                enterGate("cat");
+                setActionsOpen(true);
               }}
-              aria-label="Open Pool Unis boss actions"
+              aria-label="Open bosses with contracts"
               className="rounded-lg border border-[#f5b04a]/35 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-[#ffd28a] disabled:opacity-40"
             >
               BOSS ACTIONS
@@ -377,6 +379,15 @@ export function GameShell() {
         </div>
       </div>
 
+      {actionsOpen && (
+        <BossContractList
+          onClose={() => setActionsOpen(false)}
+          onSelect={(bossId) => {
+            setActionsOpen(false);
+            enterGate(bossId);
+          }}
+        />
+      )}
       {openBoss && isBattleGate(openBoss) && (
         <BossEntryPanel
           boss={findBoss(openBoss)}
