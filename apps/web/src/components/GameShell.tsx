@@ -410,9 +410,9 @@ function SagePrompt({ hidden }: { hidden: boolean }) {
   );
 }
 
-/** Only the playable gate owns the battle-entry panel; every other gate shows the roster card. */
+/** Only the gate with contract semantics owns the battle-entry panel; every other gate shows the roster card. */
 function isBattleGate(bossId: BossId): boolean {
-  return bossId === "cat";
+  return findBoss(bossId).source === "chain";
 }
 
 function hasTalkedToSage(): boolean {
