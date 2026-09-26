@@ -89,10 +89,10 @@ declare global {
 const REFRESH_MS = 5_000;
 const PENDING_STORAGE_KEY = "boss-pool.pending-write.v2";
 
-export function useBossPool(initialNetwork: NetworkKey = "base-sepolia") {
-  const [network, setNetwork] = useState<NetworkKey>(initialNetwork);
+export function useBossPool() {
+  const [network, setNetwork] = useState<NetworkKey>("base-sepolia");
   const [wallet, setWallet] = useState<WalletState>({ status: "checking" });
-  const [deployment, setDeployment] = useState<DeploymentState>({ kind: "loading", network: initialNetwork });
+  const [deployment, setDeployment] = useState<DeploymentState>({ kind: "loading", network: "base-sepolia" });
   const [refreshVersion, setRefreshVersion] = useState(0);
   const contextRef = useRef<VerifiedContext | null>(null);
   const pendingRef = useRef<StoredPending | null>(null);

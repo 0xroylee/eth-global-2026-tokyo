@@ -144,6 +144,7 @@ export function BossActions({
     if (!sdk || !round || inputAmount === null || inputAmount <= 0n) return;
     setQuoteBusy(true);
     setQuoteError(null);
+    setQuoteState(null);
     try {
       const quote = await sdk.quoteAttack({
         maxMockUSD: inputAmount,
@@ -231,7 +232,10 @@ export function BossActions({
         setLastResult({ kind: "attack", hash: confirmed.hash, result: confirmed.result });
       }
     } catch (error) {
-      if (error instanceof RequoteRequiredError) setQuoteError(error.message);
+      if (error instanceof RequoteRequiredError) {
+        setQuoteState(null);
+        setQuoteError(error.message);
+      }
     }
   }
 

@@ -6,7 +6,8 @@ import { confirmedBattleAttack } from "@/lib/battle";
 import { findBoss, type BossId } from "@/game/bosses";
 import { GameBridge } from "@/game/bridge";
 import { useHubGuide } from "@/lib/useHubGuide";
-import { useBossPool, type NetworkKey } from "@/lib/useBossPool";
+import type { useBossPool, NetworkKey } from "@/lib/useBossPool";
+import { useArena } from "./BossPoolProvider";
 import { BossEntryPanel } from "./BossEntryPanel";
 import { FullscreenControl } from "./FullscreenControl";
 import { GameCanvas, type CanvasPhase } from "./GameCanvas";
@@ -19,7 +20,7 @@ import { RoundStatePanel } from "./RoundStatePanel";
 export function GameShell() {
   const bridge = useMemo(() => new GameBridge(), []);
   const shellRef = useRef<HTMLElement>(null);
-  const arena = useBossPool();
+  const arena = useArena();
   const { deployment, writeState } = arena;
   const [nearBoss, setNearBoss] = useState<BossId | null>(null);
   const [openBoss, setOpenBoss] = useState<BossId | null>(null);

@@ -6,7 +6,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { confirmedBattleAttack, roundSecondsLeft, type ConfirmedBattleAttack } from "@/lib/battle";
 import { displayAmount } from "@/lib/format";
-import { useBossPool, type NetworkKey } from "@/lib/useBossPool";
+import type { useBossPool, NetworkKey } from "@/lib/useBossPool";
+import { useArena } from "../BossPoolProvider";
 import { BossActions } from "../BossActions";
 import { BossStage } from "./BossStage";
 import { CommandWindow } from "./CommandWindow";
@@ -20,8 +21,15 @@ const STAGES = [1, 2, 3] as const;
 const BUTTON = "window-chrome min-h-[44px] px-3 py-2 font-mono text-[10px] tracking-[0.08em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff] disabled:opacity-60";
 
 export function BattlePage({ initialNetwork }: { initialNetwork: NetworkKey }) {
-  const arena = useBossPool(initialNetwork);
+  const arena = useArena();
+  const [networkReady, setNetworkReady] = useState(false);
   const router = useRouter();
+  const selectNetwork = arena.selectNetwork;
+  useEffect(() => {
+    selectNetwork(initialNetwork);
+    setNetworkReady(true);
+  }, [initialNetwork, selectNetwork]);
+  if (!networkReady) return <p role="status" className="p-6">Loading battle…</p>;
   return <BattleView arena={arena} onClose={() => router.push("/")} />;
 }
 
@@ -134,11 +142,11 @@ export function BattleView({ arena, onClose }: { arena: ReturnType<typeof useBos
           <BossStage stage={visualStage} state={effect?.defeated || defeated ? "defeated" : effect?.stageCleared ? "transition" : effect ? "hit" : "idle"} />
         </div>}
 
-        {!defeated && <div className="absolute inset-x-[2%] bottom-[3%] flex items-end justify-between gap-3 max-md:flex-col max-md:items-start">
-          <div className="flex items-end gap-3">
+        {(!defeated || effect) && <div className="absolute inset-x-[2%] bottom-[3%] flex items-end justify-between gap-3 max-md:flex-col max-md:items-start">
+          {!defeated && <div className="flex items-end gap-3">
             <CroppedSprite className="h-[min(26vh,190px)] max-md:h-[14vh]" />
             <CommandWindow label={defeated ? "REWARDS" : "ATTACK"} disabled={!defeated && !canAttack} onAction={openActions} onClose={onClose} />
-          </div>
+          </div>}
           <DialogWindow title={title} detail={detail} />
         </div>}
 

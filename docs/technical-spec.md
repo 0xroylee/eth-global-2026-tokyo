@@ -96,13 +96,14 @@ The existing integration code provides the starting points:
 | File | Current responsibility | Role in the live page |
 | --- | --- | --- |
 | [`mock-battle/page.tsx`](../apps/web/src/app/mock-battle/page.tsx) | Reads the selected network from route parameters and renders `BattlePage`; exit navigates to `/`. | Route entry for the live battle controller. |
-| [`BattleView.tsx`](../apps/web/src/components/battle/BattleView.tsx) | `BattlePage` owns the arena hook. `BattleView` renders the arena, controls, native action dialog, and confirmed effects. | Round and player state come from the shared SDK. |
+| [`BattleView.tsx`](../apps/web/src/components/battle/BattleView.tsx) | `BattlePage` selects the route's network. `BattleView` renders the arena, controls, native action dialog, and confirmed effects. | Round and player state come from the shared provider and SDK. |
+| [`BossPoolProvider.tsx`](../apps/web/src/components/BossPoolProvider.tsx) | Owns one `useBossPool` instance in the root layout. | Wallet prompts, the write lock, and receipt recovery survive route navigation. |
 | [`useBossPool.ts`](../apps/web/src/lib/useBossPool.ts) | Verifies deployments, manages the injected wallet, polls every five seconds, and saves pending requests. | Existing owner of SDK access, refresh, `runPending`, and `resumePending`. |
 | [`BossActions.tsx`](../apps/web/src/components/BossActions.tsx) | Implements the fixed 1 MockUSD cap, quote freshness, approval, attack, reward, NFT, faucet, and receipt recovery actions. | The hub and battle use the same component. |
-| [`GameShell.tsx`](../apps/web/src/components/GameShell.tsx) and [`BossEntryPanel.tsx`](../apps/web/src/components/BossEntryPanel.tsx) | The hub owns one `useBossPool` instance and links to the battle with the selected network. | The shared `confirmedBattleAttack` helper scopes receipt effects in both views. |
+| [`GameShell.tsx`](../apps/web/src/components/GameShell.tsx) and [`BossEntryPanel.tsx`](../apps/web/src/components/BossEntryPanel.tsx) | The hub uses the shared arena and links to the battle with the selected network. | The shared `confirmedBattleAttack` helper scopes receipt effects in both views. |
 | [`reads.ts`](../packages/chain/src/reads.ts) and [`sdk.ts`](../packages/chain/src/sdk.ts) | Export `RoundSnapshot`, `PlayerSnapshot`, quotes, writes, decoded receipt events, and recovery. | Authoritative application interface through `@boss-pool/chain`. |
 
-A direct page visit needs its own arena owner because `layout.tsx` currently supplies no shared arena provider. An embedded battle uses its parent's arena instance. The presentation components do not create SDK clients or keep a second copy of on-chain HP. A small controller can adapt existing arena and action state into props. Wallet selection, deployment identity, and pending-write recovery must have one owner within the mounted flow.
+`layout.tsx` supplies one `BossPoolProvider` to both routes. Leaving the battle during an open wallet prompt does not unmount the transaction controller or release its write lock. Once the wallet supplies a hash, the same controller saves and follows the receipt even when the hub is visible. A full browser refresh recovers submitted requests from storage. Presentation components receive the shared arena state and keep no independent on-chain HP ledger.
 
 The screen data maps as follows:
 
