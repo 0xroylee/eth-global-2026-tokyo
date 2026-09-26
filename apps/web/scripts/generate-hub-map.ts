@@ -69,9 +69,22 @@ fillRect(15, 10, 11, 11, (c, r) => {
   if (dx * dx + dy * dy <= 1) markStone(c, r);
 });
 const reserveRoute = (col: number, row: number, w: number, h: number) => fillRect(col, row, w, h, markStone);
+/**
+ * A three-wide spur is a single corridor, so scatter has to clear the tile either side
+ * of it as well: the player's body is 12px in a 16px tile, so a tile on the flank still
+ * catches an off-centre walker. Kept apart from `reserved` because the trees that frame
+ * the routes and the plaza lanterns are deliberate — they keep their placements.
+ */
+const shoulder = new Uint8Array(WIDTH * HEIGHT);
+const isShoulder = (col: number, row: number) => inBounds(col, row) && shoulder[index(col, row)] === 1;
+const reserveSpur = (col: number, row: number, w: number, h: number) => {
+  reserveRoute(col, row, w, h);
+  fillRect(col - 1, row, 1, h, (c, r) => { shoulder[index(c, r)] = 1; });
+  fillRect(col + w, row, 1, h, (c, r) => { shoulder[index(c, r)] = 1; });
+};
 // Spawn to clearing, with a jog.
-reserveRoute(19, 20, 3, 4); // rows 20..23
-reserveRoute(20, 23, 3, 4); // rows 23..26, shifted one column east
+reserveSpur(19, 20, 3, 4); // rows 20..23
+reserveSpur(20, 23, 3, 4); // rows 23..26, shifted one column east
 // Two trunks run west and east out of the clearing along rows 12..14. Every north
 // gate drops a three-wide spur onto one of them, and the west column gates open off them.
 reserveRoute(7, 12, 9, 3); // west trunk, cols 7..15
@@ -79,22 +92,23 @@ reserveRoute(25, 12, 9, 3); // east trunk, cols 25..33
 // Future region route. Reserved before stone edges and decoration so the
 // Macro Whale approach stays put and the exit is not planted over.
 reserveRoute(33, 12, 6, 3); // cols 33..38, rows 12..14
-// One spur per north gate: three wide, centred on the gate, down to the trunk.
-reserveRoute(7, 4, 3, 11); // talis, cols 7..9
-reserveRoute(11, 4, 3, 11); // roo, cols 11..13
-reserveRoute(15, 4, 3, 11); // agrippa, cols 15..17
-reserveRoute(19, 4, 3, 11); // cat, cols 19..21
-reserveRoute(23, 4, 3, 11); // robinpepe, cols 23..25
-reserveRoute(27, 4, 3, 11); // aeva, cols 27..29
-reserveRoute(31, 4, 3, 11); // macro-whale, cols 31..33
-reserveRoute(35, 4, 3, 11); // pons, cols 35..37
+// One spur per north gate: three wide, centred on the gate, down to the trunk. A
+// three-wide route is one corridor, so it reserves its shoulders as well.
+reserveSpur(7, 4, 3, 11); // talis, cols 7..9
+reserveSpur(11, 4, 3, 11); // roo, cols 11..13
+reserveSpur(15, 4, 3, 11); // agrippa, cols 15..17
+reserveSpur(19, 4, 3, 11); // cat, cols 19..21
+reserveSpur(23, 4, 3, 11); // robinpepe, cols 23..25
+reserveSpur(27, 4, 3, 11); // aeva, cols 27..29
+reserveSpur(31, 4, 3, 11); // macro-whale, cols 31..33
+reserveSpur(35, 4, 3, 11); // pons, cols 35..37
 // hoodcats sits west of the west trunk, so its spur steps south then east into talis's.
-reserveRoute(3, 4, 3, 5); // cols 3..5, rows 4..8
+reserveSpur(3, 4, 3, 5); // cols 3..5, rows 4..8
 reserveRoute(5, 8, 5, 3); // cols 5..9, rows 8..10
 // ad opens straight onto the trunk. musebook drops south of it to its own approach.
-reserveRoute(7, 14, 3, 7); // cols 7..9, rows 14..20
+reserveSpur(7, 14, 3, 7); // cols 7..9, rows 14..20
 // robin's approach sits below its own base, so its spur passes west of the gate footprint.
-reserveRoute(33, 15, 3, 6); // cols 33..35, rows 15..20
+reserveSpur(33, 15, 3, 6); // cols 33..35, rows 15..20
 
 const isStone = (c: number, r: number) => inBounds(c, r) && stone[index(c, r)] === 1;
 fillRect(0, 0, WIDTH, HEIGHT, (c, r) => {
@@ -223,11 +237,14 @@ for (let row = 12; row <= 14; row++) {
 }
 
 // 8. Decoration after every reservation: torches beside gates, lanterns at the plaza,
-//    shrubs and rocks on open grass, flowers on the detail layer.
+//    shrubs and rocks on open grass, flowers on the detail layer. No blocking piece may
+//    land on a route tile or on a corridor shoulder, or it narrows a walkway.
 for (const gate of GATES) {
   for (const c of [gate.col - 1, gate.col + gate.width]) {
     const r = gate.row + gate.height - 1;
     if (layers.collision[index(c, r)] !== 0) continue;
+    // talis, musebook and robin each put one torch on their own spur before this guard.
+    if (isStone(c, r) || isShoulder(c, r)) continue;
     setTile("props", c, r, G.torchA);
     block(c, r, G.torchA);
   }
@@ -238,7 +255,7 @@ for (const [c, r] of [[14, 9], [26, 9], [14, 21], [26, 21]] as const) {
   block(c, r, G.lantern);
 }
 fillRect(1, 1, WIDTH - 2, HEIGHT - 2, (c, r) => {
-  if (isReserved(c, r) || layers.collision[index(c, r)] !== 0 || treeFootprint[index(c, r)]) return;
+  if (isReserved(c, r) || isShoulder(c, r) || layers.collision[index(c, r)] !== 0 || treeFootprint[index(c, r)]) return;
   const v = (c * 23 + r * 41) % 53;
   if (v === 0) { setTile("props", c, r, G.shrub); block(c, r, G.shrub); }
   else if (v === 1) { setTile("props", c, r, G.rock); block(c, r, G.rock); }
