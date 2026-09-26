@@ -110,22 +110,20 @@ export function BossEntryPanel({
             SWITCH WALLET TO {arena.selectedChainId}
           </button>
         )}
-        {actionsReady && (
-          <>
-            <BossActions arena={arena} />
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/30 px-3 py-3">
-              <div>
-                <p className="font-mono text-[9px] tracking-[0.12em] text-dim">SEPARATE MOCK PREVIEW</p>
-                <p className="mt-1 text-xs text-muted">The pixel battle is a visual demo and never changes contract state.</p>
-              </div>
-              <Link
-                href="/mock-battle"
-                className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog transition-colors hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              >
-                OPEN MOCK BATTLE
-              </Link>
+        {actionsReady && <BossActions arena={arena} />}
+        {supported && (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/30 px-3 py-3">
+            <div>
+              <p className="font-mono text-[9px] tracking-[0.12em] text-dim">SEPARATE MOCK PREVIEW</p>
+              <p className="mt-1 text-xs text-muted">The pixel battle is a visual demo and never changes contract state.</p>
             </div>
-          </>
+            <Link
+              href="/mock-battle"
+              className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog transition-colors hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              OPEN MOCK BATTLE
+            </Link>
+          </div>
         )}
         {!supported && (
           <p className="mt-4 rounded-lg border border-white/8 px-3 py-3 text-xs leading-relaxed text-muted">
