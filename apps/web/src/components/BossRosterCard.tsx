@@ -27,7 +27,12 @@ export function BossRosterCard({ boss, onClose }: { boss: BossDefinition; onClos
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    closeRef.current?.focus();
+    // Focus the dialog root, never a control. The interact key that opened this card is
+    // still being dispatched: moving focus onto the CLOSE button let that same keystroke's
+    // default action click it, so the card opened and closed within one keypress. A
+    // tabIndex={-1} container carries the focus cue without owning Enter/Space. Same shape
+    // as SageDialog, which is why that dialog never had this defect.
+    dialogRef.current?.focus({ preventScroll: true });
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -41,10 +46,13 @@ export function BossRosterCard({ boss, onClose }: { boss: BossDefinition; onClos
       const first = items[0];
       const last = items[items.length - 1];
       if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) {
+      const active = document.activeElement;
+      // The root is where focus starts, so it is also the trap's outer edge: Shift+Tab
+      // from it must wrap to the last control instead of leaving the dialog.
+      if (event.shiftKey && (active === first || active === root)) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (!event.shiftKey && active === last) {
         event.preventDefault();
         first.focus();
       }
@@ -64,7 +72,8 @@ export function BossRosterCard({ boss, onClose }: { boss: BossDefinition; onClos
         aria-modal="true"
         aria-labelledby="boss-roster-title"
         aria-describedby="boss-roster-summary"
-        className="panel-enter max-h-[min(32rem,calc(100dvh-2rem))] w-full max-w-[480px] overflow-y-auto rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)] sm:p-6"
+        tabIndex={-1}
+        className="panel-enter max-h-[min(32rem,calc(100dvh-2rem))] w-full max-w-[480px] overflow-y-auto rounded-2xl border border-white/12 bg-panel/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.6)] outline-none sm:p-6"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-4">
