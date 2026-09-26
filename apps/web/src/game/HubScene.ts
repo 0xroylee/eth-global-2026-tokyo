@@ -163,6 +163,8 @@ export class HubScene extends Phaser.Scene {
   private hintArrow: Phaser.GameObjects.Triangle | null = null;
   private regionZone: Phaser.Geom.Rectangle | null = null;
   private nearRegion = false;
+  private marketZone: Phaser.Geom.Rectangle | null = null;
+  private nearMarket = false;
   private sage: Phaser.GameObjects.Image | null = null;
   private sageBob: Phaser.Tweens.Tween | null = null;
   private sageBaseY = 0;
@@ -207,6 +209,8 @@ export class HubScene extends Phaser.Scene {
     this.nearRoamer = false;
     this.regionZone = null;
     this.nearRegion = false;
+    this.marketZone = null;
+    this.nearMarket = false;
     this.sage = null;
     this.sageBob = null;
     this.sageZone = null;
@@ -256,6 +260,7 @@ export class HubScene extends Phaser.Scene {
 
     const gateBodies = this.buildGates(map);
     this.buildRegionExit(map);
+    this.buildMarket(map);
     this.buildPlayer(spawn.x, spawn.y);
     this.physics.add.collider(this.player, collision);
     this.physics.add.collider(this.player, gateBodies);
@@ -328,6 +333,8 @@ export class HubScene extends Phaser.Scene {
       this.hintArrow = null;
       this.regionZone = null;
       this.nearRegion = false;
+      this.marketZone = null;
+      this.nearMarket = false;
       this.sageBob?.stop();
       this.sageBob = null;
       this.sage = null;
@@ -354,6 +361,7 @@ export class HubScene extends Phaser.Scene {
     this.exposeDevProbe();
     this.bridge.emit("region:near", { exitId: null });
     this.bridge.emit("npc:near", { npcId: null });
+    this.bridge.emit("market:near", { marketId: null });
     this.bridge.emit("scene:ready", {});
   }
 
@@ -377,6 +385,7 @@ export class HubScene extends Phaser.Scene {
       hintVisible: this.hintArrow?.visible ?? false,
       nearRegion: this.nearRegion,
       nearSage: this.nearSage,
+      nearMarket: this.nearMarket,
       sage: this.sage && this.sage.body
         ? {
             x: this.sage.x,
@@ -414,6 +423,7 @@ export class HubScene extends Phaser.Scene {
     this.updateGateProximity();
     this.updateSageProximity();
     this.updateRegionProximity();
+    this.updateMarketProximity();
     this.updateGuideHint(time);
   }
 
@@ -702,7 +712,7 @@ export class HubScene extends Phaser.Scene {
       // same keydown's default action on that control — closing the panel milliseconds after
       // it opened. Cancel the activation keys here so a panel survives its own opening; `e`/`E`
       // is left alone because it has no default action to cancel.
-      const opensPanel = this.nearGate || this.nearSage || this.nearRegion;
+      const opensPanel = this.nearGate || this.nearSage || this.nearRegion || this.nearMarket;
       if (activatesFocusedControl && opensPanel) event.preventDefault();
       if (this.nearGate) {
         this.bridge.emit("gate:enter", { bossId: this.nearGate.boss.id });
@@ -710,6 +720,10 @@ export class HubScene extends Phaser.Scene {
       }
       if (this.nearSage) {
         this.bridge.emit("npc:talk", { npcId: "sage" });
+        return;
+      }
+      if (this.nearMarket) {
+        this.bridge.emit("market:inspect", { marketId: "pool-ledger" });
         return;
       }
       if (this.nearRegion) this.bridge.emit("region:inspect", { exitId: "east-route" });
@@ -1082,7 +1096,7 @@ export class HubScene extends Phaser.Scene {
 
   /** Nearest unlocked gate, keeping the current target until another is clearly closer. */
   private chooseHintGate(): Gate | null {
-    const unlocked = this.gates.filter((gate) => gate.boss.status !== "locked");
+    const unlocked = this.gates.filter((gate) => gate.boss.status === "active");
     if (unlocked.length === 0) return null;
     const distance = (gate: Gate) => {
       const centerX = gate.zone.x + gate.zone.width / 2;
@@ -1148,12 +1162,84 @@ export class HubScene extends Phaser.Scene {
       .setDepth(LABEL_DEPTH);
   }
 
+  /**
+   * A market stall on the grass south of the trade route. Reuses the shrine gate's
+   * stone-house primitives, tinted with a teal awning so it reads as a market rather
+   * than a boss gate. Opens the pool ledger when inspected. No new image assets.
+   */
+  private buildMarket(map: Phaser.Tilemaps.Tilemap) {
+    const markers = map.getObjectLayer(HUB_LAYERS.markers);
+    const obj = markers?.objects.find((marker) => marker.name === "market");
+    if (!obj || obj.x === undefined || obj.y === undefined || !obj.width || !obj.height) return;
+    const marketId = obj.properties?.find((property: { name: string }) => property.name === "marketId")?.value;
+    if (marketId !== "pool-ledger") return;
+
+    const cx = obj.x + obj.width / 2;
+    const base = obj.y + obj.height;
+    const half = obj.width / 2;
+    // Approach zone below the stall, same vocabulary as a gate's.
+    this.marketZone = new Phaser.Geom.Rectangle(obj.x - 8, base, obj.width + 16, 40);
+
+    // Stall body: shadow, base course, two posts, a lintel and a teal awning.
+    this.add.ellipse(cx, base + 2, obj.width + 8, 8, 0x000000, 0.25).setDepth(1);
+    this.add.rectangle(cx, base - 4, obj.width, 8, 0x3a3d4a).setDepth(base);
+    this.add.rectangle(cx, base - 8, obj.width, 2, 0x50546a).setOrigin(0.5, 1).setDepth(base);
+    this.add.rectangle(cx - half + 3, base - 18, 5, 24, 0x4a4e60).setDepth(base);
+    this.add.rectangle(cx + half - 3, base - 18, 5, 24, 0x4a4e60).setDepth(base);
+    const lintelY = base - 30;
+    this.add.rectangle(cx, lintelY, obj.width + 4, 5, 0x4a4e60).setDepth(base);
+    this.add
+      .polygon(cx, lintelY, [
+        { x: -half - 1, y: 3 },
+        { x: 0, y: -8 },
+        { x: half + 1, y: 3 },
+      ], 0x2f7d6b)
+      .setDepth(base + 1);
+
+    // Sign board to the north so it never covers the approach the player walks in from.
+    const signY = base - 48;
+    const title = this.add
+      .text(cx, signY - 3, "MARKET", {
+        fontFamily: labelFontFamily(),
+        fontSize: "5px",
+        color: "#4fdaa5",
+        letterSpacing: 0.4,
+        resolution: ZOOM,
+      })
+      .setOrigin(0.5)
+      .setDepth(LABEL_DEPTH + 1);
+    this.crispLabels.push(title);
+    const subtitle = this.add
+      .text(cx, signY + 4, "POOL LEDGER", {
+        fontFamily: labelFontFamily(),
+        fontSize: "4px",
+        color: "#cfe9df",
+        letterSpacing: 0.4,
+        resolution: ZOOM,
+      })
+      .setOrigin(0.5)
+      .setDepth(LABEL_DEPTH + 1);
+    this.crispLabels.push(subtitle);
+    this.add
+      .rectangle(cx, signY, Math.max(title.width, subtitle.width) + 8, title.height + subtitle.height + 4, 0x0b0e18, 0.8)
+      .setStrokeStyle(1, 0x2f7d6b, 0.7)
+      .setDepth(LABEL_DEPTH);
+  }
+
   private updateRegionProximity() {
     if (!this.regionZone) return;
     const inside = Phaser.Geom.Rectangle.Contains(this.regionZone, this.player.x, this.player.y);
     if (inside === this.nearRegion) return;
     this.nearRegion = inside;
     this.bridge.emit("region:near", { exitId: inside ? "east-route" : null });
+  }
+
+  private updateMarketProximity() {
+    if (!this.marketZone) return;
+    const inside = Phaser.Geom.Rectangle.Contains(this.marketZone, this.player.x, this.player.y);
+    if (inside === this.nearMarket) return;
+    this.nearMarket = inside;
+    this.bridge.emit("market:near", { marketId: inside ? "pool-ledger" : null });
   }
 
   private updateGateProximity() {

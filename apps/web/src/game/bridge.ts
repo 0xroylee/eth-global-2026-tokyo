@@ -25,6 +25,10 @@ export type GameEvents = {
   "npc:near": { npcId: "sage" | null };
   /** Player pressed interact while inside the sage's talk zone. */
   "npc:talk": { npcId: "sage" };
+  /** Player walked into / out of the market's inspect zone. */
+  "market:near": { marketId: "pool-ledger" | null };
+  /** Player inspected the market to open the pool ledger. */
+  "market:inspect": { marketId: "pool-ledger" };
 };
 
 export type GuideSceneStep = "off" | "move" | "find" | "inspect";

@@ -18,30 +18,47 @@ describe("transitionGuide", () => {
     expect(hidden.step).toBe("hidden");
   });
 
-  test("accepts the macro whale as a discovery target", () => {
+  test("keeps the guide in find when a contract-less gate is the discovery target", () => {
     let state = transitionGuide(welcome, { type: "start" });
     state = transitionGuide(state, { type: "moved" });
     state = transitionGuide(state, { type: "near", bossId: "macro-whale" });
+    // macro-whale is a Hidden Boss (no-contract), so it never unlocks inspect.
+    expect(state).toEqual({ step: "find", nearBoss: "macro-whale" });
     state = transitionGuide(state, { type: "opened", bossId: "macro-whale" });
-    expect(state.step).toBe("done");
-    expect(state.nearBoss).toBe("macro-whale");
+    expect(state).toEqual({ step: "find", nearBoss: "macro-whale" });
   });
 
-  // Phase 1 ships every gate unlocked, so `transitionGuide`'s "locked" branch is
-  // dormant: no boss carries that status, which means `isUnlocked` can no longer be
-  // driven by a real entry. These two cases pin the contract that does matter
-  // instead. If a locked gate ever returns, add a dedicated case for the branch.
+  // "locked" stays a dormant data state (no gate carries it); "active" is the
+  // availability signal that unlocks inspect, so contract-less gates keep the
+  // guide in `find`. If a locked gate ever returns, add a dedicated case for it.
   test("ships no locked gate in phase one", () => {
     expect(BOSSES.filter((boss) => boss.status === "locked")).toEqual([]);
   });
 
-  test("walks every gate from near to opened", () => {
+  test("only active gates advance find to inspect while contract-less gates stay in find", () => {
     for (const boss of BOSSES) {
-      const inspecting = transitionGuide({ step: "find", nearBoss: null }, { type: "near", bossId: boss.id });
-      expect(inspecting).toEqual({ step: "inspect", nearBoss: boss.id });
-      const opened = transitionGuide(inspecting, { type: "opened", bossId: boss.id });
-      expect(opened).toEqual({ step: "done", nearBoss: boss.id });
+      const state = transitionGuide({ step: "find", nearBoss: null }, { type: "near", bossId: boss.id });
+      if (boss.status === "active") {
+        expect(state).toEqual({ step: "inspect", nearBoss: boss.id });
+        const opened = transitionGuide(state, { type: "opened", bossId: boss.id });
+        expect(opened).toEqual({ step: "done", nearBoss: boss.id });
+      } else {
+        expect(state).toEqual({ step: "find", nearBoss: boss.id });
+      }
     }
+  });
+
+  test("pins active as the only status that unlocks inspect", () => {
+    // Mutation guard: exactly the active gates flip find -> inspect. If a gate's
+    // status drifts (e.g. cat -> no-contract) this breaks immediately.
+    const advancing = BOSSES.filter(
+      (boss) =>
+        transitionGuide({ step: "find", nearBoss: null }, { type: "near", bossId: boss.id }).step === "inspect",
+    );
+    expect(advancing.map((boss) => boss.id)).toEqual(
+      BOSSES.filter((boss) => boss.status === "active").map((boss) => boss.id),
+    );
+    expect(advancing.length).toBeGreaterThan(0);
   });
 
   test("returns to find when the player leaves an unlocked gate", () => {
