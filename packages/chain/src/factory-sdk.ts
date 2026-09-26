@@ -1,16 +1,20 @@
 import {
   decodeEventLog,
+  decodeFunctionData,
+  encodeFunctionData,
   encodeAbiParameters,
   erc20Abi,
   getCreate2Address,
   isAddress,
   keccak256,
   toHex,
+  WaitForTransactionReceiptTimeoutError,
   type Account,
   type Address,
   type Chain,
   type Hex,
   type PublicClient,
+  type ReplacementReturnType,
   type Transport,
   type WalletClient,
 } from "viem";
@@ -28,6 +32,7 @@ export type FactoryLaunchConfig = {
   prizeBps: number;
   volumeTargetMockUSD: bigint;
   deadline: bigint;
+  maxAttackTokenPerMockUSDX128: bigint;
 };
 
 export type FactoryLaunchQuote = {
@@ -64,14 +69,6 @@ export type FactoryLaunchResult = {
   collectibles: Address;
 };
 
-export type BossFactorySdkOptions = {
-  publicClient: PublicClient;
-  factory: Address;
-  walletClient?: WalletClient<Transport, Chain | undefined, Account | undefined>;
-  routerCode?: Hex;
-  hookCode?: Hex;
-};
-
 export class BossFactorySdkError extends Error {
   readonly code: string;
 
@@ -81,6 +78,94 @@ export class BossFactorySdkError extends Error {
     this.code = code;
   }
 }
+
+type FactoryLaunchConfigRecord = Omit<FactoryLaunchConfig,
+  "tokenAllocation" | "volumeTargetMockUSD" | "deadline" | "maxAttackTokenPerMockUSDX128"
+> & {
+  tokenAllocation: string;
+  volumeTargetMockUSD: string;
+  deadline: string;
+  maxAttackTokenPerMockUSDX128: string;
+};
+
+export type FactoryPendingOperation = {
+  version: 1;
+  kind: "approval";
+  chainId: number;
+  hash: Hex;
+  account: Address;
+  factory: Address;
+  token: Address;
+  amount: string;
+  calldata: Hex;
+  submittedAt: number;
+} | {
+  version: 1;
+  kind: "launch";
+  chainId: number;
+  hash: Hex;
+  account: Address;
+  factory: Address;
+  bossId: Hex;
+  userSalt: Hex;
+  config: FactoryLaunchConfigRecord;
+  expected: { prizeAmount: string; hpPriceTick: number };
+  calldata: Hex;
+  submittedAt: number;
+};
+
+export type FactoryOperationResult =
+  | { kind: "approval"; hash: Hex; token: Address; allowance?: bigint }
+  | { kind: "launch"; result: FactoryLaunchResult };
+
+export class FactoryOperationPendingError extends BossFactorySdkError {
+  readonly operation: FactoryPendingOperation;
+
+  constructor(operation: FactoryPendingOperation) {
+    super("FACTORY_OPERATION_PENDING", "The transaction is still pending. Resume receipt checking before starting another Factory transaction.");
+    this.name = "FactoryOperationPendingError";
+    this.operation = operation;
+  }
+}
+
+export class FactoryOperationTerminalError extends BossFactorySdkError {
+  readonly operation: FactoryPendingOperation;
+
+  constructor(operation: FactoryPendingOperation, code: string, message: string) {
+    super(code, message);
+    this.name = "FactoryOperationTerminalError";
+    this.operation = operation;
+  }
+}
+
+export function parseFactoryPendingOperation(value: unknown): FactoryPendingOperation | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  if (record.version !== 1 || !positiveSafeInteger(record.chainId) ||
+      !isHash(record.hash) || !isAddressValue(record.account) || !isAddressValue(record.factory) ||
+      !isHexData(record.calldata) || !positiveSafeInteger(record.submittedAt)) return undefined;
+  if (record.kind === "approval") {
+    if (!isAddressValue(record.token) || !isDecimal(record.amount)) return undefined;
+    return value as FactoryPendingOperation;
+  }
+  if (record.kind !== "launch" || !isHash(record.bossId) || !isHash(record.userSalt) ||
+      !record.config || typeof record.config !== "object" || !record.expected || typeof record.expected !== "object") return undefined;
+  const config = record.config as Record<string, unknown>;
+  const expected = record.expected as Record<string, unknown>;
+  if (!isAddressValue(config.token) || !isDecimal(config.tokenAllocation) || !isDecimal(config.volumeTargetMockUSD) ||
+      !isDecimal(config.deadline) || !isDecimal(config.maxAttackTokenPerMockUSDX128) ||
+      !Number.isInteger(config.prizeBps) || (config.prizeBps as number) <= 0 || (config.prizeBps as number) >= 10_000 ||
+      !isDecimal(expected.prizeAmount) || !Number.isInteger(expected.hpPriceTick)) return undefined;
+  return value as FactoryPendingOperation;
+}
+
+export type BossFactorySdkOptions = {
+  publicClient: PublicClient;
+  factory: Address;
+  walletClient?: WalletClient<Transport, Chain | undefined, Account | undefined>;
+  routerCode?: Hex;
+  hookCode?: Hex;
+};
 
 export async function readErc20TokenInfo(
   publicClient: PublicClient,
@@ -136,10 +221,23 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
     const [walletChain, accounts] = await Promise.all([wallet.getChainId(), wallet.getAddresses()]);
     const expectedChain = await publicClient.getChainId();
     if (walletChain !== expectedChain) throw new BossFactorySdkError("WRONG_WALLET_CHAIN", `Switch the wallet to chain ${expectedChain}.`);
-    const configured = typeof wallet.account === "string" ? wallet.account : wallet.account?.address;
-    const account = configured ?? accounts[0];
-    if (!account || !accounts.some((candidate) => candidate.toLowerCase() === account.toLowerCase())) {
-      throw new BossFactorySdkError("WALLET_ACCOUNT_CHANGED", "The selected wallet account is unavailable.");
+    const configuredAccount = wallet.account;
+    const configured = typeof configuredAccount === "string" ? configuredAccount : configuredAccount?.address;
+    let account: Address;
+    if (configured) {
+      const localSigner = typeof configuredAccount === "object" && configuredAccount.type === "local";
+      if (localSigner) {
+        account = configured;
+      } else {
+        if (!accounts[0] || !sameAddress(accounts[0], configured)) {
+          throw new BossFactorySdkError("WALLET_ACCOUNT_CHANGED", "Configured JSON-RPC account is no longer the wallet's first selected account.");
+        }
+        account = accounts[0];
+      }
+    } else {
+      const selected = accounts[0];
+      if (!selected) throw new BossFactorySdkError("WALLET_ACCOUNT_CHANGED", "The selected wallet account is unavailable.");
+      account = selected;
     }
     return { wallet, account, writeAccount: wallet.account ?? account };
   }
@@ -158,21 +256,26 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
     return publicClient.readContract({ address: token, abi: erc20Abi, functionName: "allowance", args: [owner, factory] });
   }
 
-  async function approveToken(token: Address, amount: bigint): Promise<Hex | null> {
+  async function approveToken(
+    token: Address,
+    amount: bigint,
+    onSubmitted?: (operation: FactoryPendingOperation) => void,
+  ): Promise<Hex | null> {
     if (amount <= 0n) throw new BossFactorySdkError("INVALID_APPROVAL_AMOUNT", "Approval amount must be positive.");
     await ensureFactory();
     const { account } = await requireWallet();
     const current = await tokenAllowance(token, account);
     if (current >= amount) return null;
-    if (current > 0n) await sendApproval(token, account, 0n);
-    const hash = await sendApproval(token, account, amount);
-    if (await tokenAllowance(token, account) < amount) {
-      throw new BossFactorySdkError("APPROVAL_FAILED", "The Factory did not receive the required token allowance.");
-    }
-    return hash;
+    if (current > 0n) await sendApproval(token, account, 0n, onSubmitted);
+    return sendApproval(token, account, amount, onSubmitted);
   }
 
-  async function sendApproval(token: Address, account: Address, amount: bigint): Promise<Hex> {
+  async function sendApproval(
+    token: Address,
+    account: Address,
+    amount: bigint,
+    onSubmitted?: (operation: FactoryPendingOperation) => void,
+  ): Promise<Hex> {
     const { wallet, account: currentAccount } = await requireWallet();
     if (currentAccount.toLowerCase() !== account.toLowerCase()) {
       throw new BossFactorySdkError("WALLET_ACCOUNT_CHANGED", "The selected wallet account changed during approval.");
@@ -188,6 +291,8 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
     if (checkedWallet.account.toLowerCase() !== account.toLowerCase()) {
       throw new BossFactorySdkError("WALLET_ACCOUNT_CHANGED", "The selected wallet account changed during approval preparation.");
     }
+    const chainId = await publicClient.getChainId();
+    const calldata = encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [factory, amount] });
     const hash = await wallet.writeContract({
       address: token,
       abi: erc20Abi,
@@ -196,18 +301,38 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
       account: checkedWallet.writeAccount,
       chain: wallet.chain,
     });
-    const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
-    if (receipt.status !== "success") throw new BossFactorySdkError("APPROVAL_FAILED", "The token approval transaction reverted.");
-    return hash;
+    const operation: FactoryPendingOperation = {
+      version: 1,
+      kind: "approval",
+      chainId,
+      hash,
+      account,
+      factory,
+      token,
+      amount: amount.toString(),
+      calldata,
+      submittedAt: Date.now(),
+    };
+    onSubmitted?.(operation);
+    const { receipt } = await waitForFactoryReceipt(publicClient, operation, 120_000);
+    if (receipt.status !== "success") {
+      throw new FactoryOperationTerminalError(operation, "APPROVAL_REVERTED", "The token approval transaction reverted.");
+    }
+    assertApprovalEvent(receipt, operation);
+    return receipt.transactionHash;
   }
 
   async function launchBoss(
     config: FactoryLaunchConfig,
     onProgress?: (progress: FactoryLaunchProgress) => void,
+    onSubmitted?: (operation: FactoryPendingOperation) => void,
   ): Promise<FactoryLaunchResult> {
     await ensureFactory();
     const { account } = await requireWallet();
     onProgress?.({ phase: "preparing" });
+    if (config.maxAttackTokenPerMockUSDX128 <= 0n) {
+      throw new BossFactorySdkError("ACCEPTED_RATE_REQUIRED", "Request a quote and use its accepted attack-token rate before launching.");
+    }
 
     const tokenInfo = await readErc20TokenInfo(publicClient, config.token, account);
     if (tokenInfo.balance === undefined || tokenInfo.balance < config.tokenAllocation) {
@@ -215,6 +340,10 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
     }
     if (await tokenAllowance(config.token, account) < config.tokenAllocation) {
       throw new BossFactorySdkError("TOKEN_APPROVAL_REQUIRED", "Approve the selected MEME allocation to the Boss Factory first.");
+    }
+    const expectedQuote = await quoteLaunch(config);
+    if (expectedQuote.maxRoyPerMockUSDX128 !== config.maxAttackTokenPerMockUSDX128) {
+      throw new BossFactorySdkError("ACCEPTED_RATE_MISMATCH", "The accepted attack-token rate no longer matches the Factory quote. Request a fresh quote.");
     }
 
     const [expectedRouterHash, expectedHookHash] = await Promise.all([
@@ -236,6 +365,9 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
     const hookSalt = await mineHookSalt(factory, initCode, publicClient, onProgress);
 
     const launchArgs = [config, userSalt, hookSalt, routerCode, hookCode] as const;
+    const calldata = encodeFunctionData({ abi: bossFactoryAbi, functionName: "launchBoss", args: launchArgs });
+    const bossId = keccak256(encodeAbiParameters(FACTORY_BOSS_ID_ABI, [account, userSalt]));
+    const chainId = await publicClient.getChainId();
     const checkedWallet = await requireWallet();
     if (checkedWallet.account.toLowerCase() !== account.toLowerCase()) {
       throw new BossFactorySdkError("WALLET_ACCOUNT_CHANGED", "The selected wallet account changed while preparing the launch. Request a new quote.");
@@ -260,31 +392,45 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
       account: finalWallet.writeAccount,
       chain: finalWallet.wallet.chain,
     });
+    const operation: FactoryPendingOperation = {
+      version: 1,
+      kind: "launch",
+      chainId,
+      hash,
+      account,
+      factory,
+      bossId,
+      userSalt,
+      config: toConfigRecord(config),
+      expected: { prizeAmount: expectedQuote.prizeAmount.toString(), hpPriceTick: expectedQuote.hpPriceTick },
+      calldata,
+      submittedAt: Date.now(),
+    };
+    onSubmitted?.(operation);
     onProgress?.({ phase: "confirming", hash });
-    const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
-    if (receipt.status !== "success") throw new BossFactorySdkError("LAUNCH_REVERTED", "The launch transaction reverted.");
+    const result = await resumeOperation(operation);
+    if (result.kind !== "launch") throw new BossFactorySdkError("INVALID_OPERATION_RESULT", "Factory launch recovery returned an approval result.");
+    return result.result;
+  }
 
-    for (const log of receipt.logs) {
-      if (log.address.toLowerCase() !== factory.toLowerCase()) continue;
-      try {
-        const event = decodeEventLog({ abi: bossFactoryAbi, data: log.data, topics: log.topics, strict: true });
-        if (event.eventName !== "BossLaunched") continue;
-        if (event.args.maker.toLowerCase() !== account.toLowerCase() ||
-            event.args.token.toLowerCase() !== config.token.toLowerCase()) break;
-        return {
-          hash: receipt.transactionHash,
-          bossId: event.args.bossId,
-          maker: event.args.maker,
-          token: event.args.token,
-          hook: event.args.hook,
-          router: event.args.router,
-          collectibles: event.args.collectibles,
-        };
-      } catch {
-        // Ignore other logs from the Factory transaction.
-      }
+  async function resumeOperation(value: FactoryPendingOperation): Promise<FactoryOperationResult> {
+    const operation = parseFactoryPendingOperation(value);
+    if (!operation) throw new BossFactorySdkError("INVALID_PENDING_OPERATION", "Saved Factory operation data is invalid; keep it for recovery and check the transaction manually.");
+    const chainId = await publicClient.getChainId();
+    if (operation.chainId !== chainId || !sameAddress(operation.factory, factory)) {
+      throw new BossFactorySdkError("OPERATION_NETWORK_MISMATCH", "Saved Factory operation belongs to a different chain or Factory.");
     }
-    throw new BossFactorySdkError("LAUNCH_EVENT_MISSING", "Launch succeeded but the expected BossLaunched event was missing.");
+    const { receipt } = await waitForFactoryReceipt(publicClient, operation, 120_000);
+    if (receipt.status !== "success") {
+      const label = operation.kind === "launch" ? "launch" : "approval";
+      throw new FactoryOperationTerminalError(operation, `${label.toUpperCase()}_REVERTED`, `The Factory ${label} transaction reverted.`);
+    }
+    if (operation.kind === "approval") {
+      assertApprovalEvent(receipt, operation);
+      const allowance = await tokenAllowance(operation.token, operation.account).catch(() => undefined);
+      return { kind: "approval", hash: receipt.transactionHash, token: operation.token, allowance };
+    }
+    return { kind: "launch", result: decodeLaunchResult(receipt, operation) };
   }
 
   async function uniqueUserSalt(maker: Address): Promise<Hex> {
@@ -305,12 +451,179 @@ export function createBossFactorySdk(options: BossFactorySdkOptions) {
     tokenAllowance,
     approveToken,
     launchBoss,
+    resumeOperation,
     withWallet: (walletClient: BossFactorySdkOptions["walletClient"]) =>
       createBossFactorySdk({ ...options, walletClient }),
   };
 }
 
 export type BossFactorySdk = ReturnType<typeof createBossFactorySdk>;
+
+async function waitForFactoryReceipt(
+  publicClient: PublicClient,
+  operation: FactoryPendingOperation,
+  timeout: number,
+) {
+  let replacement: ReplacementReturnType<Chain | undefined> | undefined;
+  let receipt;
+  try {
+    receipt = await publicClient.waitForTransactionReceipt({
+      hash: operation.hash,
+      confirmations: 1,
+      timeout,
+      onReplaced: (value) => { replacement = value; },
+    });
+  } catch (error) {
+    if (error instanceof WaitForTransactionReceiptTimeoutError) throw new FactoryOperationPendingError(operation);
+    throw error;
+  }
+
+  if (replacement && (replacement.reason === "cancelled" || !matchesFactoryTransaction(replacement.transaction, operation))) {
+    const reason = replacement.reason === "cancelled" ? "cancelled" : "replaced by a different transaction";
+    throw new FactoryOperationTerminalError(operation, "TRANSACTION_REPLACED", `The Factory transaction was ${reason}; the original operation did not confirm.`);
+  }
+  const transaction = await publicClient.getTransaction({ hash: receipt.transactionHash });
+  if (!matchesFactoryTransaction(transaction, operation) ||
+      !sameAddress(receipt.from, operation.account) || !sameAddress(receipt.to ?? ZERO_ADDRESS, targetOf(operation))) {
+    throw new BossFactorySdkError("FACTORY_RECEIPT_MISMATCH", "The mined transaction does not match the saved Factory request. Keep it saved and resume later.");
+  }
+  return { receipt, replaced: Boolean(replacement) };
+}
+
+function matchesFactoryTransaction(
+  transaction: { from: Address; to: Address | null; input: Hex; value: bigint; chainId?: number | null },
+  operation: FactoryPendingOperation,
+): boolean {
+  return sameAddress(transaction.from, operation.account) &&
+    sameAddress(transaction.to ?? ZERO_ADDRESS, targetOf(operation)) &&
+    sameHex(transaction.input, operation.calldata) && transaction.value === 0n &&
+    (transaction.chainId === null || transaction.chainId === operation.chainId);
+}
+
+function targetOf(operation: FactoryPendingOperation): Address {
+  return operation.kind === "launch" ? operation.factory : operation.token;
+}
+
+function decodeLaunchResult(receipt: Awaited<ReturnType<PublicClient["waitForTransactionReceipt"]>>, operation: Extract<FactoryPendingOperation, { kind: "launch" }>): FactoryLaunchResult {
+  assertLaunchCall(operation);
+  const events = [];
+  for (const log of receipt.logs) {
+    if (!sameAddress(log.address, operation.factory)) continue;
+    try {
+      const event = decodeEventLog({ abi: bossFactoryAbi, data: log.data, topics: log.topics, strict: true });
+      if (event.eventName === "BossLaunched") events.push(event);
+    } catch {
+      // Ignore unrelated Factory logs; the expected event is checked below.
+    }
+  }
+  if (events.length !== 1) {
+    throw new BossFactorySdkError("LAUNCH_EVENT_UNKNOWN", `Expected one BossLaunched event, found ${events.length}. Keep the transaction saved and resume later.`);
+  }
+  const event = events[0]!;
+  const expectedBossId = keccak256(encodeAbiParameters(FACTORY_BOSS_ID_ABI, [operation.account, operation.userSalt]));
+  if (!sameHex(event.args.bossId, operation.bossId) || !sameHex(event.args.bossId, expectedBossId) ||
+      !sameAddress(event.args.maker, operation.account) || !sameAddress(event.args.token, operation.config.token) ||
+      event.args.tokenAllocation !== BigInt(operation.config.tokenAllocation) ||
+      event.args.prizeAmount !== BigInt(operation.expected.prizeAmount) ||
+      event.args.volumeTargetMockUSD !== BigInt(operation.config.volumeTargetMockUSD) ||
+      event.args.hpPriceTick !== operation.expected.hpPriceTick) {
+    throw new BossFactorySdkError("LAUNCH_EVENT_MISMATCH", "BossLaunched does not match the saved launch config. Keep the transaction saved and resume later.");
+  }
+  return {
+    hash: receipt.transactionHash,
+    bossId: event.args.bossId,
+    maker: event.args.maker,
+    token: event.args.token,
+    hook: event.args.hook,
+    router: event.args.router,
+    collectibles: event.args.collectibles,
+  };
+}
+
+function assertApprovalEvent(
+  receipt: Awaited<ReturnType<PublicClient["waitForTransactionReceipt"]>>,
+  operation: Extract<FactoryPendingOperation, { kind: "approval" }>,
+): void {
+  const expectedAmount = BigInt(operation.amount);
+  const call = decodeFunctionData({ abi: erc20Abi, data: operation.calldata });
+  if (call.functionName !== "approve" || !sameAddress(call.args[0], operation.factory) || call.args[1] !== expectedAmount) {
+    throw new BossFactorySdkError("APPROVAL_CALL_UNKNOWN", "Saved approval calldata does not match its owner, spender, and amount record. Keep it saved and resume later.");
+  }
+  const matches = [];
+  for (const log of receipt.logs) {
+    if (!sameAddress(log.address, operation.token)) continue;
+    try {
+      const event = decodeEventLog({ abi: erc20Abi, data: log.data, topics: log.topics, strict: true });
+      if (event.eventName === "Approval" && sameAddress(event.args.owner, operation.account) &&
+          sameAddress(event.args.spender, operation.factory) && event.args.value === expectedAmount) matches.push(event);
+    } catch {
+      // Ignore unrelated ERC-20 logs; an exact Approval event is required below.
+    }
+  }
+  if (matches.length !== 1) {
+    throw new BossFactorySdkError("APPROVAL_EVENT_UNKNOWN", "The approval receipt did not prove the saved owner, spender, and amount. Keep it saved and resume later.");
+  }
+}
+
+function assertLaunchCall(operation: Extract<FactoryPendingOperation, { kind: "launch" }>): void {
+  let decoded;
+  try {
+    decoded = decodeFunctionData({ abi: bossFactoryAbi, data: operation.calldata });
+  } catch {
+    throw new BossFactorySdkError("LAUNCH_CALL_UNKNOWN", "Saved launch calldata could not be decoded. Keep it saved and resume later.");
+  }
+  if (decoded.functionName !== "launchBoss") {
+    throw new BossFactorySdkError("LAUNCH_CALL_UNKNOWN", "Saved transaction calldata is not a Boss Factory launch. Keep it saved and resume later.");
+  }
+  const [config, userSalt] = decoded.args;
+  if (!sameHex(userSalt, operation.userSalt) || !sameAddress(config.token, operation.config.token) ||
+      config.tokenAllocation !== BigInt(operation.config.tokenAllocation) || config.prizeBps !== operation.config.prizeBps ||
+      config.volumeTargetMockUSD !== BigInt(operation.config.volumeTargetMockUSD) || config.deadline !== BigInt(operation.config.deadline) ||
+      config.maxAttackTokenPerMockUSDX128 !== BigInt(operation.config.maxAttackTokenPerMockUSDX128)) {
+    throw new BossFactorySdkError("LAUNCH_CALL_MISMATCH", "Saved launch calldata does not match its recorded config. Keep it saved and resume later.");
+  }
+}
+
+function toConfigRecord(config: FactoryLaunchConfig): FactoryLaunchConfigRecord {
+  return {
+    token: config.token,
+    tokenAllocation: config.tokenAllocation.toString(),
+    prizeBps: config.prizeBps,
+    volumeTargetMockUSD: config.volumeTargetMockUSD.toString(),
+    deadline: config.deadline.toString(),
+    maxAttackTokenPerMockUSDX128: config.maxAttackTokenPerMockUSDX128.toString(),
+  };
+}
+
+function isHash(value: unknown): value is Hex {
+  return typeof value === "string" && /^0x[\da-fA-F]{64}$/.test(value);
+}
+
+function isHexData(value: unknown): value is Hex {
+  return typeof value === "string" && /^0x(?:[\da-fA-F]{2})+$/.test(value);
+}
+
+function isAddressValue(value: unknown): value is Address {
+  return typeof value === "string" && isAddress(value, { strict: false });
+}
+
+function isDecimal(value: unknown): value is string {
+  return typeof value === "string" && /^\d+$/.test(value);
+}
+
+function positiveSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+function sameAddress(left: Address, right: Address): boolean {
+  return left.toLowerCase() === right.toLowerCase();
+}
+
+function sameHex(left: Hex, right: Hex): boolean {
+  return left.toLowerCase() === right.toLowerCase();
+}
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 
 async function mineHookSalt(
   deployer: Address,

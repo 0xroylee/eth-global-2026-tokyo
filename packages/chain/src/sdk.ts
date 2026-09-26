@@ -70,6 +70,8 @@ export type AttackQuote = {
   minRoyOut: bigint;
   minBossHPOut: bigint;
   slippageBps: number;
+  supplyPoolFee: number;
+  bossPoolFee: number;
   stageCleared: boolean;
   bossDefeated: boolean;
   nextStage: number;
@@ -418,6 +420,8 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
       minRoyOut: minimumOutput(quote.royBought, slippageBps),
       minBossHPOut: minimumOutput(quote.bossHPOut, slippageBps),
       slippageBps,
+      supplyPoolFee: round.supplyPoolFee,
+      bossPoolFee: round.bossPoolFee,
       stageCleared: quote.stageCleared,
       bossDefeated: quote.bossDefeated,
       nextStage: quote.nextStage,

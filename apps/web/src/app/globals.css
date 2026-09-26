@@ -4,6 +4,7 @@
 @theme {
   --font-sans: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-dm-mono), ui-monospace, monospace;
+  --font-pixel: var(--font-silkscreen), var(--font-dm-mono), monospace;
 
   --color-ink: #080b14;
   --color-panel: #111627;
@@ -69,13 +70,33 @@
 @utility window-title {
   background: #2b4a8b;
   color: #ffffff;
-  font-family: var(--font-dm-mono), ui-monospace, monospace;
+  font-family: var(--font-pixel), var(--font-dm-mono), monospace;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
+  letter-spacing: 1px;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @utility bar-track {
   background: #1b2a55;
+}
+
+/* Pool Unis idle: a 2px float. Movement only. */
+.boss-float {
+  animation: boss-float 2.8s ease-in-out infinite alternate;
+}
+@keyframes boss-float {
+  from { transform: translateY(0); }
+  to { transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boss-float {
+    animation: none;
+  }
+  .boss-sprite {
+    transform: none !important;
+    transition-property: opacity;
+  }
 }
 
 /* Boss entry panel: enters from slightly below and scaled, never from nothing. */

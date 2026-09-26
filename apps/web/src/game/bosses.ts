@@ -13,7 +13,7 @@ export type BossDefinition = {
 export const BOSSES: readonly BossDefinition[] = [
   {
     id: "cat",
-    name: "Roy",
+    name: "Pool Unis",
     tagline: "The evolving cat. Three forms, one pool.",
     portrait: "/images/boss-cat-form-a.png",
     locked: false,

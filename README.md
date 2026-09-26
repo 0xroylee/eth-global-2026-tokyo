@@ -1,17 +1,17 @@
 # Boss Pool
 
-Players spend MockUSD through the supply pool to buy ROY, then BossHP through Uniswap v4. The Hook counts actual BossHP output as damage without burning tokens. Each defeated stage unlocks a new allocation of BossHP liquidity. After final defeat, eligible BossHP represents a share of the sponsor-funded prize.
+Players spend MockUSD through the supply pool to buy Attack Token, then BossHP through Uniswap v4. The Hook counts actual BossHP output as damage without burning tokens. Each defeated stage unlocks a new allocation of BossHP liquidity. After final defeat, eligible BossHP represents a share of the sponsor-funded prize.
 
-廣東話 pitch：MockUSD 買 ROY，ROY 換 BossHP；hook 累計買入 HP 當傷害，清一階先放下一階流動性，打贏按貢獻分獎。
+廣東話 pitch：MockUSD 買 Attack Token，Attack Token 換 BossHP；hook 累計買入 HP 當傷害，清一階先放下一階流動性，打贏按貢獻分獎。
 
 ## Current direction
 
 The user confirmed this replacement for the earlier physical/magic design:
 
-- Supply pool: **MockUSD / ROY**.
-- Boss pool: **ROY / BossHP**, with BossHP as a real ERC-20.
+- Supply pool: **MockUSD / Attack Token**.
+- Boss pool: **Attack Token / BossHP**, with BossHP as a real ERC-20.
 - Players connect, approve MockUSD to BossRouter when needed, and press Attack. No enrollment fee or entry NFT is required.
-- Primary Attack executes both swaps in one unlock. ROY is payment into the Boss pool; it is not burned by the attack.
+- Primary Attack executes both swaps in one unlock. Attack Token is payment into the Boss pool; it is not burned by the attack.
 - BossHook accumulates actual BossHP output in `stageSold`. The router delivers BossHP to the player through ordinary settlement; no token burn or output-return delta is needed for damage.
 - Stage HP stays **300 → 600 → 900**. Clear the current sellable allocation, perform the controller-only price reset, then add the next stage's incremental liquidity. One attack cannot damage two stages.
 - Player BossHP sell-backs into the battle pool are disabled. Transfers do not deal new damage. The worked reward proposal lets eligible token transfers carry reward rights, then locks surrendered tokens at claim. Protocol reserve and fee HP remain excluded. See [reward math](docs/refill-math.md#rewards-follow-eligible-bosshp).
@@ -25,21 +25,21 @@ The private Bun workspace, generated contract client, and local deployment flow 
 
 The app uses Next.js App Router, Tailwind CSS, direct viem, and Phaser. Manual browser-wallet popup checks remain separate from automated local and testnet verification. See [apps/web/AGENTS.md](apps/web/AGENTS.md) for frontend rules.
 
-The 1,000 MockUSD prize is a test fixture. [Refill math](docs/refill-math.md) gives candidate prices and reserve amounts, with the no-burn accounting change distinguished from historical test evidence. Earlier ROY/MROY allocation tables and price-impact estimates are superseded.
+The 1,000 MockUSD prize is a test fixture. [Refill math](docs/refill-math.md) gives candidate prices and reserve amounts, with the no-burn accounting change distinguished from historical test evidence. Earlier Attack Token/MROY allocation tables and price-impact estimates are superseded.
 
 ## Read and claim work
 
 | Document | Purpose |
 | --- | --- |
 | [Agent instructions](AGENTS.md) | Reuse first, focused E2E/core checks, scoped guidance, and current task-specific model routing |
-| [Domain context](CONTEXT.md) | ROY, BossHP, effective damage, stage reserve, and prize terminology |
+| [Domain context](CONTEXT.md) | Attack Token, BossHP, effective damage, stage reserve, and prize terminology |
 | [Requirements](docs/requirements.md) | Confirmed gameplay and proposed bounded defaults |
 | [Technical specification](docs/technical-spec.md) | Atomic two-hop settlement and stage LP control |
 | [Contract usage guide](docs/contract-usage.md) | Local deployment, SDK operations, rewards, and current testnet status |
 | [Boss Factory](docs/boss-factory.md) | Permissionless MEME launches, volume quotes, stage gates, and prize claims |
 | [SDK verification](docs/sdk-verification.md) | Local and testnet SDK results, browser checks, and wallet-popup checklist |
 | [Foundation testnet report](docs/testnet-verification.md) | Historical deployment and exercise evidence from the earlier fixture |
-| [Economy](docs/economy.md) | Separate ROY/BossHP budgets and the new proof gate |
+| [Economy](docs/economy.md) | Separate Attack Token/BossHP budgets and the new proof gate |
 | [HP lifecycle](docs/hp-lifecycle.md) | Purchase counters, clearing evidence, and stage release |
 | [Refill math](docs/refill-math.md) | Prices, reserve funding, and historical core test evidence |
 | [Contract/game diagrams](docs/contract-game-diagrams.md) | No-burn attacks, stage release, and token reward custody |

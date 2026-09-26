@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Mono, Space_Grotesk } from "next/font/google";
+import { DM_Mono, Silkscreen, Space_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
+import { BossPoolProvider } from "@/components/BossPoolProvider";
+import { FactoryOperationProvider } from "@/components/FactoryOperationProvider";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -17,6 +19,13 @@ const dmMono = DM_Mono({
   display: "swap",
 });
 
+const silkscreen = Silkscreen({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-silkscreen",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Boss Pool · Local Arena",
   description: "Pixel-art boss raid on Uniswap v4. Every hit buys real BossHP.",
@@ -30,8 +39,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${dmMono.variable}`}>
-      <body>{children}</body>
+    <html lang="en" className={`${spaceGrotesk.variable} ${dmMono.variable} ${silkscreen.variable}`}>
+      <body><FactoryOperationProvider><BossPoolProvider>{children}</BossPoolProvider></FactoryOperationProvider></body>
     </html>
   );
 }

@@ -83,13 +83,18 @@ export {
 export { bossHookCreationCode, bossRouterCreationCode } from "./generated/bytecode";
 export {
   BossFactorySdkError,
+  FactoryOperationPendingError,
+  FactoryOperationTerminalError,
   createBossFactorySdk,
+  parseFactoryPendingOperation,
   readErc20TokenInfo,
 } from "./factory-sdk";
 export type {
   BossFactorySdk,
   BossFactorySdkOptions,
   Erc20TokenInfo,
+  FactoryOperationResult,
+  FactoryPendingOperation,
   FactoryLaunchConfig,
   FactoryLaunchProgress,
   FactoryLaunchQuote,
