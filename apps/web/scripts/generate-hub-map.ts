@@ -9,6 +9,8 @@ const TILE = HUB_TILESET.tileSize;
 const SPAWN = { col: 20, row: 25 };
 /** The sage stands one tile west of the spawn path so players walk past them. */
 const SAGE = { col: 18, row: 21 };
+/** A market stall on the grass just south of the east trade route; opens the pool ledger. */
+const MARKET = { col: 26, row: 16, width: 2, height: 2 };
 /** Nine gates across the north, two down the west edge, one on the south-east approach. */
 const GATES = [
   { bossId: "aero", col: 3, row: 2, width: 3, height: 2 },
@@ -137,6 +139,8 @@ for (const gate of GATES) {
 }
 reserve(SPAWN.col - 2, SPAWN.row - 2, 5, 5);
 reserve(SAGE.col, SAGE.row); // the sage's own tile, so nothing is planted on top of them
+// Market landmark: keep its footprint and the approach tile below it clear of decoration.
+reserve(MARKET.col, MARKET.row, MARKET.width, MARKET.height + 1);
 
 // 4. Pond: south-west corner, columns 2..7, rows 24..29. Fully blocked, banked edges.
 //    Row 29 is the map edge, so the pond seals it in place of the border hedge.
@@ -294,7 +298,7 @@ const map = {
   renderorder: "right-down",
   type: "map",
   version: "1.10",
-  nextobjectid: 4 + GATES.length,
+  nextobjectid: 5 + GATES.length,
   tilesets: [
     {
       firstgid: 1,
@@ -364,6 +368,18 @@ const map = {
             { name: "exitId", type: "string", value: "east-route" },
             { name: "status", type: "string", value: "coming-soon" },
           ],
+        },
+        {
+          id: 4 + GATES.length,
+          name: "market",
+          type: "",
+          x: MARKET.col * TILE,
+          y: MARKET.row * TILE,
+          width: MARKET.width * TILE,
+          height: MARKET.height * TILE,
+          rotation: 0,
+          visible: true,
+          properties: [{ name: "marketId", type: "string", value: "pool-ledger" }],
         },
       ],
     },
