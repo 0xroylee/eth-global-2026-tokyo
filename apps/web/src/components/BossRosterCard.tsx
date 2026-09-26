@@ -83,7 +83,7 @@ export function BossRosterCard({ boss, onClose }: { boss: BossDefinition; onClos
               )}
             </div>
             <div className="min-w-0">
-              <p className="eyebrow mb-1">{meta ? "LAUNCH BOOST · ROBINHOOD" : "FIXTURE GATE"}</p>
+              <p className="eyebrow mb-1">{meta ? "LAUNCH BOOST · BASE" : "FIXTURE GATE"}</p>
               <h2 id="boss-roster-title" className="flex flex-wrap items-baseline gap-2 text-2xl font-semibold tracking-[-0.03em]">
                 {boss.name}
                 <span className="font-mono text-[11px] tracking-[0.14em]" style={{ color: boss.accent }}>

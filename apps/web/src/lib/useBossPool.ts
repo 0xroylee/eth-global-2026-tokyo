@@ -490,7 +490,7 @@ function chainIdForNetwork(network: NetworkKey): SupportedChainId {
 function networkName(network: NetworkKey): string {
   if (network === "local") return "Boss Pool Local";
   if (network === "base-sepolia") return "Base Sepolia";
-  return "Robinhood Testnet (historical)";
+  return "Historical Testnet (46630)";
 }
 
 function rpcUrlForNetwork(network: NetworkKey): string {
