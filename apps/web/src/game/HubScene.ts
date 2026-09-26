@@ -39,6 +39,24 @@ function accentColor(hex: string): number {
   return Phaser.Display.Color.HexStringToColor(hex).color;
 }
 
+/**
+ * Canvas 2D parses the font string itself and cannot resolve CSS custom properties,
+ * so `"6px var(--font-dm-mono), monospace"` is invalid and the context silently keeps
+ * its previous font (10px sans-serif), doubling every label. Resolve the token to a
+ * real family list once, on the client.
+ */
+let labelFont: string | null = null;
+function labelFontFamily(): string {
+  if (labelFont === null) {
+    const token =
+      typeof document === "undefined"
+        ? ""
+        : getComputedStyle(document.documentElement).getPropertyValue("--font-dm-mono").trim();
+    labelFont = token ? `${token}, monospace` : "monospace";
+  }
+  return labelFont;
+}
+
 type Gate = {
   boss: BossDefinition;
   zone: Phaser.Geom.Rectangle;
@@ -349,7 +367,7 @@ export class HubScene extends Phaser.Scene {
       // Name plate. Rendered at 3x resolution so the zoomed camera keeps it crisp.
       const label = this.add
         .text(cx, base + 6, boss.ticker.toUpperCase(), {
-          fontFamily: "var(--font-dm-mono), monospace",
+          fontFamily: labelFontFamily(),
           fontSize: "6px",
           color: locked ? "#9aa0b4" : "#f3f3f8",
           letterSpacing: 1,
@@ -368,7 +386,7 @@ export class HubScene extends Phaser.Scene {
         ? null
         : this.add
             .text(cx, label.y + label.height, captionText, {
-              fontFamily: "var(--font-dm-mono), monospace",
+              fontFamily: labelFontFamily(),
               fontSize: "4px",
               color: boss.accent,
               letterSpacing: 0.6,
@@ -395,7 +413,7 @@ export class HubScene extends Phaser.Scene {
         ? null
         : this.add
             .text(cx, label.y + blockHeight + 3, chipText, {
-              fontFamily: "var(--font-dm-mono), monospace",
+              fontFamily: labelFontFamily(),
               fontSize: "4px",
               color: "#9aa0b4",
               letterSpacing: 0.5,
@@ -406,7 +424,7 @@ export class HubScene extends Phaser.Scene {
       if (chip) this.crispLabels.push(chip);
       const stageLabel = boss.id === "cat"
         ? this.add.text(cx, base + 18, "CHECKING ROUND", {
-            fontFamily: "var(--font-dm-mono), monospace",
+            fontFamily: labelFontFamily(),
             fontSize: "9px",
             color: "#f5b04a",
             letterSpacing: 1,
@@ -457,7 +475,7 @@ export class HubScene extends Phaser.Scene {
     shield.setStrokeStyle(1, color, 0.9).setDepth(depth);
     const initials = this.add
       .text(cx, cy - 1, ticker.slice(0, 2).toUpperCase(), {
-        fontFamily: "var(--font-dm-mono), monospace",
+        fontFamily: labelFontFamily(),
         fontSize: "6px",
         color: "#f3f3f8",
         letterSpacing: 0.5,
@@ -526,7 +544,7 @@ export class HubScene extends Phaser.Scene {
 
     const label = this.add
       .text(x, y + 2, SAGE.label, {
-        fontFamily: "var(--font-dm-mono), monospace",
+        fontFamily: labelFontFamily(),
         fontSize: "6px",
         color: "#f3f3f8",
         letterSpacing: 1,
@@ -844,7 +862,7 @@ export class HubScene extends Phaser.Scene {
     const cy = obj.y - 14;
     const title = this.add
       .text(cx, cy - 4, "NEXT REGION", {
-        fontFamily: "var(--font-dm-mono), monospace",
+        fontFamily: labelFontFamily(),
         fontSize: "5px",
         color: "#f5b04a",
         letterSpacing: 0.4,
@@ -855,7 +873,7 @@ export class HubScene extends Phaser.Scene {
     this.crispLabels.push(title);
     const subtitle = this.add
       .text(cx, cy + 4, "COMING SOON", {
-        fontFamily: "var(--font-dm-mono), monospace",
+        fontFamily: labelFontFamily(),
         fontSize: "4px",
         color: "#f3e2c4",
         letterSpacing: 0.4,
