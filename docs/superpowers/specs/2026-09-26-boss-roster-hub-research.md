@@ -86,4 +86,59 @@
 - 若堅持 Base 資料，可用 GeckoTerminal `networks/base/trending_pools`（同 endpoint 換 network 即可），但那離「官方 Launch 概念」更遠。
 - **建議**：Boss 名單直接採用 Robinhood Chain 榜（那是「Launch Boost」話語的真正出處），並在遊戲文案標注來源鏈（老智者台詞或 UI 小字）。Boss 名單資料源是 presentation 資料，不與 Base Sepolia 合約部署綁定，兩者可並存。
 
+## 3. 遊戲設計模式研究
+
+> 本節消化自外部研究 A2。標「建議」的段落是研究者的設計建議、**非既有事實**；hub 技巧是**給規劃階段的設計素材**，尚未定案。
+
+### 3.1 引導 NPC 先例
+
+| 先例 | 機制 | 對本專案的啟示 |
+| --- | --- | --- |
+| Hollow Knight — Elderbug | Dirtmouth 唯一居民；首遇直接警告「沿著那口井下去的人，生物會發瘋、旅人會被奪走記憶」；遊戲中持續提示「下一個該去的區域」；對話可反覆觸發、內容隨進度更新 | **骨架**：危險警告 + 常駐進度提示器，最貼合「老智者說前方有很多 Boss」 |
+| Zelda: BotW — 老人（Old Man） | 初始台地多次邂逅逐步教學；「集滿 4 個神殿的試煉之證就送滑翔傘」把「前方有 N 個挑戰」轉化為「集滿 N 個東西」的量化目標；約 300 個對話框（社群統計）；離開台地後永久消失 | **血肉**：量化目標——「擊敗 10 隻 Boss」可轉為「集滿 10 個印記」 |
+| Pokemon — 大木博士（Professor Oak） | 最短對話建立世界 + 交付任務裝置（圖鑑）＝用可量化目標替代直接警告；開場只教「移動 + A 鍵互動」兩件事；母親一句「隔壁的博士在找你」形成引導鏈 | 引導鏈：由第二個 NPC 把玩家推向第一個 NPC；機制不壓垮玩家 |
+| Pokemon — 關都老人（Kanto Old Man） | 躺路擋道直到送完包裹；後主動攔下玩家強制教學捕捉。紅/藍版可跳過教學、黃版後改為不可跳過 | 「用 NPC 身體擋路做進度閘門」最簡潔範例；「可跳過 vs 強制」是版本級決策 |
+| Stardew Valley — Robin + Lewis | 開場迎接帶路 + 「明天去鎮上自我介紹」；Introductions Quest 要求向 28 位村民自我介紹 | 對照組：沒有危險警告，用「社交清單任務」達成同樣導航效果 |
+
+**對本專案的啟示（建議，非既有事實）**：老智者採 **Elderbug 骨架 + BotW 量化目標**——首遇直接警告「有 10 隻 Boss」，之後每擊敗一隻對話內容更新（「還剩 N 隻」），把 NPC 變成活的進度計數器。對話呈現工具的常見約定（工具層級事實，詳見 A2 對話機制表）：打字機逐字效果為標準內建（速度控制碼 `.` `,` `>` `^`）；跳過慣例是「第一次按鍵加速打完整行、第二次按鍵進下一句」；對話框開啟期間自動攔截輸入（Godot `blocking-dialog-box` 實作）；同一工具支援 `set_skip 0` 把特定對話設為不可跳過（作者註明謹慎使用）——與關都老人後期版本的選擇一致。若時間有限，Boss 名單可用 UI 清單（圖鑑式）承載，NPC 只講世界觀與警告（Pokemon 圖鑑思路的分離式變體）。
+
+### 3.2 10 Boss 呈現：四選項比較
+
+**FromSoftware 演進史案例（本節最關鍵證據）**：Elden Ring 的 Night's Cavalry 據 Fextralife 記載「原本規劃為隨機遭遇的漫遊敵，後來才改為固定地點」；同樣構想也曾規劃給 Dark Souls 的黑騎士與 DS2 的追跡者（Pursuer），最終都收斂為定點。連 FromSoftware 都退回「定點 + 巡邏路線」的折衷——純漫遊對「玩家能穩定找到目標」是有害的。
+
+| 維度 | (a) 全定點（Pokemon 道館式） | (b) 全漫遊 | (c) 混合 | (d) 門/雕像 |
+| --- | --- | --- | --- | --- |
+| 可讀性/可發現性 | ★★★ | ★ | ★★ | ★★★ |
+| 效能成本 | 極低 | 中（10 隻 × 巡邏 AI） | 低–中 | 極低 |
+| 美術成本 | 每隻 Boss 靜態立繪/站立動畫即可 | 全套 4 向行走動畫 ×10 | 部分 Boss 需行走動畫 | 靜態雕像/門 |
+| 引導性/順序感 | 依賴標記（星等、指示牌） | 差，玩家亂撞 | 中（移動=危險訊號） | 最強（門上寫條件） |
+| 與「擊敗後解鎖」相容 | 佳（狀態視覺化簡單） | 差（解鎖語義模糊） | 佳 | 原生設計就是解鎖 |
+| Top-down pixel canvas 實作複雜度 | 低 | 高（碰撞/避障/卡位） | 中 | 低 |
+
+- 選項先例：(a) Pokemon 8 道館各占城鎮建築、BotW 40 隻石巨人定點生成＋靠近觸發演出；(b) Night's Cavalry 現行形態（夜間定點巡邏的野王）；(d) Mario 64 星星鎖門、Demon's Souls 5 archstone「看得見但進不去」、Talos Principle 中央高塔。
+- **建議（A2）**：初版採 **(c) 混合**——多數定點（各自守雕像/領地）+ 極少「遊蕩者」巡邏 hub，由老智者點明「只有那隻不守規矩」；每個定點 Boss 旁放可視狀態錨（石碑/雕像），擊敗後熄滅或傾倒。若要做順序，用 Demon's Souls 的「部分解鎖」：較深區域寫條件（如「擊敗 N 隻後開啟」）。
+
+### 3.3 Hub 世界設計技巧（規劃階段設計素材，非已定案）
+
+- **「看得見但進不去」**（Demon's Souls archstone、Mario 64 星門）：把 10 個 Boss 入口的可視狀態做成進度牆——「看得見的未解鎖物」是廉價而有效的進度感。
+- **hub 生長**（Hades 大廳、Hollow Knight Dirtmouth）：擊敗 Boss 後 hub 出現對應變化（NPC 回流、雕像變化、帳篷式新內容），比打勾清單更強的進度感。
+- **扇形分布 vs 單一收束**：Dirtmouth 的井 vs Nexus 的 5 門是兩種極端；10 Boss 建議走 Nexus 式的**扇形分布**（從出生點輻射出去），讓老智者成為「圓心導航點」。
+- **hub 低風險化**（Mario 64 庭院）：出生點周邊無敵意碰撞、無成本練移動——與現況「hub 很空」的起點相容。
+
+### 3.4 Canvas 效能事實
+
+- **直接先例**：CursorCamp Sandbox（Next.js + TypeScript + 原生 Canvas 2D，無引擎）同時讓 **55 個角色漫遊**，每人跑五相狀態機（idle→accel→cruise→decel→overshoot，閒置 1-4 秒後選隨機目標、沿二次貝茲曲線移動），每幀全清全畫、無髒矩形、無空間分割——證明此規模完全不需要優化架構。
+- **社群基準**：純 `drawImage` 的位塊傳輸極廉價；無碰撞的 50×50 方塊畫到約 3000 個才開始掉幀。10–15 實體距離瓶頸極遠。
+- **真正昂貴的是每 tick 的 AI/尋路計算，不是繪製**；成熟引擎（PixiJS）在 bunnymark 可跑上萬個移動 sprite。
+- **兩個經典陷阱**：①每隻實體 new 一個 Image（一個實例就吃 1–2ms 載入，應按類型共用一張 sprite sheet）；②大量 new + splice 造成 GC 停頓（應使用 object pool）。
+- **結論**：10–15 隻漫遊 Boss 對 Canvas 2D 是**微不足道的負載**；瓶頸會是巡邏 AI 的碰撞調解（誰讓誰）與卡位處理、美術資源載入管理。建議照 CursorCamp 的**狀態機巡邏（隨機目標 + 貝茲緩動）而不做 pathfinding**。
+- 提醒：`requestAnimationFrame` 在視窗失焦時會被節流，與先前在 VS Code 內嵌瀏覽器遇到的 `visibilityState: hidden` → timer 箝制是同族問題（測試環境 artifact，勿據此「修」timing）。
+
+### 3.5 AI Agent NPC：先例與雙軌風險結論
+
+- 具名先例：Stanford Generative Agents / Smallville（25 個 LLM agent；作者明載 API rate-limit 會卡住模擬、運行成本高）、Skyrim + Mantella 學術個案（LLM 增強沉浸與自主性，但整合不良的技術會反向破壞 NPC 可信度）、NVIDIA ACE「Covert Protocol」（LLM 數位人作為「關鍵資訊守門人」驅動任務進程）、Vaudeville（Inworld 引擎謀殺案解謎）、Whispers from the Star（Anuttacon）。
+- **結論：雙軌（LLM + 腳本兜底）**——demo 的對話範圍窄（世界觀引導 + Boss 提示），小 context + system prompt 即可，LLM 可行；但**最大風險是現場網路/API 延遲與速率限制**（Stanford demo 直接為此加註警語），**必須做「LLM 生成 + 腳本回退」雙軌**：請求逾時即顯示預寫腳本。
+- **可信度陷阱**：Mantella 與 Vaudeville 案例都顯示 LLM 一旦說出不符世界觀的話，NPC 可信度立即崩壞——**世界觀事實（Boss 數量、名稱、位置）應 hard-code 注入 prompt，不讓模型自由編造**。
+- 若採用，老智者是最理想的載體：一位靜態 NPC + 低頻對話 + 狹窄知識域，恰好落在 LLM NPC 最穩定的使用區間；其餘 10 隻 Boss **不建議接 LLM**。
+
 <!-- APPEND -->
