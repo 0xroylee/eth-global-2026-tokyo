@@ -1,7 +1,7 @@
 {
   "chainId": 84532,
   "defaultBossHook": "0xc11D07448948AC4757592E91D8f5155907Ef6AC0",
-  "bossFactory": "0x353749ffa9640c4152dd28068c416adfc2eb168e",
+  "bossFactory": "0x1392633904eDB77aeC9f1AED81D4F0773F72C8c7",
   "addresses": {
     "hook": "0xc11D07448948AC4757592E91D8f5155907Ef6AC0",
     "router": "0x087D22c53082ED7841cB5716cB699111a02b0dEf",
@@ -11,8 +11,12 @@
     "collectibles": "0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925",
     "poolManager": "0x1EF1e7e79B14AFB530d9671A79B7B173FE41a1c3"
   },
-  "bossFactoryDeployedAtBlock": 47334087,
+  "bossFactoryDeployedAtBlock": 47341945,
   "previousBossFactories": [
+    {
+      "address": "0x353749ffa9640c4152dd28068c416adfc2eb168e",
+      "deployedAtBlock": 47334087
+    },
     {
       "address": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
       "deployedAtBlock": 47332647
