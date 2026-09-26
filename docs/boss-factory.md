@@ -131,6 +131,41 @@ The original launch reads confirmed the registered boss, active stage one, creat
 
 The original Factory at block `47330324` remains in the [historical deployment record](evidence/base-sepolia-boss-factory-deployment.json). It predates the review fixes and is incompatible with the current SDK. The SDK checks build compatibility before quotes, approvals, and launches. Read-only receipt recovery remains independent of the current bundled code hashes.
 
+## Swap fees
+
+The current public Roy and general Factory use fixed LP fees on both swaps:
+
+| Hop | Swap | Fee rate | Currency charged |
+| --- | --- | --- | --- |
+| Supply | MockUSD → Attack Token | 3,000 millionths = 0.3% | MockUSD |
+| Boss | Attack Token → selected Boss token | 3,000 millionths = 0.3% | Attack Token |
+
+v4 uses a denominator of `D = 1,000,000`. A fee value `F` has fraction `F / D` and percentage `F / 10,000`. The fee is included in the swap's gross input. Router `mockUSDSpent` and `roySpent` report actual gross input from the respective swap deltas, including that hop's fee. Quotes already include both fees; the caller does not add another 0.3% to the quoted spend.
+
+For an exact-input step that exhausts its remaining gross input `G`, [v4 SwapMath](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/SwapMath.sol#L64-L84) computes:
+
+```text
+netInput = floor(G × (D - F) / D)
+feeAmount = G - netInput
+```
+
+When a step reaches its target tick or price before consuming all input, `netInput` is the amount needed to reach that price and `feeAmount = ceil(netInput × F / (D - F))`. The pool repeats this accounting across swap steps. Per-step rounding and partial fills make the exact receipt amounts differ from a single percentage multiplication.
+
+For a fee-only illustration, assume both fee-free exchange rates are 1:1, the input is fully used, and there is no price impact or integer rounding:
+
+| Hop | Gross input | LP fee | Input used for the swap |
+| --- | --- | --- | --- |
+| Supply | 1 MockUSD | 0.003 MockUSD | 0.997 MockUSD |
+| Boss | 0.997 Attack Token | 0.002991 Attack Token | 0.994009 Attack Token |
+
+The resulting output would be 0.994009 Boss tokens under those illustrative rates. Fee-only retention is `0.997² = 0.994009`, so the combined effect is `1 - 0.994009 = 0.005991`, or 0.5991%. This is not a live Roy quote. Actual output also reflects pool prices, both hops' price impact, liquidity, stage/price bounds, and base-unit rounding. If the Boss fee is dynamic, the corresponding approximation is `0.997 × (1 - bossFee / D)`.
+
+Unspent MockUSD is refunded and does not pay a swap fee. Unused Attack Token is refunded after the first hop; it has already incurred supply fees but does not incur a Boss fee until spent on that hop. The selected button cap can exceed the SDK's execution cap, so fee estimates use actual swap amounts rather than assuming the entire button cap is spent.
+
+These fees accrue to liquidity positions in PoolManager. Protocol fees must be zero for the supported route, the Hook returns zero custom accounting deltas, and Factory/Router add no separate platform, entry, or launch surcharge. The creator's prize deposit and player reward credit are separate accounting. Initial-position LP fees remain locked; the owner's separate surplus position follows its existing fee-collection rules.
+
+ETH gas pays transaction execution separately. Approval and launch transactions also require gas, but approval does not perform a swap. If an attack reverts, both swaps and their LP fees roll back; the failed transaction can still consume gas. Relevant implementation: [two-hop Router execution](../contracts/src/BossRouter.sol), [Hook fee selection](../contracts/src/BossHook.sol), and [fee controller](../contracts/src/BossFeeController.sol).
+
 ## Testnet mock price and fees
 
 The UI's Mock Token Oracle uses `MockBossPriceSource`, an owner-controlled testnet demo artifact under `contracts/src`. It is not a live market oracle or real USD feed. Its immutable pair binds the selected Boss token and MockUSD. Prices are Q128 MockUSD raw units per Boss raw unit; the UI converts them to MockUSD per displayed token. A controller-enabled Factory is restricted to that Boss token, and its launches share the controller/source. The source owner need not be each boss's creator. No public deployment of this mock-enabled build is recorded here.
@@ -145,13 +180,32 @@ The UI's Mock Token Oracle uses `MockBossPriceSource`, an owner-controlled testn
 | Frozen supply-rate bound | `maxRoyPerMockUSDX128` limits measured Attack Token per MockUSD using the launch quote's 10% spot headroom. This is independent of the mock Boss reference. |
 | Player slippage bounds | `minRoyOut`, `minBossHPOut`, input cap, and transaction deadline constrain accepted execution after a quote. They do not set an AMM or external market price. |
 
-The supply pool fee stays at 0.3%. With a controller, the Boss PoolKey uses v4's dynamic fee sentinel, and `beforeSwap` returns the computed fee with the override flag. Without a controller, the Boss fee is fixed at 0.3%. The controller prices the Boss pool in MockUSD using the measured first-hop amounts and the Boss pre-swap spot. The conversion includes supply fees and first-hop price impact. In integer millionths:
+The supply pool fee stays at 0.3%. With a controller, the Boss PoolKey uses v4's dynamic fee sentinel `0x800000`, and `beforeSwap` returns the computed fee with the override flag `0x400000`, including when the applied fee is zero. These flags identify dynamic-fee handling; they are not fee percentages. Without a controller, the Boss fee is fixed at 0.3%.
+
+The controller derives the pre-swap Attack Token cost of one Boss token from the Boss pool's `sqrtPriceX96`, reversing the ratio when token ordering requires it. It converts that spot using the first hop's actual gross MockUSD spend and Attack Token output:
+
+```text
+poolPriceX128 = floor(attackPerBossX128 × mockUSDSpent / attackBought)
+```
+
+Both `poolPriceX128` and `referencePriceX128` use Q128 MockUSD raw units per Boss raw unit. The ratio in the fee formula is unchanged if both are converted to the same displayed-token units. This conversion includes supply fees and first-hop price impact; it uses the Boss spot before the second swap, not its average execution price. In integer millionths:
 
 ```text
 fee = max(0, 1,000,000 - floor(997,000 × poolPrice / referencePrice))
 ```
 
-A cheaper pool relative to the reference produces a larger fee. At equal prices the fee is 0.3%; at one-quarter of the reference it is approximately 75.075%; at four times the reference it is 0%. The zero-fee region begins at approximately `poolPrice/referencePrice >= 1/0.997`. At one-tenth of the reference, the required 90.03% exceeds the demo maximum and rejects execution. The actual quote fee is computed from the same pinned block as both hop amounts; the sentinel is never displayed as a percentage. These are LP fees, separate from the prize. See the official [v4 dynamic fee mechanism](https://developers.uniswap.org/docs/protocols/v4/concepts/dynamic-fees).
+A cheaper pool relative to the reference produces a larger fee. Example ratios give:
+
+| `poolPrice / referencePrice` | Required fee, millionths | Boss fee or result |
+| --- | --- | --- |
+| 0.25 | 750,750 | 75.075% |
+| 0.50 | 501,500 | 50.15% |
+| 1.00 | 3,000 | 0.3% |
+| 1.004 | 0 | 0% |
+| 4.00 | 0 | 0% |
+| 0.10 | 900,300 | Requires 90.03%; rejects above the demo's 90% limit |
+
+The zero-fee region begins at `poolPrice/referencePrice >= 1/0.997`, approximately 1.003009, or a pool price 0.3009% above the reference. The contract checks this region with a rounded-up integer threshold before division to avoid overflow. The actual quote fee is computed from the same pinned block as the first-hop amounts and Boss spot; a changed reference or pool state can change the execution fee. The SDK displays the calculated fee rather than the sentinel or stored dynamic LP fee. These are LP fees, separate from the prize. See the official [v4 dynamic fee mechanism](https://developers.uniswap.org/docs/protocols/v4/concepts/dynamic-fees).
 
 Dynamic fees change the fee component of buying tokens relative to the chosen reference. They do not reset the AMM price, replenish inventory, or execute a balancing trade. A zero Boss fee still leaves the supply fee, gas, and price impact. An owner-supplied or refreshed reference can be economically wrong. This demo cannot guarantee elimination of arbitrage, impermanent loss, or market losses. Real external-oracle integration and market-deviation controls remain [future work](../README.md#price-oracle-integration-and-volatility-controls).
 
