@@ -977,12 +977,12 @@ export const bossPoolHookAbi = [
     "name": "beforeRemoveLiquidity",
     "inputs": [
       {
-        "name": "sender",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "key",
+        "name": "",
         "type": "tuple",
         "internalType": "struct PoolKey",
         "components": [
@@ -1053,7 +1053,7 @@ export const bossPoolHookAbi = [
         "internalType": "bytes4"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -2627,19 +2627,6 @@ export const bossRouterAbi = [
   },
   {
     "type": "function",
-    "name": "liquidityRecovered",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "manager",
     "inputs": [],
     "outputs": [
@@ -2782,7 +2769,7 @@ export const bossRouterAbi = [
     "name": "recoverAfterDeadline",
     "inputs": [],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "pure"
   },
   {
     "type": "function",

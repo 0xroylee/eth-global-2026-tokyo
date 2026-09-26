@@ -90,17 +90,17 @@ A game-controlled BossHP-to-Attack Token exchange funded by stage reserve to res
 _Avoid_: A player sell-back, free HP, a new attack.
 
 **BoostPad**:
-The maker's factory page, where a connected wallet describes a new boss pool. The description is ready for a contract handoff and is not a deployed round.
-_Avoid_: The live battle, a funded round.
+The maker's Blacksmith page at `/boostpad`, where a connected wallet quotes, approves, and launches a funded Factory boss.
+_Avoid_: The player battle page, an unsaved draft.
 
 **Pool deposit**:
-The amount of the chosen token a maker puts into a described boss pool. The final prize is a maker-set percentage of this deposit, released only when the final stage is cleared.
+The amount of the chosen token a maker permanently commits to a Factory boss. The final prize is a maker-set percentage of this deposit, released only when the final stage is cleared.
 _Avoid_: Target volume, a per-stage prize, the live prize escrow.
 
 **Target volume**:
-The trading volume a maker sets on a boss description.
+The eligible MockUSD purchase volume a maker sets for a Factory boss.
 _Avoid_: Pool deposit, prize.
 
 **Stage count**:
-The number of stages on a boss description, from one to three. Each stage has an image chosen from the existing boss images.
-_Avoid_: Changing the live round, which still has three stages.
+The three fixed stages of a Factory boss, with default cat portraits.
+_Avoid_: A creator-selectable setting.

@@ -1,7 +1,7 @@
 {
   "chainId": 84532,
   "deployer": "0x1ab476210D3Ad23fCEdA23B10Bf8Fee0F9f802F5",
-  "bossFactory": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
+  "bossFactory": "0x353749ffa9640c4152dd28068c416adfc2eb168e",
   "addresses": {
     "hook": "0xe217b4840049f928d4392030ac86aCe6b3766AC0",
     "router": "0xc404DA7b3ceB94414e8Bf304E4538E9365936994",

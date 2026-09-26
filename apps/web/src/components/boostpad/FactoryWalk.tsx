@@ -9,10 +9,10 @@ import { useBoostPadForm } from "./useBoostPadForm";
 
 /**
  * Game flow. The player walks the smithy and talks to the blacksmith, which opens the form.
- * Direct visits use web form mode instead.
+ * Direct visits open the same form immediately.
  */
-export function FactoryWalk() {
-  const pad = useBoostPadForm();
+export function FactoryWalk({ initiallyOpen = false }: { initiallyOpen?: boolean }) {
+  const pad = useBoostPadForm(initiallyOpen);
   const router = useRouter();
   const hostRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(false);
@@ -83,7 +83,9 @@ export function FactoryWalk() {
       });
 
     const onEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || !pausedRef.current) return;
+      if (event.key !== "Escape" || !pausedRef.current || event.defaultPrevented) return;
+      // The wallet chooser/menu owns Escape while it is above this dialog.
+      if (document.querySelector('[role="dialog"][aria-modal="true"]:not([aria-label="Blacksmith"])')) return;
       event.preventDefault();
       closeRef.current();
     };
@@ -195,7 +197,7 @@ export function FactoryWalk() {
             </button>
           </div>
           <div className="mx-auto w-full max-w-xl px-4 pb-6">
-            <PixelFactory pad={pad} overlay />
+            <PixelFactory pad={pad} />
           </div>
         </div>
       ) : null}

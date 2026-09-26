@@ -52,7 +52,6 @@ contract BossHook is ReentrancyGuard {
     uint8 private constant MODE_ATTACK = 3;
     uint8 private constant MODE_TRANSITION = 4;
     uint8 private constant MODE_QUOTE = 5;
-    uint8 private constant MODE_RECOVER = 6;
     uint24 public constant SWAP_FEE = 3_000;
     int24 public constant TICK_SPACING = 60;
     int24 public immutable LOWER_TICK;
@@ -67,6 +66,7 @@ contract BossHook is ReentrancyGuard {
     IERC20 public immutable rewardToken;
     BossCollectibles public immutable collectibles;
     address public immutable maker;
+    /// @notice Zero for perpetual Factory bosses; standalone rounds retain their fixed deadline.
     uint256 public immutable deadline;
     uint160 public immutable sqrtLowerX96;
     uint160 public immutable sqrtUpperX96;
@@ -142,7 +142,8 @@ contract BossHook is ReentrancyGuard {
             address(manager_) == address(0) || address(router_) == address(0) || address(mockUSD_) == address(0)
                 || address(roy_) == address(0) || address(bossHP_) == address(0)
                 || address(collectibles_) == address(0) || maker_ == address(0) || config.prizeAmount == 0
-                || config.deadline <= block.timestamp || config.stageOneHP == 0
+                || (config.volumeTargetMockUSD == 0 ? config.deadline <= block.timestamp : config.deadline != 0)
+                || config.stageOneHP == 0
                 || config.stageOneHP > uint256(uint128(type(int128).max)) / 6
                 || config.hpPriceTick % TICK_SPACING != 0
                 || config.hpPriceTick < -887_220 || config.hpPriceTick > 885_300
@@ -234,8 +235,12 @@ contract BossHook is ReentrancyGuard {
         return PoolId.unwrap(_bossPoolId);
     }
 
+    function _expired() private view returns (bool) {
+        return deadline != 0 && block.timestamp >= deadline;
+    }
+
     function fundPrize() external nonReentrant {
-        if (status != RoundStatus.Setup || prizeFunded || block.timestamp >= deadline) revert InvalidRound();
+        if (status != RoundStatus.Setup || prizeFunded || _expired()) revert InvalidRound();
         prizeFunded = true;
         if (externalHP) {
             if (rewardToken.balanceOf(address(this)) < originalPrize) revert PrizeNotFunded();
@@ -250,7 +255,7 @@ contract BossHook is ReentrancyGuard {
     function activateFromRouter() external {
         if (msg.sender != address(router)) revert Unauthorized();
         if (
-            status != RoundStatus.Setup || block.timestamp >= deadline || router.mode() != MODE_SETUP
+            status != RoundStatus.Setup || _expired() || router.mode() != MODE_SETUP
                 || !prizeFunded || !poolInitialized
         ) {
             revert InvalidRound();
@@ -293,7 +298,7 @@ contract BossHook is ReentrancyGuard {
     function beforeInitialize(address sender, PoolKey calldata key, uint160) external returns (bytes4) {
         if (
             msg.sender != address(manager) || sender != address(router) || router.mode() != MODE_SETUP
-                || block.timestamp >= deadline
+                || _expired()
         ) {
             revert InvalidHookContext();
         }
@@ -323,7 +328,7 @@ contract BossHook is ReentrancyGuard {
         uint8 stage;
         uint128 expectedDelta;
         if (router.mode() == MODE_SETUP) {
-            if (status != RoundStatus.Setup || currentStage != 0 || block.timestamp >= deadline) {
+            if (status != RoundStatus.Setup || currentStage != 0 || _expired()) {
                 revert InvalidHookContext();
             }
             stage = 0;
@@ -344,17 +349,11 @@ contract BossHook is ReentrancyGuard {
         return IHooks.beforeAddLiquidity.selector;
     }
 
-    function beforeRemoveLiquidity(
-        address sender,
-        PoolKey calldata key,
-        ModifyLiquidityParams calldata,
-        bytes calldata
-    ) external view returns (bytes4) {
-        _authenticatePoolCallback(sender, key);
-        if (!externalHP || block.timestamp < deadline || router.mode() != MODE_RECOVER) {
-            revert LiquidityRemovalDisabled();
-        }
-        return IHooks.beforeRemoveLiquidity.selector;
+    /// @notice Creator liquidity is permanently locked, including after victory.
+    function beforeRemoveLiquidity(address, PoolKey calldata, ModifyLiquidityParams calldata, bytes calldata)
+        external pure returns (bytes4)
+    {
+        revert LiquidityRemovalDisabled();
     }
 
     function beforeSwap(address sender, PoolKey calldata key, SwapParams calldata params, bytes calldata)
@@ -371,7 +370,7 @@ contract BossHook is ReentrancyGuard {
         uint8 operation = router.mode();
         if (operation == MODE_ATTACK || operation == MODE_QUOTE) {
             if (
-                status != RoundStatus.Active || block.timestamp >= deadline || router.activePlayer() == address(0)
+                status != RoundStatus.Active || _expired() || router.activePlayer() == address(0)
                     || router.expectedStage() != currentStage || params.zeroForOne == bossIsCurrency0
                     || params.sqrtPriceLimitX96 != (bossIsCurrency0 ? sqrtUpperX96 : sqrtLowerX96)
             ) revert InvalidSwap();
@@ -496,7 +495,8 @@ contract BossHook is ReentrancyGuard {
 
     function expire() external {
         if (
-            (status != RoundStatus.Active && status != RoundStatus.StageCleared) || block.timestamp < deadline
+            deadline == 0 || (status != RoundStatus.Active && status != RoundStatus.StageCleared)
+                || block.timestamp < deadline
         ) revert InvalidRound();
         status = RoundStatus.Expired;
         emit RoundExpired(block.timestamp);

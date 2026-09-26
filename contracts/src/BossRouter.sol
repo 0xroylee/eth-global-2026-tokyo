@@ -33,8 +33,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         Setup,
         Attack,
         Transition,
-        Quote,
-        Recover
+        Quote
     }
 
     struct AttackRequest {
@@ -84,7 +83,6 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
     uint256 public activeRoyBought;
     bool public supplyPoolSeeded;
     bool public activated;
-    bool public liquidityRecovered;
 
     error InvalidSetup();
     error InvalidAttack();
@@ -182,7 +180,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         nonReentrant
     {
         if (
-            address(bossHook) == address(0) || block.timestamp >= bossHook.deadline() || supplyPoolSeeded
+            address(bossHook) == address(0) || _roundExpired() || supplyPoolSeeded
                 || bossHook.externalHP() || activated || liquidity == 0
                 || tickLower >= tickUpper || tickLower % TICK_SPACING != 0 || tickUpper % TICK_SPACING != 0
         ) revert InvalidSetup();
@@ -204,7 +202,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
     function activate() external onlyOwner nonReentrant {
         if (
             activated || mode != Operation.Idle || address(bossHook) == address(0)
-                || block.timestamp >= bossHook.deadline()
+                || _roundExpired()
                 || (!bossHook.externalHP() && (!supplyPoolSeeded || bossHP.balanceOf(address(this)) != bossHP.totalSupply()))
                 || bossHP.balanceOf(address(this)) < minimumBossHPForVictoryPath()
                 || !bossHook.prizeFunded() || bossHook.rewardToken().balanceOf(address(bossHook)) < bossHook.originalPrize()
@@ -233,9 +231,9 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         uint256 callDeadline
     ) external nonReentrant returns (uint256 mockUSDSpent, uint256 royBought, uint256 roySpent, uint256 bossHPOut) {
         if (
-            !activated || mode != Operation.Idle || block.timestamp >= bossHook.deadline() || maxMockUSD == 0
+            !activated || mode != Operation.Idle || _roundExpired() || maxMockUSD == 0
                 || maxMockUSD > uint256(type(int256).max)
-                || minBossHPOut == 0 || callDeadline < block.timestamp || callDeadline > bossHook.deadline()
+                || minBossHPOut == 0 || callDeadline < block.timestamp || (bossHook.deadline() != 0 && callDeadline > bossHook.deadline())
                 || attackStage != bossHook.currentStage() || bossHook.status() != BossHook.RoundStatus.Active
         ) revert InvalidAttack();
 
@@ -266,8 +264,8 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         external nonReentrant returns (uint256 roySpent, uint256 bossHPOut)
     {
         if (!activated || mode != Operation.Idle || maxRoy == 0 || maxRoy > uint256(uint128(type(int128).max))
-            || minBossHPOut == 0 || block.timestamp >= bossHook.deadline() || callDeadline < block.timestamp
-            || callDeadline > bossHook.deadline() || attackStage != bossHook.currentStage()
+            || minBossHPOut == 0 || _roundExpired() || callDeadline < block.timestamp
+            || (bossHook.deadline() != 0 && callDeadline > bossHook.deadline()) || attackStage != bossHook.currentStage()
             || bossHook.volumeTargetMockUSD() != 0
             || bossHook.status() != BossHook.RoundStatus.Active) revert InvalidAttack();
         {
@@ -291,18 +289,14 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         emit AttackExecuted(msg.sender, attackStage, 0, 0, roySpent, bossHPOut, 0, maxRoy - roySpent);
     }
 
-    /// @notice External-token makers recover LP proceeds and unused reserves after the fixed deadline.
-    function recoverAfterDeadline() external onlyOwner nonReentrant {
-        if (!activated || !bossHook.externalHP() || block.timestamp < bossHook.deadline()
-            || mode != Operation.Idle || liquidityRecovered) revert InvalidSetup();
-        if (bossHook.status() == BossHook.RoundStatus.Active) bossHook.expire();
-        liquidityRecovered = true;
-        mode = Operation.Recover;
-        manager.unlock(bytes(""));
-        mode = Operation.Idle;
-        bossHP.safeTransfer(owner(), bossHP.balanceOf(address(this)));
-        roy.safeTransfer(owner(), roy.balanceOf(address(this)));
-        mockUSD.safeTransfer(owner(), mockUSD.balanceOf(address(this)));
+    /// @notice Retained for callers of the old ABI. Creator withdrawals are permanently disabled.
+    function recoverAfterDeadline() external pure {
+        revert InvalidSetup();
+    }
+
+    function _roundExpired() private view returns (bool) {
+        uint256 deadline = bossHook.deadline();
+        return deadline != 0 && block.timestamp >= deadline;
     }
 
     /// @notice Simulates the normal two-hop attack and any resulting stage transition without player funding.
@@ -313,7 +307,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         returns (QuoteResult memory quote)
     {
         if (
-            !activated || mode != Operation.Idle || block.timestamp >= bossHook.deadline() || maxMockUSD == 0
+            !activated || mode != Operation.Idle || _roundExpired() || maxMockUSD == 0
                 || maxMockUSD > uint256(type(int256).max) || attackStage != bossHook.currentStage()
                 || bossHook.status() != BossHook.RoundStatus.Active
         ) revert InvalidAttack();
@@ -332,7 +326,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         activePlayer = QUOTE_SINK;
         expectedStage = attackStage;
         manager.unlock(
-            abi.encode(AttackRequest(QUOTE_SINK, maxMockUSD, 0, 0, 0, attackStage, bossHook.deadline()))
+            abi.encode(AttackRequest(QUOTE_SINK, maxMockUSD, 0, 0, 0, attackStage, block.timestamp))
         );
         revert UnexpectedQuoteSuccess();
     }
@@ -371,7 +365,6 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         if (mode == Operation.Setup) return _activateCallback();
         if (mode == Operation.Attack) return _attackCallback(data);
         if (mode == Operation.Quote) return _attackCallback(data);
-        if (mode == Operation.Recover) return _recoverCallback();
         revert InvalidCallback();
     }
 
@@ -499,25 +492,6 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         uint256 balanceBefore = bossHP.balanceOf(player);
         manager.take(Currency.wrap(address(bossHP)), player, amount);
         if (bossHP.balanceOf(player) - balanceBefore != amount) revert InvalidAttack();
-    }
-
-    function _recoverCallback() private returns (bytes memory) {
-        for (uint8 stage; stage <= bossHook.currentStage(); stage++) {
-            uint128 liquidity = bossHook.stageLiquidity(stage) - (stage == 0 ? 0 : bossHook.stageLiquidity(stage - 1));
-            manager.modifyLiquidity(_bossPoolKey, ModifyLiquidityParams(
-                bossHook.LOWER_TICK(), bossHook.UPPER_TICK(), -int256(uint256(liquidity)), bytes32(uint256(stage + 1))
-            ), bytes(""));
-        }
-        Currency hp = Currency.wrap(address(bossHP));
-        Currency payment = Currency.wrap(address(roy));
-        int256 hpDelta = manager.currencyDelta(address(this), hp);
-        int256 paymentDelta = manager.currencyDelta(address(this), payment);
-        if (hpDelta < 0 || paymentDelta < 0) revert InvalidSetup();
-        if (hpDelta > 0) manager.take(hp, address(this), uint256(hpDelta));
-        if (paymentDelta > 0) manager.take(payment, address(this), uint256(paymentDelta));
-        _assertZero(hp);
-        _assertZero(payment);
-        return bytes("");
     }
 
     function _runTransition(uint8 clearedStage) private {

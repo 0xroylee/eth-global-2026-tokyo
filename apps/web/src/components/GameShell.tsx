@@ -32,7 +32,7 @@ export function GameShell() {
   const [canvasPhase, setCanvasPhase] = useState<CanvasPhase>("loading");
   const guide = useHubGuide(bridge, nearBoss);
   const welcomeOpen = guide.hydrated && guide.state.step === "welcome" && canvasPhase !== "error";
-  const overlayOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen || arena.wallet.busy;
+  const overlayOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen || Boolean(arena.wallet.busy);
 
   useEffect(() => {
     const offNear = bridge.on("gate:near", ({ bossId }) => setNearBoss(bossId));
