@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Address, type DecodedContractEvent, type DeploymentManifest } from "@boss-pool/chain";
 import { findBoss, type BossId } from "@/game/bosses";
 import { GameBridge } from "@/game/bridge";
+import { SAGE_DEFEATED_STORAGE_KEY, SAGE_TALKED_STORAGE_KEY, sageLines, type SageState } from "@/lib/sageLines";
 import { useHubGuide } from "@/lib/useHubGuide";
 import { useBossPool, type NetworkKey } from "@/lib/useBossPool";
 import { BossEntryPanel } from "./BossEntryPanel";
@@ -14,6 +15,7 @@ import { HubHelp } from "./HubHelp";
 import { HubRouteNotice } from "./HubRouteNotice";
 import { HubSoundControl } from "./HubSoundControl";
 import { RoundStatePanel } from "./RoundStatePanel";
+import { SageDialog } from "./SageDialog";
 
 export function GameShell() {
   const bridge = useMemo(() => new GameBridge(), []);
@@ -22,6 +24,9 @@ export function GameShell() {
   const { deployment, writeState } = arena;
   const [nearBoss, setNearBoss] = useState<BossId | null>(null);
   const [openBoss, setOpenBoss] = useState<BossId | null>(null);
+  const [nearSage, setNearSage] = useState(false);
+  const [sageOpen, setSageOpen] = useState(false);
+  const [sageState, setSageState] = useState<SageState>({ firstVisit: true, defeated: false });
   const [showChain, setShowChain] = useState(false);
   const [nearRoute, setNearRoute] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
@@ -29,20 +34,35 @@ export function GameShell() {
   const [canvasPhase, setCanvasPhase] = useState<CanvasPhase>("loading");
   const guide = useHubGuide(bridge, nearBoss);
   const welcomeOpen = guide.hydrated && guide.state.step === "welcome" && canvasPhase !== "error";
-  const overlayOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen;
+  const overlayOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen || sageOpen;
+  const sageScript = useMemo(() => sageLines(sageState), [sageState]);
+
+  // Read progress when the conversation starts, so a repeat visit sees the latest lines.
+  const openSage = useCallback(() => {
+    setSageState({ firstVisit: !hasTalkedToSage(), defeated: isCatDefeated() });
+    setSageOpen(true);
+  }, []);
+  const closeSage = useCallback(() => {
+    markSageTalked();
+    setSageOpen(false);
+  }, []);
 
   useEffect(() => {
     const offNear = bridge.on("gate:near", ({ bossId }) => setNearBoss(bossId));
     const offEnter = bridge.on("gate:enter", ({ bossId }) => setOpenBoss(bossId));
     const offRouteNear = bridge.on("region:near", ({ exitId }) => setNearRoute(exitId !== null));
     const offRouteInspect = bridge.on("region:inspect", () => setRouteOpen(true));
+    const offSageNear = bridge.on("npc:near", ({ npcId }) => setNearSage(npcId === "sage"));
+    const offSageTalk = bridge.on("npc:talk", () => openSage());
     return () => {
       offNear();
       offEnter();
       offRouteNear();
       offRouteInspect();
+      offSageNear();
+      offSageTalk();
     };
-  }, [bridge]);
+  }, [bridge, openSage]);
 
   useEffect(() => {
     guide.syncModal(overlayOpen);
@@ -124,7 +144,8 @@ export function GameShell() {
     (hintStep === "move" || hintStep === "find" || hintStep === "inspect" || hintStep === "done");
   const guideInspect = showHint && hintStep === "inspect";
   const showBossPrompt = nearBoss !== null && !overlayOpen && !guideInspect;
-  const showRoutePrompt = nearRoute && !showBossPrompt && !overlayOpen && !guideInspect;
+  const showSagePrompt = nearSage && !overlayOpen && !showBossPrompt && !guideInspect;
+  const showRoutePrompt = nearRoute && !showSagePrompt && !showBossPrompt && !overlayOpen && !guideInspect;
   const live = deployment.kind === "live";
   const chainLabel =
     deployment.kind === "loading" ? "CHECKING" : live ? "LIVE" : deployment.kind === "error" ? "RPC ERROR" : "NOT DEPLOYED";
@@ -265,6 +286,7 @@ export function GameShell() {
           <div className="flex flex-wrap items-end justify-center gap-2">
             <span className="rounded-md bg-ink/70 px-2 py-1 font-mono text-[9px] tracking-[0.14em] text-dim">WASD / ARROWS · MOVE</span>
             <GatePrompt bossId={nearBoss} hidden={!showBossPrompt} />
+            <SagePrompt hidden={!showSagePrompt} />
             <RoutePrompt hidden={!showRoutePrompt} />
           </div>
           <div className="pointer-events-auto flex flex-wrap items-center gap-2">
@@ -294,6 +316,7 @@ export function GameShell() {
       )}
       {routeOpen && <HubRouteNotice onClose={closeRoute} />}
       {helpOpen && <HubHelp onClose={closeHelp} onReplay={replayFromHelp} />}
+      {sageOpen && <SageDialog lines={sageScript} onClose={closeSage} />}
       {showChain && (
         <div className="absolute inset-0 z-20 grid place-items-center overflow-y-auto bg-ink/70 p-4 backdrop-blur-[2px]">
           <div className="max-h-[min(32rem,calc(100dvh-2rem))] w-full max-w-3xl overflow-y-auto">
@@ -361,6 +384,46 @@ function RoutePrompt({ hidden }: { hidden: boolean }) {
       {hidden ? "" : "E · INSPECT ROUTE"}
     </span>
   );
+}
+
+/** The sage is a conversation, not a gate: the prompt says so and never says "enter". */
+function SagePrompt({ hidden }: { hidden: boolean }) {
+  return (
+    <span
+      aria-live="polite"
+      aria-hidden={hidden}
+      className={`rounded-md border border-white/12 bg-ink/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.14em] text-fog transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] ${
+        hidden ? "pointer-events-none absolute translate-y-1 opacity-0" : "translate-y-0 opacity-100"
+      }`}
+    >
+      {hidden ? "" : "E · TALK TO THE SAGE"}
+    </span>
+  );
+}
+
+function hasTalkedToSage(): boolean {
+  try {
+    return localStorage.getItem(SAGE_TALKED_STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function markSageTalked() {
+  try {
+    localStorage.setItem(SAGE_TALKED_STORAGE_KEY, "1");
+  } catch {
+    // Storage can be blocked. The conversation still works.
+  }
+}
+
+/** Written by the round-state owner once Roy is really defeated; the sage only reads it. */
+function isCatDefeated(): boolean {
+  try {
+    return localStorage.getItem(SAGE_DEFEATED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 type AttackOrigin = { network: NetworkKey; manifest: DeploymentManifest; target: string };
