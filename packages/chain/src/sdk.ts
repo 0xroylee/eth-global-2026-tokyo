@@ -24,6 +24,7 @@ import {
 } from "./generated/abi";
 import { isVerifiedDeployment, ROBINHOOD_TESTNET_CHAIN_ID, type VerifiedDeployment } from "./deployment";
 import { readPlayer, readRound, readState, type RoundSnapshot } from "./reads";
+import { readActivity, type ReadActivityOptions } from "./activity";
 
 const CLAIMABLE_STATUS = 3;
 const ACTIVE_STATUS = 1;
@@ -849,6 +850,7 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     readRound: () => readRound(publicClient, deployment),
     readPlayer: (account: Address) => readPlayer(publicClient, deployment, account),
     readState: (account?: Address) => readState(publicClient, deployment, account),
+    readActivity: (activityOptions?: ReadActivityOptions) => readActivity(publicClient, deployment, activityOptions),
     quoteAttack,
     prepareAttack,
     getApproval,
