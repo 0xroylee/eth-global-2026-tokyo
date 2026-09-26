@@ -94,9 +94,9 @@ function toDefinition(entry: RosterEntry): BossDefinition {
     source: "venue",
     rosterMeta: {
       rank: entry.rank,
-      chain: "Robinhood",
+      chain: "Base",
       category: entry.category,
-      snapshot: `GeckoTerminal trending · ${roster.snapshotDate}`,
+      snapshot: `GeckoTerminal trending (base) · ${roster.snapshotDate}`,
     },
   };
 }
