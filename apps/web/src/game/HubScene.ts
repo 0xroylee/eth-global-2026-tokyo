@@ -665,6 +665,13 @@ export class HubScene extends Phaser.Scene {
       if (!inspect && !activatesFocusedControl) return;
       const target = event.target;
       if (target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      // Past every guard, so this keydown is the one that consumes the interaction. The panel
+      // it opens mounts with focus on one of its own controls, and the browser then runs this
+      // same keydown's default action on that control — closing the panel milliseconds after
+      // it opened. Cancel the activation keys here so a panel survives its own opening; `e`/`E`
+      // is left alone because it has no default action to cancel.
+      const opensPanel = this.nearGate || this.nearSage || this.nearRegion;
+      if (activatesFocusedControl && opensPanel) event.preventDefault();
       if (this.nearGate) {
         this.bridge.emit("gate:enter", { bossId: this.nearGate.boss.id });
         return;
