@@ -8,7 +8,7 @@ The hub is a warm, textured 16-bit garden. Stone paths connect the boss gates an
 
 The battle keeps the lake background, status window at the upper left, boss name at the upper right, large boss on the right, command menu at the lower left, and dialogue at the lower right. The player portrait sits above the command menu. Reduce spacing and sprite size on shorter screens so windows remain separate and commands stay visible.
 
-Use the existing character and environment artwork with nearest-neighbor rendering. Keep each boss's configured stage artwork and chain identity together. An encounter without configured artwork shows its real data with an appearance-unavailable message.
+Use the existing character and environment artwork with nearest-neighbor rendering. Keep each boss's configured stage artwork and chain identity together. A verified perpetual Factory boss uses Pool Unis artwork when no explicit mapping exists. Other encounters without configured artwork show their real data with an appearance-unavailable message.
 
 ## Windows and typography
 

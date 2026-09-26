@@ -105,7 +105,7 @@ Keep the shared E2E and focused accounting checks. Optional held-Attack Token at
 
 `/battle/<hook-address>?network=base-sepolia` opens one verified Boss encounter using `@boss-pool/chain`; `network=local` selects the local chain. The path contains the Boss Hook address, not a Uniswap pool ID or Factory boss ID. Bare `/battle` and old `/mock-battle` links lead to the selected network's standalone demo. Explicit addresses never fall back to a different Boss.
 
-Boss names and stage artwork are configured in code by network and Hook address. The existing Base Sepolia demo and configured local demo use **Pool Unis**. Other addresses need an explicit presentation mapping. A verified Factory boss without a mapping shows **Boss appearance not configured**, while its real token data and actions remain available. The mapping does not authorize an unverified contract. **SWAP ATTACK** remains the attack command.
+Boss names and stage artwork are configured in code by network and Hook address. The existing Base Sepolia demo and configured local demo use **Pool Unis**. A verified perpetual Factory boss uses Pool Unis when no explicit mapping exists. Other encounters without a mapping show **Boss appearance not configured**, while their real token data and actions remain available. Appearance does not authorize an unverified contract. **SWAP ATTACK** remains the attack command.
 
 The desktop visual baseline is John Ku's Pool Unis design in commit `c5b11b3`: lake background, upper-left HUD, upper-right nameplate, large boss on the right, lower-left command menu, and lower-right dialogue. SDK integration must preserve this composition, pixel typography, and cream/navy windows. Shorter desktop windows may reduce spacing and sprite size to prevent overlap.
 
