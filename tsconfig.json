@@ -16,6 +16,7 @@
   },
   "include": [
     "apps/web/src",
+    "apps/web/scripts",
     "apps/web/next.config.ts",
     "apps/web/next-env.d.ts",
     "packages/chain/src",

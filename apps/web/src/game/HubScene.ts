@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { BOSSES, findBoss, isBossId, type BossDefinition, type BossId } from "./bosses";
 import type { GameBridge } from "./bridge";
+import { HUB_LAYERS, HUB_TILESET } from "./hubTiles";
 import { makeCroppedTexture } from "./textures";
 
 /** World units are map pixels; the camera zooms them for the viewport. */
@@ -25,12 +26,27 @@ type Gate = {
   pulse?: Phaser.Tweens.Tween;
 };
 
+/** Frame sequences for animated tiles. Both cycles divide TILE_CLOCK_PERIOD. */
+const TILE_ANIMATIONS: { frames: readonly number[]; durations: readonly number[] }[] = [
+  { frames: [HUB_TILESET.gid.waterA, HUB_TILESET.gid.waterB], durations: [500, 500] },
+  { frames: [HUB_TILESET.gid.waterB, HUB_TILESET.gid.waterA], durations: [500, 500] },
+  { frames: [HUB_TILESET.gid.torchA, HUB_TILESET.gid.torchB, HUB_TILESET.gid.torchC], durations: [166, 167, 167] },
+];
+const TILE_CLOCK_PERIOD = 1000;
+
+/** Shape of Phaser's per-tile data that `Tileset.getAnimatedTileId` reads. */
+type TileAnimationData = {
+  animation?: { tileid: number; duration: number; startTime: number }[];
+  animationDuration?: number;
+};
+
 export class HubScene extends Phaser.Scene {
   private bridge!: GameBridge;
   private player!: Phaser.Physics.Arcade.Sprite;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: Record<"W" | "A" | "S" | "D", Phaser.Input.Keyboard.Key>;
   private gates: Gate[] = [];
+  private tileset!: Phaser.Tilemaps.Tileset;
   private nearGate: Gate | null = null;
   private modalOpen = false;
   private reduceMotion = false;
@@ -60,15 +76,18 @@ export class HubScene extends Phaser.Scene {
     makeCroppedTexture(this, "portrait-macro-whale", "portrait-master-macro-whale", { x: 160, y: 80, w: 940, h: 940 }, 28);
 
     const map = this.make.tilemap({ key: "hub" });
-    const tileset = map.addTilesetImage("hub", "tiles");
-    if (!tileset) throw new Error("hub.json tileset 'hub' did not resolve to image 'tiles'");
+    const tileset = map.addTilesetImage(HUB_TILESET.name, "tiles");
+    if (!tileset) throw new Error(`hub.json tileset '${HUB_TILESET.name}' did not resolve to image 'tiles'`);
+    this.tileset = tileset;
 
-    map.createLayer("ground", tileset, 0, 0)?.setDepth(0);
-    // Trees and decor: transparent tiles over grass, under the player.
-    map.createLayer("props", tileset, 0, 0)?.setDepth(1);
-    map.createLayer("overhead", tileset, 0, 0)?.setDepth(OVERHEAD_DEPTH);
-    const collision = map.createLayer("collision", tileset, 0, 0);
+    const ground = map.createLayer(HUB_LAYERS.ground, tileset, 0, 0)?.setDepth(0);
+    map.createLayer(HUB_LAYERS.detail, tileset, 0, 0)?.setDepth(1);
+    const props = map.createLayer(HUB_LAYERS.props, tileset, 0, 0)?.setDepth(2);
+    map.createLayer(HUB_LAYERS.overhead, tileset, 0, 0)?.setDepth(OVERHEAD_DEPTH);
+    const collision = map.createLayer(HUB_LAYERS.collision, tileset, 0, 0);
     if (!collision) throw new Error("hub.json is missing the collision layer");
+    // Water lives on ground, torches on props. Keep their clocks wrapping on a frame boundary.
+    for (const layer of [ground, props]) layer?.setTimerResetPeriod(TILE_CLOCK_PERIOD);
     // The collision layer duplicates blocking tiles so it can stay invisible.
     collision.setVisible(false);
     collision.setCollisionByExclusion([-1]);
@@ -76,7 +95,7 @@ export class HubScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
     this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
 
-    const spawn = map.findObject("markers", (o) => o.name === "spawn");
+    const spawn = map.findObject(HUB_LAYERS.markers, (o) => o.name === "spawn");
     if (!spawn || spawn.x === undefined || spawn.y === undefined) {
       throw new Error("hub.json is missing the spawn marker");
     }
@@ -91,6 +110,7 @@ export class HubScene extends Phaser.Scene {
     this.cameras.main.setRoundPixels(true);
 
     this.setupInput();
+    // Sets reduceMotion and applies tile animation for the current preference.
     this.watchReducedMotion();
 
     this.unsubscribe.push(
@@ -137,7 +157,7 @@ export class HubScene extends Phaser.Scene {
   /** Gates come from the Tiled `markers` layer; returns their blocking bodies. */
   private buildGates(map: Phaser.Tilemaps.Tilemap): Phaser.Physics.Arcade.StaticGroup {
     const bodies = this.physics.add.staticGroup();
-    const markers = map.getObjectLayer("markers");
+    const markers = map.getObjectLayer(HUB_LAYERS.markers);
     if (!markers) throw new Error("hub.json is missing the markers layer");
 
     for (const obj of markers.objects) {
@@ -235,10 +255,37 @@ export class HubScene extends Phaser.Scene {
       this.reduceMotion = query.matches;
       this.player.setScale(1, 1);
       if (this.nearGate) this.startGatePulse(this.nearGate);
+      this.applyTileAnimation();
     };
     apply();
     query.addEventListener("change", apply);
     this.unsubscribe.push(() => query.removeEventListener("change", apply));
+  }
+
+  /**
+   * Water and torch frames through Phaser's tileset animation data, which the
+   * tilemap renderer reads every frame. Reduced motion clears the data so
+   * those tiles rest on their first frame.
+   */
+  private applyTileAnimation() {
+    const data = this.tileset.tileData as Record<number, TileAnimationData | undefined>;
+    for (const { frames, durations } of TILE_ANIMATIONS) {
+      const local = frames[0]! - this.tileset.firstgid;
+      if (this.reduceMotion) {
+        const entry = data[local];
+        if (!entry) continue;
+        delete entry.animation;
+        delete entry.animationDuration;
+        continue;
+      }
+      let startTime = 0;
+      const animation = frames.map((gid, i) => {
+        const frame = { tileid: gid - this.tileset.firstgid, duration: durations[i]!, startTime };
+        startTime += durations[i]!;
+        return frame;
+      });
+      data[local] = { ...data[local], animation, animationDuration: startTime };
+    }
   }
 
   private startGatePulse(gate: Gate) {
