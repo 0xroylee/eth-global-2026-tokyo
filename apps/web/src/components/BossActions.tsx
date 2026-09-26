@@ -27,12 +27,10 @@ type ActionResult =
   | { kind: "approval"; hash: string; token: string; spender: string; amount: bigint }
   | { kind: "attack"; hash: string; result: AttackResult }
   | { kind: "reward"; hash: string; hpAmount: bigint; payout: bigint }
-  | { kind: "nft"; hash: string; tokenId: bigint }
-  | { kind: "faucet"; hash: string; amount: bigint };
+  | { kind: "nft"; hash: string; tokenId: bigint };
 
 const MOCK_USD_DECIMALS = 6;
 const BOSS_HP_DECIMALS = 18;
-const PUBLIC_FAUCET_AMOUNT = 100n * 10n ** BigInt(MOCK_USD_DECIMALS);
 const DEFAULT_SLIPPAGE_BPS = 100;
 const ATTACK_CAP = 1_000_000n;
 
@@ -133,7 +131,6 @@ export function BossActions({
     : 0;
   const attackApproval = approvals.attack;
   const claimApproval = approvals.claim;
-  const needsFaucet = Boolean(player && inputAmount !== null && player.mockUSDBalance < inputAmount);
   const hasInputBalance = Boolean(player && inputAmount !== null && inputAmount > 0n && player.mockUSDBalance >= inputAmount);
   const attackReady = Boolean(
     sdk && account && arena.canWrite && !arena.networkMismatch && active && hasInputBalance &&
@@ -208,18 +205,6 @@ export function BossActions({
       }
     } catch {
       // The shared write status retains the decoded contract error.
-    }
-  }
-
-  async function faucetMockUSD() {
-    if (!sdk) return;
-    try {
-      const confirmed = await arena.runPending("Faucet MockUSD", () => sdk.faucetMockUSD(PUBLIC_FAUCET_AMOUNT));
-      if (confirmed?.status === "confirmed") {
-        setLastResult({ kind: "faucet", hash: confirmed.hash, amount: confirmed.result.amount });
-      }
-    } catch {
-      // The shared write status retains rejection and receipt errors.
     }
   }
 
@@ -369,16 +354,7 @@ export function BossActions({
               {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD · {displayAmount(player.royBalance, BOSS_HP_DECIMALS)} Attack Token · {displayAmount(player.bossHPBalance, BOSS_HP_DECIMALS)} BossHP · {displayAmount(player.nativeBalance, BOSS_HP_DECIMALS)} ETH gas
               <span className="ml-2">{player.hasAttacked ? "ATTACKED" : "NO ATTACK YET"}</span>
             </p>
-            {!defeated && <><ReadinessRow step="A" title="MockUSD faucet" state={needsFaucet ? "needed" : "ready"}>
-              <p className="text-xs text-muted">Balance: {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD</p>
-              {needsFaucet && (
-                <ActionButton disabled={!arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord)} onClick={() => void faucetMockUSD()}>
-                  Faucet 100 mUSD
-                </ActionButton>
-              )}
-            </ReadinessRow>
-
-            <ReadinessRow step="B" title="Router allowance" state={!quoteState ? "waiting" : !quoteFresh ? "stale" : attackApproval?.approvalNeeded ? "needed" : "ready"}>
+            {!defeated && <><ReadinessRow step="A" title="Router allowance" state={!quoteState ? "waiting" : !quoteFresh ? "stale" : attackApproval?.approvalNeeded ? "needed" : "ready"}>
               {!quoteState ? <p className="text-xs text-muted">Get the public quote above before approving the attack input.</p> : (
                 <>
                   {attackApproval && (
@@ -399,7 +375,7 @@ export function BossActions({
               )}
             </ReadinessRow>
 
-            <ReadinessRow step="C" title="Attack" state={attackReady ? "ready" : active ? "waiting" : "closed"}>
+            <ReadinessRow step="B" title="Attack" state={attackReady ? "ready" : active ? "waiting" : "closed"}>
               <p className="text-xs leading-relaxed text-muted" role="status">{attackBlockReason}</p>
               <ActionButton primary disabled={!attackReady} onClick={() => void attack()}>
                 ATTACK · STAGE {round ? round.currentStage + 1 : "—"}
@@ -579,9 +555,6 @@ function ConfirmedResult({ result }: { result: ActionResult }) {
       break;
     case "nft":
       text = `Victory NFT #${result.tokenId} confirmed`;
-      break;
-    case "faucet":
-      text = `Faucet delivered ${displayAmount(result.amount, MOCK_USD_DECIMALS)} mUSD`;
       break;
   }
   return (
