@@ -7,7 +7,6 @@ import Link from "next/link";
 import type { BossDefinition } from "@/game/bosses";
 import { displayAmount, roundStatusLabel } from "@/lib/format";
 import { type useBossPool } from "@/lib/useBossPool";
-import { BossActions } from "./BossActions";
 
 type Arena = ReturnType<typeof useBossPool>;
 const CAT_FORMS = ["/images/boss-cat-form-a.png", "/images/boss-cat-form-b.png", "/images/boss-cat-form-c.png"] as const;
@@ -29,13 +28,16 @@ export function BossEntryPanel({
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const actionRef = useRef<HTMLButtonElement>(null);
-  const live = arena.deployment.kind === "live" ? arena.deployment : null;
+  const candidate = arena.deployment.kind === "live" ? arena.deployment : null;
+  const live = candidate && candidate.context.deployment.encounterMode === "standalone" &&
+    candidate.hookAddress.toLowerCase() === candidate.context.baseManifest.addresses.hook.toLowerCase()
+    ? candidate
+    : null;
   const stage = live?.round.currentStage ?? 0;
   const portrait = boss.id === "cat" ? CAT_FORMS[Math.min(stage, 2)] : boss.portrait;
   const supported = boss.id === "cat";
   const needsWallet = supported && !arena.wallet.account;
   const needsSwitch = supported && Boolean(arena.wallet.account) && arena.networkMismatch;
-  const actionsReady = supported && !needsWallet && !needsSwitch;
 
   useEffect(() => {
     if (suspendInput) return;
@@ -95,9 +97,10 @@ export function BossEntryPanel({
             ref={actionRef}
             type="button"
             onClick={onConnect}
-            className="mt-5 w-full rounded-lg bg-accent/20 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-accent-soft transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-accent/25 active:scale-[0.98]"
+            disabled={arena.wallet.busy || arena.wallet.status === "checking" || arena.wallet.status === "missing"}
+            className="mt-5 w-full rounded-lg bg-accent/20 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-accent-soft transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-accent/25 active:scale-[0.98] disabled:opacity-40"
           >
-            CONNECT WALLET TO CHALLENGE
+            {arena.wallet.status === "choosing" ? "CHOOSE WALLET TO CHALLENGE" : arena.wallet.busy ? "CONNECTING WALLET…" : "CONNECT WALLET TO CHALLENGE"}
           </button>
         )}
         {needsSwitch && (
@@ -105,23 +108,23 @@ export function BossEntryPanel({
             ref={actionRef}
             type="button"
             onClick={onSwitch}
-            className="mt-5 w-full rounded-lg border border-[#f5b04a]/40 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-[#f5b04a] transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-[#f5b04a]/10 active:scale-[0.98]"
+            disabled={arena.wallet.busy}
+            className="mt-5 w-full rounded-lg border border-[#f5b04a]/40 px-4 py-2.5 font-mono text-[11px] tracking-[0.14em] text-[#f5b04a] transition-transform duration-150 ease-[var(--ease-out-strong)] hover:bg-[#f5b04a]/10 active:scale-[0.98] disabled:opacity-40"
           >
-            SWITCH WALLET TO {arena.selectedChainId}
+            {arena.wallet.busy ? "SWITCHING NETWORK…" : `SWITCH WALLET TO ${arena.selectedChainId}`}
           </button>
         )}
-        {actionsReady && <BossActions arena={arena} />}
-        {supported && (
+        {supported && live && (
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-ink/30 px-3 py-3">
             <div>
-              <p className="font-mono text-[9px] tracking-[0.12em] text-dim">SEPARATE MOCK PREVIEW</p>
-              <p className="mt-1 text-xs text-muted">The pixel battle is a visual demo and never changes contract state.</p>
+              <p className="font-mono text-[9px] tracking-[0.12em] text-dim">LIVE BATTLE</p>
+              <p className="mt-1 text-xs text-muted">Enter the arena. Each attack spends up to 1 MockUSD.</p>
             </div>
             <Link
-              href="/mock-battle"
+              href={`/battle/${live.hookAddress}?network=${arena.network}`}
               className="shrink-0 rounded-lg border border-white/12 px-3 py-2 font-mono text-[9px] tracking-[0.1em] text-fog transition-colors hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              OPEN MOCK BATTLE
+              ENTER BATTLE
             </Link>
           </div>
         )}
@@ -162,9 +165,8 @@ function BossHealth({ boss, deployment }: { boss: BossDefinition; deployment: Ar
   }
   const { round } = deployment;
   const stage = round.currentStage;
-  const sold = round.stageSold[stage] ?? 0n;
   const cap = round.stageCapacity[stage] ?? 0n;
-  const remaining = cap > sold ? cap - sold : 0n;
+  const remaining = round.remainingSellableHP;
   const fraction = cap > 0n ? Number((remaining * 1000n) / cap) / 1000 : 0;
   return (
     <Row label={`STAGE ${stage + 1} / 3 · ${roundStatusLabel(round.status).toUpperCase()}`} badge="LIVE">

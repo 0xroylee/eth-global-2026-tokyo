@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "network": "base-sepolia",
+  "chainId": 84532,
+  "factory": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
+  "contractSourceCommit": "4efa8f01e73dbabdc3383d444ab03079f6c63493",
+  "classification": "TEAM_DEPLOYED_NON_PRODUCTION_DEMO",
+  "token": "0x5a5517f63714f44F19337d34ab29d5ACC652e4CF",
+  "config": {
+    "token": "0x5a5517f63714f44f19337d34ab29d5acc652e4cf",
+    "tokenAllocation": "10000000000000000000000",
+    "prizeBps": 1000,
+    "volumeTargetMockUSD": "60000000",
+    "deadline": "1791038562",
+    "maxAttackTokenPerMockUSDX128": "3806887966256966826657796491141825770359923138000413"
+  },
+  "quote": {
+    "prizeAmount": "1000000000000000000000",
+    "battleTokenBudget": "9000000000000000000000",
+    "saleHPBudget": "8910000000000000000000",
+    "requiredBattleTokenFunding": "8923405215646940822470",
+    "estimatedAttackToken": "671246294782261735765",
+    "stageOneHP": "1485000000000000000000",
+    "hpPriceTick": -25800,
+    "maxRoyPerMockUSDX128": "3806887966256966826657796491141825770359923138000413"
+  },
+  "hash": "0x757a887b2de2275dcd617b8daa8eeef6fa19d8dc469185b2aaa8f0aa1517a120",
+  "bossId": "0x1adc03208b3c9dd978e16e71e8a354d7e173605cde85365baee117995ccbb9e2",
+  "maker": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+  "hook": "0xc11D07448948AC4757592E91D8f5155907Ef6AC0",
+  "router": "0x087D22c53082ED7841cB5716cB699111a02b0dEf",
+  "collectibles": "0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925",
+  "blockNumber": 47332745,
+  "gasUsed": "12009713",
+  "status": "success",
+  "pool": {
+    "id": "0xd3113f219dfd6a3889eadd5fe2a199550a2de18bf72761d7dd955d61bc095115",
+    "key": {
+      "currency0": "0x5a5517f63714f44F19337d34ab29d5ACC652e4CF",
+      "currency1": "0x6e5390D3231beb061c1E49916806F2f26B3Feb22",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "hooks": "0xc11D07448948AC4757592E91D8f5155907Ef6AC0"
+    }
+  },
+  "verifiedAtBlock": "47332748",
+  "verification": {
+    "factoryBossCount": "1",
+    "registeredHook": "0xc11D07448948AC4757592E91D8f5155907Ef6AC0",
+    "roundStatus": "Active",
+    "currentStage": 0,
+    "originalPrize": "1000000000000000000000",
+    "prizeBalance": "1000000000000000000000",
+    "volumeTargetMockUSD": "60000000",
+    "totalVolume": "0",
+    "runtimeBytes": {
+      "BossHook": 21404,
+      "BossRouter": 24307,
+      "BossCollectibles": 3899
+    },
+    "currentRuntimeMatches": true,
+    "oneMockUSDAttackQuote": {
+      "mockUSDSpent": "1000000",
+      "royBought": "10139354293952772569",
+      "roySpent": "10139354293952772569",
+      "bossHPOut": "132304025798271019315",
+      "stageCleared": false,
+      "bossDefeated": false,
+      "nextStage": 0
+    }
+  },
+  "operations": [
+    {
+      "kind": "approval",
+      "transactionHash": "0xb207761d115a876ad248787e828a860fe4936b1ec895644dd1e1e4976968448c"
+    },
+    {
+      "kind": "launch",
+      "transactionHash": "0x757a887b2de2275dcd617b8daa8eeef6fa19d8dc469185b2aaa8f0aa1517a120"
+    }
+  ],
+  "playerTransactionsSent": 0,
+  "tokenDetails": {
+    "name": "Boss HP",
+    "symbol": "BHP",
+    "decimals": 18,
+    "totalSupply": "10000000000000000000000",
+    "deploymentTxHash": "0x3020b83bb3a32a3a095b548652acf049eaf4d68ee558248cddf8842d9b1223cf"
+  }
+}

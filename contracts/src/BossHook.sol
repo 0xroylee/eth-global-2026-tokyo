@@ -20,6 +20,7 @@ import {FullMath} from "v4-core/src/libraries/FullMath.sol";
 import {SqrtPriceMath} from "v4-core/src/libraries/SqrtPriceMath.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
+import {BossPricing} from "./libraries/BossPricing.sol";
 
 /// @notice Canonical Boss Pool rules, attack accounting, prize escrow and claim custody.
 contract BossHook is ReentrancyGuard {
@@ -35,29 +36,45 @@ contract BossHook is ReentrancyGuard {
         Expired
     }
 
+    struct RoundConfig {
+        uint256 prizeAmount;
+        uint256 deadline;
+        uint256 stageOneHP;
+        int24 hpPriceTick;
+        bool externalHP;
+        bool prizeInHP;
+        uint256 volumeTargetMockUSD;
+        uint256 saleHPBudget;
+        uint256 maxRoyPerMockUSDX128;
+    }
+
     uint8 private constant MODE_SETUP = 2;
     uint8 private constant MODE_ATTACK = 3;
     uint8 private constant MODE_TRANSITION = 4;
     uint8 private constant MODE_QUOTE = 5;
+    uint8 private constant MODE_RECOVER = 6;
     uint24 public constant SWAP_FEE = 3_000;
     int24 public constant TICK_SPACING = 60;
     int24 public immutable LOWER_TICK;
     int24 public immutable UPPER_TICK;
-    int24 private constant HP1_REFILL_SPLIT_TICK = -60;
     uint256 private constant FEE_DENOMINATOR = 1_000_000;
-    uint256 private constant STAGE_ONE_HP = 300e18;
 
     IPoolManager public immutable manager;
     IBossRouterContext public immutable router;
     IERC20 public immutable mockUSD;
     IERC20 public immutable roy;
     IERC20 public immutable bossHP;
+    IERC20 public immutable rewardToken;
     BossCollectibles public immutable collectibles;
     address public immutable maker;
     uint256 public immutable deadline;
     uint160 public immutable sqrtLowerX96;
     uint160 public immutable sqrtUpperX96;
     bool public immutable bossIsCurrency0;
+    bool public immutable externalHP;
+    uint256 public immutable volumeTargetMockUSD;
+    uint256 public immutable saleHPBudget;
+    uint256 public immutable maxRoyPerMockUSDX128;
 
     uint256 public originalPrize;
     uint256 public finalEligibleHP;
@@ -77,10 +94,16 @@ contract BossHook is ReentrancyGuard {
     mapping(uint8 stage => uint256) public stageCapacity;
     mapping(uint8 stage => uint128) public stageLiquidity;
     mapping(uint8 stage => uint256) public stageAttackCount;
+    mapping(uint8 stage => uint256) public stageVolumeTarget;
+    mapping(uint8 stage => uint256) public stageVolume;
     mapping(uint8 stage => uint256) public roundingDust;
     mapping(uint8 stage => uint160) public stageEndSqrtPriceX96;
     mapping(address player => bool) public hasAttacked;
     mapping(address player => bool) public victoryClaimed;
+    /// @notice External-token prize credit belongs to the attacker, independently of token ownership.
+    mapping(address player => uint256) public rewardCredit;
+    uint256 public totalVolume;
+    uint256 public eligibleHP;
 
     error Unauthorized();
     error InvalidRound();
@@ -97,9 +120,10 @@ contract BossHook is ReentrancyGuard {
     event PrizeFunded(address indexed maker, uint256 amount);
     event StageActivated(uint8 indexed stage, uint160 sqrtPriceX96, uint128 liquidity, uint256 capacity);
     event AttackRecorded(address indexed player, uint8 indexed stage, uint256 bossHPOut, uint256 cumulativeSold);
+    event VolumeCredited(address indexed player, uint8 indexed stage, uint256 mockUSD, uint256 totalMockUSD);
     event StageCleared(uint8 indexed stage, uint256 sold, uint256 capacity, uint256 roundingDust);
     event BossDefeated(uint256 finalEligibleHP, uint256 originalPrize);
-    event RewardClaimed(address indexed player, uint256 bossHPIn, uint256 mockUSDOut);
+    event RewardClaimed(address indexed player, uint256 rewardCreditUsed, uint256 memeTokenPrize);
     event VictoryNFTClaimed(address indexed player, uint256 tokenId);
     event RoundExpired(uint256 timestamp);
     event ExpiredPrizeRefunded(address indexed maker, uint256 amount);
@@ -112,14 +136,24 @@ contract BossHook is ReentrancyGuard {
         IERC20 bossHP_,
         BossCollectibles collectibles_,
         address maker_,
-        uint256 prizeAmount_,
-        uint256 deadline_
+        RoundConfig memory config
     ) {
         if (
             address(manager_) == address(0) || address(router_) == address(0) || address(mockUSD_) == address(0)
                 || address(roy_) == address(0) || address(bossHP_) == address(0)
-                || address(collectibles_) == address(0) || maker_ == address(0) || prizeAmount_ == 0
-                || deadline_ <= block.timestamp
+                || address(collectibles_) == address(0) || maker_ == address(0) || config.prizeAmount == 0
+                || config.deadline <= block.timestamp || config.stageOneHP == 0
+                || config.stageOneHP > uint256(uint128(type(int128).max)) / 6
+                || config.hpPriceTick % TICK_SPACING != 0
+                || config.hpPriceTick < -887_220 || config.hpPriceTick > 885_300
+                || address(mockUSD_) == address(roy_) || address(mockUSD_) == address(bossHP_)
+                || address(roy_) == address(bossHP_)
+                || (config.prizeInHP && !config.externalHP)
+                || (config.volumeTargetMockUSD != 0
+                    && (!config.externalHP || !config.prizeInHP || config.saleHPBudget == 0
+                        || config.maxRoyPerMockUSDX128 == 0 || config.volumeTargetMockUSD < 6
+                        || config.stageOneHP != config.saleHPBudget / 6
+                        || config.saleHPBudget != config.stageOneHP * 6))
         ) revert InvalidRound();
 
         manager = manager_;
@@ -127,10 +161,18 @@ contract BossHook is ReentrancyGuard {
         mockUSD = mockUSD_;
         roy = roy_;
         bossHP = bossHP_;
+        rewardToken = config.prizeInHP ? bossHP_ : mockUSD_;
         collectibles = collectibles_;
         maker = maker_;
-        originalPrize = prizeAmount_;
-        deadline = deadline_;
+        originalPrize = config.prizeAmount;
+        deadline = config.deadline;
+        externalHP = config.externalHP;
+        volumeTargetMockUSD = config.volumeTargetMockUSD;
+        saleHPBudget = config.saleHPBudget;
+        maxRoyPerMockUSDX128 = config.maxRoyPerMockUSDX128;
+        stageVolumeTarget[0] = config.volumeTargetMockUSD / 6;
+        stageVolumeTarget[1] = config.volumeTargetMockUSD / 3;
+        stageVolumeTarget[2] = config.volumeTargetMockUSD - stageVolumeTarget[0] - stageVolumeTarget[1];
         status = RoundStatus.Setup;
 
         Currency bossCurrency = Currency.wrap(address(bossHP_));
@@ -145,15 +187,16 @@ contract BossHook is ReentrancyGuard {
             tickSpacing: TICK_SPACING,
             hooks: IHooks(address(this))
         });
-        LOWER_TICK = bossIsCurrency0 ? int24(0) : int24(-1_920);
-        UPPER_TICK = bossIsCurrency0 ? int24(1_920) : int24(0);
+        LOWER_TICK = bossIsCurrency0 ? config.hpPriceTick : -(config.hpPriceTick + 1_920);
+        UPPER_TICK = bossIsCurrency0 ? config.hpPriceTick + 1_920 : -config.hpPriceTick;
         sqrtLowerX96 = TickMath.getSqrtPriceAtTick(LOWER_TICK);
         sqrtUpperX96 = TickMath.getSqrtPriceAtTick(UPPER_TICK);
 
         uint128 previousLiquidity;
         for (uint8 stage = 0; stage < 3; stage++) {
-            uint256 nominalHP = STAGE_ONE_HP * (stage + 1);
-            uint128 targetLiquidity = _liquidityForHP(nominalHP);
+            uint256 nominalHP = config.stageOneHP * (stage + 1);
+            uint128 targetLiquidity =
+                BossPricing.liquidityForHP(nominalHP, sqrtLowerX96, sqrtUpperX96, bossIsCurrency0);
             if (targetLiquidity <= previousLiquidity) revert InvalidStage();
             uint256 capacity = _capacityForLiquidity(targetLiquidity);
             if (capacity < nominalHP || capacity > nominalHP + 1) revert InvalidStage();
@@ -192,11 +235,16 @@ contract BossHook is ReentrancyGuard {
     }
 
     function fundPrize() external nonReentrant {
-        if (msg.sender != maker) revert Unauthorized();
-        if (status != RoundStatus.Setup || prizeFunded) revert InvalidRound();
+        if (status != RoundStatus.Setup || prizeFunded || block.timestamp >= deadline) revert InvalidRound();
         prizeFunded = true;
-        mockUSD.safeTransferFrom(msg.sender, address(this), originalPrize);
-        emit PrizeFunded(msg.sender, originalPrize);
+        if (externalHP) {
+            if (rewardToken.balanceOf(address(this)) < originalPrize) revert PrizeNotFunded();
+        } else {
+            uint256 balanceBefore = rewardToken.balanceOf(address(this));
+            rewardToken.safeTransferFrom(msg.sender, address(this), originalPrize);
+            if (rewardToken.balanceOf(address(this)) - balanceBefore != originalPrize) revert PrizeNotFunded();
+        }
+        emit PrizeFunded(maker, originalPrize);
     }
 
     function activateFromRouter() external {
@@ -211,6 +259,7 @@ contract BossHook is ReentrancyGuard {
         (uint160 price,,uint24 protocolFee,uint24 lpFee) = manager.getSlot0(_bossPoolId);
         uint160 expectedStart = bossIsCurrency0 ? sqrtLowerX96 : sqrtUpperX96;
         if (price != expectedStart || protocolFee != 0 || lpFee != SWAP_FEE) revert InvalidPool();
+        if (_remainingSellableHP(price, stageLiquidity[0]) == 0) revert InvalidStage();
         lastSqrtPriceX96 = price;
         status = RoundStatus.Active;
         emit StageActivated(0, price, stageLiquidity[0], stageCapacity[0]);
@@ -234,6 +283,11 @@ contract BossHook is ReentrancyGuard {
         lastSqrtPriceX96 = price;
         status = RoundStatus.Active;
         emit StageActivated(nextStage, price, stageLiquidity[nextStage], stageCapacity[nextStage]);
+    }
+
+    function remainingStageVolume() external view returns (uint256) {
+        if (volumeTargetMockUSD == 0 || status != RoundStatus.Active) revert InvalidStage();
+        return stageVolumeTarget[currentStage] - stageVolume[currentStage];
     }
 
     function beforeInitialize(address sender, PoolKey calldata key, uint160) external returns (bytes4) {
@@ -297,7 +351,10 @@ contract BossHook is ReentrancyGuard {
         bytes calldata
     ) external view returns (bytes4) {
         _authenticatePoolCallback(sender, key);
-        revert LiquidityRemovalDisabled();
+        if (!externalHP || block.timestamp < deadline || router.mode() != MODE_RECOVER) {
+            revert LiquidityRemovalDisabled();
+        }
+        return IHooks.beforeRemoveLiquidity.selector;
     }
 
     function beforeSwap(address sender, PoolKey calldata key, SwapParams calldata params, bytes calldata)
@@ -369,14 +426,40 @@ contract BossHook is ReentrancyGuard {
         uint8 stage = currentStage;
         uint256 newSold = stageSold[stage] + hpOut;
         if (newSold > stageCapacity[stage]) revert InvalidSwap();
+        uint256 newEligibleHP = eligibleHP + hpOut;
+        uint256 creditedVolume;
+        uint256 nextVolume;
+        if (volumeTargetMockUSD != 0) {
+            uint256 usdSpent = router.activeMockUSDSpent();
+            uint256 royBought = router.activeRoyBought();
+            if (usdSpent == 0 || royBought == 0) revert InvalidSwap();
+            if (FullMath.mulDiv(royBought, 1 << 128, usdSpent) > maxRoyPerMockUSDX128) {
+                revert InvalidSwap();
+            }
+            creditedVolume = FullMath.mulDiv(usdSpent, _inputAmount(delta, params.zeroForOne), royBought);
+            if (creditedVolume == 0) revert InvalidSwap();
+            nextVolume = totalVolume + creditedVolume;
+            if (newEligibleHP > FullMath.mulDiv(saleHPBudget, nextVolume, volumeTargetMockUSD)) {
+                revert InvalidSwap();
+            }
+        }
         stageSold[stage] = newSold;
+        eligibleHP = newEligibleHP;
         stageAttackCount[stage]++;
         hasAttacked[router.activePlayer()] = true;
+        if (externalHP) rewardCredit[router.activePlayer()] += hpOut;
         lastSqrtPriceX96 = price;
         emit AttackRecorded(router.activePlayer(), stage, hpOut, newSold);
 
         uint256 remaining = _remainingSellableHP(price, stageLiquidity[stage]);
-        if (remaining == 0) _clearStage(stage);
+        if (volumeTargetMockUSD != 0) {
+            stageVolume[stage] += creditedVolume;
+            totalVolume = nextVolume;
+            emit VolumeCredited(router.activePlayer(), stage, creditedVolume, totalVolume);
+            if (stageVolume[stage] >= stageVolumeTarget[stage]) _clearVolumeStage(stage);
+        } else if (remaining == 0) {
+            _clearStage(stage);
+        }
         return (IHooks.afterSwap.selector, 0);
     }
 
@@ -386,11 +469,19 @@ contract BossHook is ReentrancyGuard {
         }
         payout = Math.mulDiv(originalPrize, hpAmount, finalEligibleHP);
         if (payout == 0) revert ClaimUnavailable();
+        if (externalHP) {
+            if (hpAmount > rewardCredit[msg.sender]) revert ClaimUnavailable();
+            rewardCredit[msg.sender] -= hpAmount;
+        }
 
         redeemedHP += hpAmount;
         paidPrize += payout;
-        bossHP.safeTransferFrom(msg.sender, address(this), hpAmount);
-        mockUSD.safeTransfer(msg.sender, payout);
+        if (!externalHP) {
+            uint256 balanceBefore = bossHP.balanceOf(address(this));
+            bossHP.safeTransferFrom(msg.sender, address(this), hpAmount);
+            if (bossHP.balanceOf(address(this)) - balanceBefore != hpAmount) revert ClaimUnavailable();
+        }
+        rewardToken.safeTransfer(msg.sender, payout);
         emit RewardClaimed(msg.sender, hpAmount, payout);
     }
 
@@ -416,7 +507,7 @@ contract BossHook is ReentrancyGuard {
             msg.sender != maker || status != RoundStatus.Expired || expiredPrizeRefunded
         ) revert Unauthorized();
         expiredPrizeRefunded = true;
-        mockUSD.safeTransfer(maker, originalPrize);
+        rewardToken.safeTransfer(maker, originalPrize);
         emit ExpiredPrizeRefunded(maker, originalPrize);
     }
 
@@ -468,10 +559,8 @@ contract BossHook is ReentrancyGuard {
         uint256 sold = stageSold[stage];
         if (sold == 0 || sold > capacity) revert InvalidStage();
         uint256 dust = capacity - sold;
-        // HP1 starts at its upper tick, so the first attack can cross that tick in a zero-output step.
-        // That crossing adds no rounding loss; each successful attack has one positive-output step.
-        // Output steps round down by <1 HP unit and funded capacity rounds up by <1.
-        if (dust > stageAttackCount[stage] + 1) revert InvalidStage();
+        // A 32-spacing range can cross one bitmap-word boundary: at most two output steps per attack.
+        if (dust > 2 * stageAttackCount[stage] + 1) revert InvalidStage();
         roundingDust[stage] = dust;
         (stageEndSqrtPriceX96[stage],,,) = manager.getSlot0(_bossPoolId);
         emit StageCleared(stage, sold, capacity, dust);
@@ -484,6 +573,25 @@ contract BossHook is ReentrancyGuard {
         } else {
             status = RoundStatus.StageCleared;
         }
+    }
+
+    function _clearVolumeStage(uint8 stage) private {
+        if (stageVolume[stage] < stageVolumeTarget[stage]) revert InvalidStage();
+        emit StageCleared(stage, stageSold[stage], stageCapacity[stage], 0);
+        if (stage == 2) {
+            status = RoundStatus.Defeated;
+            finalEligibleHP = eligibleHP;
+            if (finalEligibleHP == 0) revert InvalidStage();
+            emit BossDefeated(finalEligibleHP, originalPrize);
+        } else {
+            status = RoundStatus.StageCleared;
+        }
+    }
+
+    function _inputAmount(BalanceDelta delta, bool zeroForOne) private pure returns (uint256 amount) {
+        int128 raw = zeroForOne ? delta.amount0() : delta.amount1();
+        if (raw >= 0) revert InvalidSwap();
+        amount = uint256(uint128(-raw));
     }
 
     function _assertRegisteredPositions(uint8 throughStage) private view {
@@ -511,49 +619,17 @@ contract BossHook is ReentrancyGuard {
     }
 
     function _refillInput(uint160 price, uint128 liquidity) private view returns (uint256) {
-        if (bossIsCurrency0) {
-            return _grossInputForNet(SqrtPriceMath.getAmount0Delta(sqrtLowerX96, price, liquidity, true));
-        }
-
-        uint160 splitPrice = TickMath.getSqrtPriceAtTick(HP1_REFILL_SPLIT_TICK);
-        if (price >= splitPrice) {
-            return _grossInputForNet(SqrtPriceMath.getAmount1Delta(price, sqrtUpperX96, liquidity, true));
-        }
-
-        // The mirrored range crosses a bitmap word at tick -60, so v4 rounds two input and fee steps.
-        uint256 firstStepNet = SqrtPriceMath.getAmount1Delta(price, splitPrice, liquidity, true);
-        uint256 secondStepNet = SqrtPriceMath.getAmount1Delta(splitPrice, sqrtUpperX96, liquidity, true);
-        return _grossInputForNet(firstStepNet) + _grossInputForNet(secondStepNet);
+        return bossIsCurrency0
+            ? BossPricing.stageRoyInputRequirement(sqrtLowerX96, price, liquidity, true)
+            : BossPricing.stageRoyInputRequirement(price, sqrtUpperX96, liquidity, false);
     }
 
     function _stageRoyInputRequirement(uint8 stage) private view returns (uint256) {
-        uint256 netRoy = bossIsCurrency0
-            ? SqrtPriceMath.getAmount1Delta(sqrtLowerX96, sqrtUpperX96, stageLiquidity[stage], true)
-            : SqrtPriceMath.getAmount0Delta(sqrtLowerX96, sqrtUpperX96, stageLiquidity[stage], true);
-        return _grossInputForNet(netRoy);
-    }
-
-    function _grossInputForNet(uint256 netInput) private pure returns (uint256) {
-        return FullMath.mulDivRoundingUp(netInput, FEE_DENOMINATOR, FEE_DENOMINATOR - SWAP_FEE);
+        return BossPricing.stageRoyInputRequirement(bossIsCurrency0, LOWER_TICK, UPPER_TICK, stageLiquidity[stage]);
     }
 
     function _capacityForLiquidity(uint128 liquidity) private view returns (uint256) {
-        return bossIsCurrency0
-            ? SqrtPriceMath.getAmount0Delta(sqrtLowerX96, sqrtUpperX96, liquidity, true)
-            : SqrtPriceMath.getAmount1Delta(sqrtLowerX96, sqrtUpperX96, liquidity, true);
-    }
-
-    function _liquidityForHP(uint256 amount) private view returns (uint128) {
-        uint256 q96 = 1 << 96;
-        uint256 value;
-        if (bossIsCurrency0) {
-            uint256 intermediate = FullMath.mulDiv(sqrtLowerX96, sqrtUpperX96, q96);
-            value = FullMath.mulDiv(amount, intermediate, sqrtUpperX96 - sqrtLowerX96);
-        } else {
-            value = FullMath.mulDiv(amount, q96, sqrtUpperX96 - sqrtLowerX96);
-        }
-        if (value == 0 || value > type(uint128).max) revert InvalidStage();
-        return uint128(value);
+        return BossPricing.hpAmountForLiquidity(sqrtLowerX96, sqrtUpperX96, liquidity, bossIsCurrency0);
     }
 
 }

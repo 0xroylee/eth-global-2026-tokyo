@@ -3,25 +3,22 @@
 /* eslint-disable @next/next/no-img-element -- art masters are static PNGs; no optimisation needed yet */
 
 import { useEffect, useRef, useState } from "react";
-import { STAGE_HUES, type BossVisualState } from "@/lib/mockBattle";
-
-const BOSS_IMAGES = {
-  1: "/images/boss-cat-form-b.png",
-  2: "/images/boss-cat-form-a.png",
-  3: "/images/boss-cat-form-c.png",
-} as const;
+import type { BossVisualState } from "@/lib/battle";
 
 /**
- * Three-form boss art. Only `transform` and `opacity` animate (no filters,
- * no keyframes): hit = two 120ms ±4px nudges, transition = flattened and
- * faded, next form enters scaled 0.8 → 1, defeated = tilted and dimmed.
+ * Boss sprite, painted directly on the battlefield. The PNGs are transparent;
+ * this box has no fill, so the lake shows around the character.
  */
-export function BossStage({ stage, state }: { stage: 1 | 2 | 3; state: BossVisualState }) {
+export function BossStage({ stage, stageImages, state }: {
+  stage: 1 | 2 | 3;
+  stageImages: readonly [string, string, string];
+  state: BossVisualState;
+}) {
   const [beat, setBeat] = useState<"left" | "right" | null>(null);
   const [entering, setEntering] = useState(false);
   const prevState = useRef(state);
+  const idle = state === "idle" && !entering;
 
-  // Two-beat hit nudge; the hook flips bossState back to idle after 240ms.
   useEffect(() => {
     if (state !== "hit") {
       setBeat(null);
@@ -32,7 +29,6 @@ export function BossStage({ stage, state }: { stage: 1 | 2 | 3; state: BossVisua
     return () => window.clearTimeout(timer);
   }, [state]);
 
-  // After the cleared transition, the next form enters scaled from 0.8.
   useEffect(() => {
     if (prevState.current === "transition" && state !== "transition") {
       setEntering(true);
@@ -49,37 +45,28 @@ export function BossStage({ stage, state }: { stage: 1 | 2 | 3; state: BossVisua
       : state === "transition"
         ? "scaleY(0.4)"
         : entering
-          ? "scale(0.8)"
+          ? "scale(0.92)"
           : beat === "left"
             ? "translateX(-4px)"
             : beat === "right"
               ? "translateX(4px)"
               : "none";
   const opacity = state === "transition" ? 0.3 : state === "defeated" ? 0.7 : 1;
-  const hue = STAGE_HUES[stage - 1];
 
   return (
-    <div className="relative h-full w-full">
-      <div
-        aria-hidden
-        className="absolute inset-8 rounded-full"
-        style={{ boxShadow: `0 0 80px ${hue}33` }}
-      />
+    <div
+      className={`relative h-full w-full bg-transparent ${idle ? "boss-float" : ""}`}
+    >
       <img
-        src={BOSS_IMAGES[stage]}
+        src={stageImages[stage - 1]}
         alt=""
         aria-hidden
-        className="absolute inset-0 h-full w-full object-contain [image-rendering:pixelated] transition-[transform,opacity] duration-[120ms] ease-[var(--ease-out-strong)]"
-        style={{ transform, opacity }}
-      />
-      {/* Stone slab plinth echoing arena-lake-background.png's platform. */}
-      <div
-        aria-hidden
-        className="absolute bottom-[7%] left-1/2 h-[6%] w-[62%] -translate-x-1/2 bg-[#66728e] [clip-path:polygon(12%_0,88%_0,100%_100%,0_100%)]"
-      />
-      <div
-        aria-hidden
-        className="absolute bottom-[2%] left-1/2 h-[3%] w-[72%] -translate-x-1/2 rounded-[50%] bg-[#080b14]/60"
+        className="boss-sprite absolute inset-0 h-full w-full bg-transparent object-contain object-bottom opacity-100 [image-rendering:pixelated] transition-[transform,opacity] duration-[120ms] ease-[var(--ease-out-strong)]"
+        style={{
+          transform,
+          opacity,
+          filter: "drop-shadow(3px 4px 0 #041833)",
+        }}
       />
     </div>
   );

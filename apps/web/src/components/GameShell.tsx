@@ -1,12 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { type Address, type DecodedContractEvent, type DeploymentManifest } from "@boss-pool/chain";
+import { type Address, type DeploymentManifest } from "@boss-pool/chain";
+import { confirmedBattleAttack } from "@/lib/battle";
 import { BOSSES, findBoss, type BossId } from "@/game/bosses";
 import { GameBridge } from "@/game/bridge";
 import { SAGE_DEFEATED_STORAGE_KEY, SAGE_TALKED_STORAGE_KEY, sageLines, type SageState } from "@/lib/sageLines";
 import { useHubGuide } from "@/lib/useHubGuide";
-import { useBossPool, type NetworkKey } from "@/lib/useBossPool";
+import type { useBossPool, NetworkKey } from "@/lib/useBossPool";
+import { useArena } from "./BossPoolProvider";
 import { BossEntryPanel } from "./BossEntryPanel";
 import { BossRosterCard } from "./BossRosterCard";
 import { FullscreenControl } from "./FullscreenControl";
@@ -21,7 +24,7 @@ import { SageDialog } from "./SageDialog";
 export function GameShell() {
   const bridge = useMemo(() => new GameBridge(), []);
   const shellRef = useRef<HTMLElement>(null);
-  const arena = useBossPool();
+  const arena = useArena();
   const { deployment, writeState } = arena;
   const [nearBoss, setNearBoss] = useState<BossId | null>(null);
   const [openBoss, setOpenBoss] = useState<BossId | null>(null);
@@ -35,7 +38,8 @@ export function GameShell() {
   const [canvasPhase, setCanvasPhase] = useState<CanvasPhase>("loading");
   const guide = useHubGuide(bridge, nearBoss);
   const welcomeOpen = guide.hydrated && guide.state.step === "welcome" && canvasPhase !== "error";
-  const overlayOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen || sageOpen;
+  const gameDialogOpen = openBoss !== null || showChain || welcomeOpen || routeOpen || helpOpen;
+  const overlayOpen = gameDialogOpen || sageOpen || Boolean(arena.wallet.busy);
   const sageScript = useMemo(() => sageLines(sageState), [sageState]);
 
   // Read progress when the conversation starts, so a repeat visit sees the latest lines.
@@ -53,6 +57,10 @@ export function GameShell() {
   // that rides on `openBoss`.
   const enterGate = useCallback((bossId: BossId) => setOpenBoss(bossId), []);
   const inspectRoute = useCallback(() => setRouteOpen(true), []);
+
+  useEffect(() => {
+    arena.selectDefaultEncounter(arena.network);
+  }, [arena.network, arena.selectDefaultEncounter]); // Returning from a direct battle restores the hub's registered demo Hook.
 
   useEffect(() => {
     const offNear = bridge.on("gate:near", ({ bossId }) => setNearBoss(bossId));
@@ -80,13 +88,43 @@ export function GameShell() {
   }, [bridge, guide.syncModal, overlayOpen]);
 
   useEffect(() => {
+    const onMove = (event: KeyboardEvent) => {
+      const wasd = /^[wasd]$/i.test(event.key);
+      const arrow = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key);
+      if ((!wasd && !arrow) || event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (arena.wallet.busy || writeState.status === "prompting" || canvasPhase !== "ready") return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"]')) return;
+      if (!gameDialogOpen && target?.closest('[role="dialog"], dialog')) return;
+      if (gameDialogOpen) {
+        if (!wasd) return;
+        setOpenBoss(null);
+        setShowChain(false);
+        setRouteOpen(false);
+        setHelpOpen(false);
+        if (welcomeOpen) guide.start();
+        // Resume before this same keydown reaches Phaser's window listener.
+        bridge.send("ui:modal", { open: false });
+      }
+      // Phaser ignores cancelled events, so let the original keydown reach it.
+      focusHubCanvas();
+    };
+    window.addEventListener("keydown", onMove, true);
+    return () => window.removeEventListener("keydown", onMove, true);
+  }, [arena.wallet.busy, bridge, canvasPhase, gameDialogOpen, guide.start, welcomeOpen, writeState.status]);
+
+  useEffect(() => {
     if (openBoss) guide.panelOpened(openBoss);
   }, [guide.panelOpened, openBoss]);
 
   useEffect(() => {
-    if (deployment.kind === "live") {
-      // Real chain state is the only thing allowed to move the sage's script on.
-      if (deployment.round.status === CAT_DEFEATED_STATUS) markCatDefeated();
+    if (openBoss === "cat") arena.selectDefaultEncounter(arena.network);
+  }, [arena.network, arena.selectDefaultEncounter, openBoss]);
+
+  useEffect(() => {
+    // Real chain state is the only thing allowed to move the sage's script on.
+    if (deployment.kind === "live" && deployment.round.status === CAT_DEFEATED_STATUS) markCatDefeated();
+    if (isHubEncounter(deployment)) {
       bridge.send("round:state", {
         status: deployment.round.status,
         currentStage: deployment.round.currentStage,
@@ -104,19 +142,19 @@ export function GameShell() {
   }, [bridge, deployment]);
 
   useEffect(() => {
-    const live = deployment.kind === "live" ? deployment : null;
+    const live = isHubEncounter(deployment) ? deployment : null;
     const origin = attackOrigin(writeState);
     const originMatchesSelected = Boolean(origin && live && matchesSelectedDeployment(origin, arena.network, arena.selectedChainId, live.manifest));
     const writingAttack = originMatchesSelected && (
       writeState.status === "prompting" || writeState.status === "pending" || writeState.status === "unresolved"
     );
-    const confirmedAttack = originMatchesSelected && writeState.status === "confirmed";
+    const confirmedAttack = confirmedBattleAttack(writeState, arena.network, live?.manifest, live?.hookAddress, arena.wallet.account);
     bridge.send("attack:pending", {
       active: Boolean(writingAttack),
       stage: live?.round.currentStage,
     });
-    if (confirmedAttack && live) sendConfirmedAttack(bridge, writeState.result, live.manifest.addresses.hook);
-  }, [arena.network, arena.selectedChainId, bridge, deployment, writeState]);
+    if (confirmedAttack) bridge.send("attack:confirmed", confirmedAttack);
+  }, [arena.network, arena.selectedChainId, arena.wallet.account, bridge, deployment, writeState]);
 
   useEffect(() => {
     if (!showChain) return;
@@ -129,11 +167,11 @@ export function GameShell() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [showChain]);
 
-  const chainWasOpen = useRef(false);
+  const overlayWasOpen = useRef(false);
   useEffect(() => {
-    if (chainWasOpen.current && !showChain) focusHubCanvas();
-    chainWasOpen.current = showChain;
-  }, [showChain]);
+    if (overlayWasOpen.current && !overlayOpen) focusHubCanvas();
+    overlayWasOpen.current = overlayOpen;
+  }, [overlayOpen]);
 
   const closeBoss = useCallback(() => setOpenBoss(null), []);
   const closeRoute = useCallback(() => setRouteOpen(false), []);
@@ -158,7 +196,7 @@ export function GameShell() {
   const showBossPrompt = nearBoss !== null && !overlayOpen && !guideInspect;
   const showSagePrompt = nearSage && !overlayOpen && !showBossPrompt && !guideInspect;
   const showRoutePrompt = nearRoute && !showSagePrompt && !showBossPrompt && !overlayOpen && !guideInspect;
-  const live = deployment.kind === "live";
+  const live = isHubEncounter(deployment);
   const chainLabel =
     deployment.kind === "loading" ? "CHECKING" : live ? "LIVE" : deployment.kind === "error" ? "RPC ERROR" : "NOT DEPLOYED";
 
@@ -166,10 +204,7 @@ export function GameShell() {
     <main ref={shellRef} className="relative h-dvh w-full overflow-hidden bg-ink text-fog">
       <GameCanvas bridge={bridge} onPhase={setCanvasPhase} />
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col gap-3 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-4">
-        <header
-          className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-start"
-          onKeyDown={(event) => event.stopPropagation()}
-        >
+        <header className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-start">
           <div className="pointer-events-none">
             <p className="font-mono text-[10px] tracking-[0.22em] text-dim">BOSS POOL</p>
             <div className="mt-1 flex flex-wrap items-baseline gap-2">
@@ -191,13 +226,20 @@ export function GameShell() {
               disabled={overlayOpen || canvasPhase === "error"}
               onClick={(event) => {
                 blurOnMouseClick(event);
+                arena.selectDefaultEncounter(arena.network);
                 enterGate("cat");
               }}
-              aria-label="Open Boss actions for Roy the cat"
+              aria-label="Open Pool Unis boss actions"
               className="rounded-lg border border-[#f5b04a]/35 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-[#ffd28a] disabled:opacity-40"
             >
               BOSS ACTIONS
             </button>
+            <Link
+              href="/boostpad?from=game"
+              className="rounded-lg border border-[#c48a45]/50 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-[#f3e2c4] transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97]"
+            >
+              BOOSTPAD
+            </Link>
             <label className="rounded-lg border border-white/10 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-dim">
               NETWORK
               <select
@@ -205,7 +247,7 @@ export function GameShell() {
                 value={arena.network}
                 disabled={overlayOpen}
                 onChange={(event) => {
-                  arena.selectNetwork(event.target.value as NetworkKey);
+                  arena.selectDefaultEncounter(event.target.value as NetworkKey);
                   focusHubCanvas();
                 }}
                 onBlur={(event) => {
@@ -221,7 +263,6 @@ export function GameShell() {
               >
                 <option value="local">LOCAL · 31337</option>
                 <option value="base-sepolia">BASE SEPOLIA · 84532</option>
-                <option value="robinhood-testnet">46630 · HISTORICAL</option>
               </select>
             </label>
             {arena.wallet.account ? (
@@ -235,10 +276,10 @@ export function GameShell() {
                   blurOnMouseClick(event);
                   connectWallet();
                 }}
-                disabled={overlayOpen || arena.wallet.status === "checking"}
+                disabled={overlayOpen || arena.wallet.busy || arena.wallet.status === "checking" || arena.wallet.status === "missing"}
                 className="rounded-lg border border-white/10 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-fog disabled:opacity-40"
               >
-                {arena.wallet.status === "missing" ? "NO WALLET" : "CONNECT WALLET"}
+                {arena.wallet.status === "choosing" ? "CHOOSE WALLET…" : arena.wallet.busy ? "CONNECTING…" : arena.wallet.status === "missing" ? "NO WALLET" : "CONNECT WALLET"}
               </button>
             )}
             {arena.networkMismatch && (
@@ -248,7 +289,7 @@ export function GameShell() {
                   blurOnMouseClick(event);
                   switchWallet();
                 }}
-                disabled={overlayOpen}
+                disabled={overlayOpen || arena.wallet.busy}
                 className="rounded-lg border border-danger/40 bg-ink/70 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-danger disabled:opacity-40"
               >
                 SWITCH WALLET TO {arena.selectedChainId}
@@ -517,16 +558,27 @@ function markCatDefeated() {
   }
 }
 
-type AttackOrigin = { network: NetworkKey; manifest: DeploymentManifest; target: string };
+/** A hub encounter is the standalone demo Hook: only it owns the sage's round narration. */
+function isHubEncounter(state: ReturnType<typeof useBossPool>["deployment"]): state is Extract<ReturnType<typeof useBossPool>["deployment"], { kind: "live" }> {
+  return state.kind === "live" && state.hookAddress.toLowerCase() === state.context.baseManifest.addresses.hook.toLowerCase() &&
+    state.context.deployment.encounterMode === "standalone";
+}
+
+type AttackOrigin = { network: NetworkKey; hookAddress: Address; manifest: DeploymentManifest; target: string };
 
 function attackOrigin(state: ReturnType<typeof useBossPool>["writeState"]): AttackOrigin | null {
   if (state.status === "prompting") {
     if (state.action.toLowerCase() !== "attack") return null;
-    return { network: state.network, manifest: state.manifest, target: state.manifest.addresses.router };
+    return { network: state.network, hookAddress: state.hookAddress, manifest: state.manifest, target: state.manifest.addresses.router };
   }
   if (state.status === "pending" || state.status === "unresolved" || state.status === "confirmed") {
     if (state.record.request.kind !== "attack") return null;
-    return { network: state.record.network, manifest: state.record.manifest, target: state.record.request.target };
+    return {
+      network: state.record.network,
+      hookAddress: state.record.hookAddress ?? state.record.manifest.addresses.hook,
+      manifest: state.record.manifest,
+      target: state.record.request.target,
+    };
   }
   return null;
 }
@@ -538,25 +590,9 @@ function matchesSelectedDeployment(
   selected: DeploymentManifest,
 ): boolean {
   return origin.network === network &&
+    origin.hookAddress.toLowerCase() === selected.addresses.hook.toLowerCase() &&
     origin.manifest.chainId === chainId &&
     origin.manifest.deploymentTxHash.toLowerCase() === selected.deploymentTxHash.toLowerCase() &&
     origin.manifest.addresses.router.toLowerCase() === selected.addresses.router.toLowerCase() &&
-    origin.manifest.addresses.hook.toLowerCase() === selected.addresses.hook.toLowerCase() &&
     origin.target.toLowerCase() === selected.addresses.router.toLowerCase();
-}
-
-function sendConfirmedAttack(bridge: GameBridge, value: unknown, expectedHook: string) {
-  if (!value || typeof value !== "object" || !("events" in value)) return;
-  const events = (value as { events?: readonly DecodedContractEvent[] }).events;
-  const event = events?.find((item) => item.eventName === "AttackRecorded" && item.address.toLowerCase() === expectedHook.toLowerCase());
-  if (!event || !("stage" in event.args) || !("bossHPOut" in event.args)) return;
-  const stage = event.args.stage;
-  const bossHPOut = event.args.bossHPOut;
-  if (typeof stage !== "number" || typeof bossHPOut !== "bigint") return;
-  bridge.send("attack:confirmed", {
-    transactionHash: event.transactionHash,
-    logIndex: event.logIndex,
-    stage,
-    bossHPOut,
-  });
 }

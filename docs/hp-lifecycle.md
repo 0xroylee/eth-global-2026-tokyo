@@ -1,6 +1,6 @@
 # Boss HP completion and stage activation
 
-Status: current purchase-accounting design, 26 September 2026. Attacks do not burn tokens. Focus on one ROY / BossHP battle pool with three gated stages. Physical/magic routing remains deferred.
+Status: current purchase-accounting design, 26 September 2026. Attacks do not burn tokens. Focus on one Attack Token / BossHP battle pool with three gated stages. Physical/magic routing remains deferred.
 
 The accepted same-pool refill/reset model is documented in [Refill math](refill-math.md). A controller-only reverse swap during transition restores the lower price, then incremental liquidity funds the next stage. The BP01 shared fixture now verifies no-burn delivery, stages, custody and claims, with a targeted mirrored HP1 price/refill case. Historical burn results below remain separate from current evidence.
 
@@ -10,7 +10,7 @@ Use existing v4 concentrated-liquidity math and finite single-sided BossHP posit
 
 The nominal stage sizes remain 300, 600, and 900 HP. Each stage records its funded sellable capacity, registered positions, cumulative liquidity, tick bounds, start/end sqrt price, `stageSold`, and rounding residue. Validate a positive sellable amount before activating the stage.
 
-Reuse the same range after each reset. Add a fresh incremental position to reach the next total capacity, accounting for HP already restored to earlier positions. Use Hook's immutable `[0,1920]` bounds for HP0 and `[-1920,0]` for HP1 so normalized ROY/HP prices agree. Calculate actual amounts with the pinned Uniswap libraries, including HP1 refill rounding across the -60 bitmap boundary.
+Reuse the same range after each reset. Add a fresh incremental position to reach the next total capacity, accounting for HP already restored to earlier positions. Use Hook's immutable `[0,1920]` bounds for HP0 and `[-1920,0]` for HP1 so normalized Attack Token/HP prices agree. Calculate actual amounts with the pinned Uniswap libraries, including HP1 refill rounding across the -60 bitmap boundary.
 
 A finite range can sell its HP inventory at a finite terminal price. The game's completion rule must not require PoolManager's shared token balance to become zero. [Uniswap range orders](https://developers.uniswap.org/docs/get-started/concepts/liquidity-providers/range-orders)
 
@@ -80,23 +80,23 @@ Require all of the following, not just zero pool active liquidity:
 4. No undeployed, tradeable allocation remains for the current stage. Future-stage reserves are separate.
 5. `stageSold` is positive, and funded/sold/residue accounting reconciles within an explicitly derived rounding bound. Freeze that bound from the pinned math and allowed operation shape; do not choose an arbitrary percentage of HP as a kill threshold.
 
-LP liquidity units can remain nonzero after a position becomes entirely ROY. Pool active liquidity can be zero for unrelated reasons. Neither quantity alone is the boss's health.
+LP liquidity units can remain nonzero after a position becomes entirely Attack Token. Pool active liquidity can be zero for unrelated reasons. Neither quantity alone is the boss's health.
 
 Exclude external LP additions/removals and unauthorized swaps from the battle pool. Never infer current-stage inventory from BossHP.balanceOf(PoolManager): the singleton also holds other positions, fees, donations, and pools.
 
 ## Router/controller responsibilities
 
-After the current PoolManager.swap returns, settle the player's debt and deliver its BossHP. If StageCleared, enter guarded Transition, reverse-swap prefunded BossHP to the lower price, and take recovered ROY into reserve custody. Add the incremental registered position, then set the next stage Active and emit StageActivated. No second player purchase occurs in this attack. Refill swaps earn no contribution.
+After the current PoolManager.swap returns, settle the player's debt and deliver its BossHP. If StageCleared, enter guarded Transition, reverse-swap prefunded BossHP to the lower price, and take recovered Attack Token into reserve custody. Add the incremental registered position, then set the next stage Active and emit StageActivated. No second player purchase occurs in this attack. Refill swaps earn no contribution.
 
 Use the already open unlock. A supported PositionManager route is modifyLiquiditiesWithoutUnlock; do not call a second unlock-opening method. The actual implementation may use existing lower-level settlement helpers instead when smaller. [Upstream interface](https://github.com/Uniswap/v4-periphery/blob/9969eec44cfdf07e24b41de47f40276a58401976/src/interfaces/IPositionManager.sol)
 
-Unused ROY remains with or is returned to the player. Stage LP funding comes from the reserve, never from an extra charge beyond the player's authorization. All actors' currency deltas must settle before unlock finishes.
+Unused Attack Token remains with or is returned to the player. Stage LP funding comes from the reserve, never from an extra charge beyond the player's authorization. All actors' currency deltas must settle before unlock finishes.
 
 If refilling or adding the next position fails, the clearing attack, output delivery, counters, and stage change all revert. Freeze and verify all stage funding before the round starts so this default does not create an unfunded transition. Final defeat performs no refill or LP addition and enables claims only after the transaction succeeds.
 
 ## Minimal proof
 
-Adapt the existing real-v4 refill scenario with funded ROY wallets. Exercise a partial hit, a large final hit that cannot consume the next stage, all three stages, player output delivery, unchanged BossHP supply, per-stage residue, contribution totals, and unused-input handling. Within the shared scenario, check that transfers earn no additional contribution and that player sell-backs are rejected. Reuse its failed-next-stage-funding rollback check when adapting settlement.
+Adapt the existing real-v4 refill scenario with funded Attack Token wallets. Exercise a partial hit, a large final hit that cannot consume the next stage, all three stages, player output delivery, unchanged BossHP supply, per-stage residue, contribution totals, and unused-input handling. Within the shared scenario, check that transfers earn no additional contribution and that player sell-backs are rejected. Reuse its failed-next-stage-funding rollback check when adapting settlement.
 
 ## Historical burn-based proof result
 

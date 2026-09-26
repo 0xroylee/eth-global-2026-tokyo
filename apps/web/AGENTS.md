@@ -21,6 +21,8 @@ Next.js App Router, React, TypeScript, Tailwind CSS 4 (PostCSS), direct viem. Th
 
 Run `bun run typecheck` and `bun run web:build` from the repo root. For browser checks, cover both the missing/unreachable deployment state and the live local state where a local chain is available. See [testing rules](../../docs/agents/testing.md).
 
+Browser layout verification is desktop-only by default. Run mobile viewport or device-emulation checks only when the user explicitly requests mobile testing; older design-spec checklists do not override this rule.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know

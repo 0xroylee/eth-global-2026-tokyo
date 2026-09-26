@@ -25,6 +25,8 @@ export {
   parseBaseSepoliaDeployment,
   parseLocalDeployment,
   verifyDeployment,
+  resolveBossDeployment,
+  DeploymentResolutionError,
 } from "./deployment";
 export type {
   BaseSepoliaDeploymentManifest,
@@ -35,9 +37,14 @@ export type {
   SupportedChainId,
   TestnetDeploymentManifest,
   VerifiedDeployment,
+  DeploymentProvenance,
+  EncounterMode,
+  FactoryBossOrigin,
+  TokenMetadata,
 } from "./deployment";
 export { readPlayer, readRound, readState } from "./reads";
 export type { BossPoolSnapshot, PlayerSnapshot, RoundSnapshot } from "./reads";
+export type { ActivityCursor, ActivityEntry, ActivityPage, ReadActivityOptions } from "./activity";
 export {
   BossPoolSdkError,
   RequoteRequiredError,
@@ -71,6 +78,7 @@ export type {
   VictoryClaimResult,
 } from "./sdk";
 export {
+  bossFactoryAbi,
   bossCollectiblesAbi,
   bossHpAbi,
   bossPoolHookAbi,
@@ -78,8 +86,29 @@ export {
   mockUsdAbi,
   royTokenAbi,
 } from "./generated/abi";
-export { formatUnits, isAddress } from "viem";
-export type { Address, EIP1193Provider } from "viem";
+export { bossHookCreationCode, bossRouterCreationCode } from "./generated/bytecode";
+export {
+  BossFactorySdkError,
+  FactoryOperationPendingError,
+  FactoryOperationTerminalError,
+  createBossFactorySdk,
+  parseFactoryPendingOperation,
+  readErc20TokenInfo,
+} from "./factory-sdk";
+export type {
+  BossFactorySdk,
+  BossFactorySdkOptions,
+  Erc20TokenInfo,
+  FactoryBuildStatus,
+  FactoryOperationResult,
+  FactoryPendingOperation,
+  FactoryLaunchConfig,
+  FactoryLaunchProgress,
+  FactoryLaunchQuote,
+  FactoryLaunchResult,
+} from "./factory-sdk";
+export { formatUnits, isAddress, parseUnits } from "viem";
+export type { Address, EIP1193Provider, Hex } from "viem";
 export {
   BASE_SEPOLIA_CHAIN,
   BASE_SEPOLIA_CHAIN_HEX,

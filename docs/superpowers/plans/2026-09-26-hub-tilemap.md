@@ -358,7 +358,7 @@ export type BossDefinition = {
 export const BOSSES: readonly BossDefinition[] = [
   {
     id: "cat",
-    name: "Roy",
+    name: "Attack Token",
     tagline: "The evolving cat. Three forms, one pool.",
     portrait: "/images/boss-cat-form-a.png",
     locked: false,
@@ -543,7 +543,7 @@ Confirm all of these:
 
 - The ground is tiles, not a flat noise texture. Grass repeats with the tileset's own variation. A path connects the bottom spawn to three gates.
 - The player is crisp, not blurred. Walking into a tree or the pond stops the player. Walking along the path does not.
-- Standing in front of the cat gate shows `E · ENTER ROY`. One tap of E opens the Roy panel. Esc closes it. Movement does not work while it is open.
+- Standing in front of the cat gate shows `E · ENTER Attack Token`. One tap of E opens the Attack Token panel. Esc closes it. Movement does not work while it is open.
 - The locked gate shows a lock and `E · INSPECT LOCKED GATE`. The whale gate opens the Macro Whale panel, whose HP row says `NO CONTRACT YET`.
 - The badge still says `HUB · FIXTURE MAP`. The chain pill still shows `RPC ERROR` when Anvil is not running. That is the correct state.
 - At 390 px wide the canvas still fits the column and the HUD does not cover the gates.

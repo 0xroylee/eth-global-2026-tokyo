@@ -1,125 +1,73 @@
-"use client";
+import type { ReactNode } from "react";
+import { displayAmount, displayEstimate, roundStatusLabel } from "@/lib/format";
+import { roundSecondsLeft } from "@/lib/battle";
+import type { DeploymentState } from "@/lib/useBossPool";
+import { BattleFrame } from "./BattleFrame";
 
-import { useEffect, useState } from "react";
-import { displayAmount } from "@/lib/format";
-import { MOCK_FINAL_ELIGIBLE_HP, STAGE_HUES, type MockBattleState } from "@/lib/mockBattle";
-import { MockBadge } from "./MockBadge";
-
-const HP_FILL = "#57c858";
-const SHARE_FILL = "#a9d6ff";
-const NAVY = "#2b4a8b";
-const URGENT_MS = 10 * 60 * 1000;
-
-/** `mm:ss`; minutes are allowed to exceed 59 (deadline = mount + 2h). */
-function formatMmSs(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+function Label({ icon, children }: { icon: string; children: ReactNode }) {
+  return <span className="flex shrink-0 items-center gap-2 bg-[#092B61] px-2 py-2 text-xs leading-none text-white sm:text-sm lg:px-3 lg:text-[clamp(16px,2.2vh,20px)]"><span aria-hidden>{icon}</span>{children}</span>;
 }
 
-/**
- * STATUS zone: boss HP bar, your share bar and the chip row (stage dots,
- * round deadline, mock badge). Pure display; data arrives via props.
- */
-export function StatusPanel({
-  state,
-  stage,
-  deadlineAt,
-}: {
-  state: MockBattleState;
-  stage: 1 | 2 | 3;
-  deadlineAt: number;
-}) {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const cap = state.stageCapacity[state.currentStage];
-  const sold = state.stageSold[state.currentStage];
-  const remaining = cap > sold ? cap - sold : 0n;
-  const hpFraction = cap > 0n ? Number((remaining * 1000n) / cap) / 1000 : 0;
-  const hpPct = cap > 0n ? Number((remaining * 100n) / cap) : 0;
-
-  const totalDealt = state.stageSold[0] + state.stageSold[1] + state.stageSold[2];
-  const sharePercent =
-    totalDealt > 0n
-      ? Math.min(100, Number((totalDealt * 10000n) / MOCK_FINAL_ELIGIBLE_HP) / 100)
-      : 0;
-  const shareFraction = sharePercent / 100;
-
-  const remainingMs = deadlineAt - now;
-  const urgent = remainingMs < URGENT_MS;
+export function StatusPanel({ deployment }: { deployment: DeploymentState }) {
+  const live = deployment.kind === "live" ? deployment : null;
+  const round = live?.round;
+  const player = live?.player;
+  const factory = round?.encounterMode === "factory";
+  const cap = round ? factory ? round.stageVolumeTarget[round.currentStage] : round.stageCapacity[round.currentStage] : 0n;
+  const progress = round ? factory ? round.stageVolume[round.currentStage] : cap - round.remainingSellableHP : 0n;
+  const remaining = round?.remainingSellableHP ?? 0n;
+  const hpFraction = cap > 0n
+    ? Math.min(1, Number((factory ? progress : remaining) * 10_000n / cap) / 10_000)
+    : 0;
+  const defeated = round?.status === 3;
+  const eligibleBalance = factory ? player?.rewardCredit ?? 0n : player?.bossHPBalance ?? 0n;
+  const share = defeated && player && round.finalEligibleHP > 0n ? Number(eligibleBalance * 10_000n / round.finalEligibleHP) / 100 : null;
+  const shownPlayerBalance = defeated && factory ? player?.rewardCredit : player?.bossHPBalance;
+  const shownPlayerDecimals = defeated && factory ? round?.rewardToken.decimals ?? 18 : round?.hpToken.decimals ?? 18;
+  const shownPlayerSymbol = defeated && factory ? round?.rewardToken.symbol ?? "MEME" : round?.hpToken.symbol ?? "HP";
 
   return (
-    <div className="window-chrome flex flex-col gap-2 px-3 py-2.5 font-mono">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-        <span className="text-[10px] tracking-[0.14em]" style={{ color: NAVY }}>
-          BOSS HP
-        </span>
-        <span className="text-[10px] tracking-[0.08em] tabular-nums" style={{ color: NAVY }}>
-          {displayAmount(remaining, 18)}/{displayAmount(cap, 18)} ({hpPct}%)
-        </span>
-      </div>
-      <div
-        className="bar-track h-3 overflow-hidden"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={1}
-        aria-valuenow={hpFraction}
-        aria-valuetext={`${displayAmount(remaining, 18)} of ${displayAmount(cap, 18)} HP remaining`}
-      >
-        <div
-          className="h-full w-full origin-left transition-transform duration-300 ease-[var(--ease-out-strong)]"
-          style={{ background: HP_FILL, transform: `scaleX(${hpFraction})` }}
-        />
-      </div>
+    <div className="space-y-2 font-pixel">
+      <BattleFrame><div className="flex flex-wrap items-center gap-2 p-2 lg:flex-nowrap lg:gap-3"><Label icon="◆">BOSS POOL</Label><span className="min-w-0 flex-1 text-[10px] leading-relaxed sm:text-xs lg:text-[clamp(16px,2.45vh,22px)] lg:leading-none">UNISWAP V4 HACKATHON DEMO</span></div></BattleFrame>
+      <BattleFrame>
+        <div className="flex flex-wrap items-center gap-2 p-2 lg:flex-nowrap lg:gap-3">
+          <Label icon="⚔">{factory ? "STAGE VOLUME" : "BOSS HP"}</Label>
+          <div className="min-w-[120px] flex-1 lg:contents">
+            {round && <div className="h-4 overflow-hidden bg-[#092B61] lg:h-8 lg:min-w-0 lg:flex-1" role="progressbar" aria-label={factory ? "Stage volume" : "Boss HP"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={hpFraction * 100} aria-valuetext={factory ? `${displayAmount(progress, 6)} of ${displayAmount(cap, 6)} MockUSD volume` : `${displayAmount(remaining, round.hpToken.decimals)} of ${displayAmount(cap, round.hpToken.decimals)} ${round.hpToken.symbol} remaining`}>
+              <div className="h-full w-full origin-left bg-[#59C84A] transition-transform duration-300" style={{ transform: `scaleX(${hpFraction})` }} />
+            </div>}
+            <p className="mt-1 break-words text-xs tabular-nums sm:text-sm lg:m-0 lg:shrink-0 lg:text-[clamp(16px,2.65vh,24px)] lg:leading-none" title={round ? factory ? `${displayAmount(progress, 6)} of ${displayAmount(cap, 6)} MockUSD volume` : `${displayAmount(remaining, round.hpToken.decimals)} ${round.hpToken.symbol} remaining` : undefined}>{round ? factory ? `≈ ${displayEstimate(progress, 6)} / ${displayEstimate(cap, 6)} mUSD` : `≈ ${displayEstimate(remaining, round.hpToken.decimals)} / ${displayEstimate(cap, round.hpToken.decimals)} ${round.hpToken.symbol} (${Math.round(hpFraction * 100)}%)` : "—"}</p>
+          </div>
+        </div>
+      </BattleFrame>
+      <BattleFrame>
+        <div className="flex flex-wrap items-center gap-2 p-2 lg:flex-nowrap lg:gap-3">
+          <Label icon="💧">{defeated ? "YOUR SHARE" : factory ? "MEME BOUGHT" : "YOUR HP"}</Label>
+          <div className="min-w-[120px] flex-1 lg:contents">
+            {share !== null && <div className="h-4 overflow-hidden bg-[#092B61] lg:h-8 lg:min-w-0 lg:flex-1" role="progressbar" aria-label="Your prize share" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, share)}>
+              <div className="h-full w-full origin-left bg-[#55B8F2] transition-transform duration-300" style={{ transform: `scaleX(${Math.min(1, share / 100)})` }} />
+            </div>}
+            <p className="mt-1 break-words text-xs tabular-nums sm:text-sm lg:m-0 lg:shrink-0 lg:text-[clamp(16px,2.65vh,24px)] lg:leading-none" title={player && shownPlayerBalance !== undefined ? `${displayAmount(shownPlayerBalance, shownPlayerDecimals)} ${shownPlayerSymbol}` : undefined}>{player ? share !== null ? `${share}%` : `≈ ${displayEstimate(shownPlayerBalance ?? 0n, shownPlayerDecimals)} ${shownPlayerSymbol}` : "CONNECT WALLET"}</p>
+          </div>
+        </div>
+      </BattleFrame>
+    </div>
+  );
+}
 
-      <div className="flex flex-wrap items-baseline justify-between gap-x-2 pt-1">
-        <span className="text-[10px] tracking-[0.14em]" style={{ color: NAVY }}>
-          YOUR SHARE
-        </span>
-        <span className="text-[10px] tracking-[0.08em] tabular-nums" style={{ color: NAVY }}>
-          {sharePercent}%
-        </span>
-      </div>
-      <div
-        className="bar-track h-2.5 overflow-hidden"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={1}
-        aria-valuenow={shareFraction}
-        aria-valuetext={`${sharePercent}% share`}
-      >
-        <div
-          className="h-full w-full origin-left transition-transform duration-300 ease-[var(--ease-out-strong)]"
-          style={{ background: SHARE_FILL, transform: `scaleX(${shareFraction})` }}
-        />
-      </div>
-
-      {/* 純資訊 chip 列：不掛 live region——ROUND DEADLINE 每秒更新會令 SR 每秒廣播；動態宣告由 DialogWindow 承擔（smith M-1） */}
-      <div className="mt-1 flex flex-col gap-1.5 border-t-2 border-[#2b4a8b]/20 pt-1.5">
-        <span className="flex flex-wrap items-center justify-between gap-x-2 rounded-full border border-[#2b4a8b]/40 px-2 py-0.5 text-[10px] tracking-[0.12em] text-[#2b4a8b]">
-          <span>STAGE {stage} / 3</span>
-          <span className="flex items-center gap-1" aria-hidden>
-            {[1, 2, 3].map((n) => (
-              <span
-                key={n}
-                className="size-1.5 rounded-full"
-                style={{ background: n === stage ? STAGE_HUES[stage - 1] : "rgba(43,74,139,0.25)" }}
-              />
-            ))}
-          </span>
-        </span>
-        <span className="flex flex-wrap items-center justify-between gap-x-2 rounded-full border border-[#2b4a8b]/40 px-2 py-0.5 text-[10px] tracking-[0.12em] text-[#2b4a8b]">
-          <span>ROUND DEADLINE</span>
-          <span className={`tabular-nums ${urgent ? "text-[#c0392b]" : ""}`}>{formatMmSs(remainingMs)}</span>
-        </span>
-        <MockBadge />
-      </div>
+export function BattleMeta({ deployment, now }: { deployment: DeploymentState; now: number }) {
+  const live = deployment.kind === "live" ? deployment : null;
+  const round = live?.round;
+  const seconds = live ? roundSecondsLeft(live.round, live.readAt, now) : null;
+  const time = seconds === null ? "—" : `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+  const network = deployment.network === "local" ? "LOCAL CHAIN" : deployment.network === "base-sepolia" ? "BASE SEPOLIA" : "HISTORICAL · READ ONLY";
+  const status = round ? roundStatusLabel(round.status) : deployment.kind === "loading" ? "CHECKING" : deployment.kind === "not-deployed" ? "NOT DEPLOYED" : "DATA UNAVAILABLE";
+  const hookAddress = deployment.hookAddress;
+  return (
+    <div className="bg-[#092B61] px-3 py-2 font-pixel text-[10px] leading-relaxed text-white shadow-[3px_3px_0_#041833] sm:text-xs lg:flex lg:gap-2 lg:py-1 lg:text-[16px] lg:leading-none">
+      <p>STAGE {round ? round.currentStage + 1 : "—"}/3 · ROUND <span className={seconds !== null && seconds < 600 && round?.status !== 3 ? "text-[#ffb4a8]" : ""}>{round?.status === 3 ? "VICTORY" : time}</span></p>
+      <p title={`${status}${round ? ` · BLOCK ${round.blockNumber}` : ""}`}>{network}</p>
+      {hookAddress && <p title={hookAddress}>HOOK {hookAddress.slice(0, 6)}…{hookAddress.slice(-4)}</p>}
     </div>
   );
 }

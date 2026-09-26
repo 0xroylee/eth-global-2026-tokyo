@@ -2,21 +2,33 @@ import { BlockNotFoundError, type Address, type PublicClient } from "viem";
 import {
   bossHpAbi,
   bossPoolHookAbi,
+  bossRouterAbi,
   mockUsdAbi,
   royTokenAbi,
 } from "./generated/abi";
-import type { VerifiedDeployment } from "./deployment";
+import type { EncounterMode, TokenMetadata, VerifiedDeployment } from "./deployment";
+
+const STANDALONE_MODE: EncounterMode = "standalone";
 
 export type RoundSnapshot = {
   blockNumber: bigint;
   blockTimestamp: bigint;
+  encounterMode: EncounterMode;
+  hpToken: TokenMetadata;
+  rewardToken: TokenMetadata;
   deadline: bigint;
   status: number;
   currentStage: number;
   stageSold: readonly [bigint, bigint, bigint];
   stageCapacity: readonly [bigint, bigint, bigint];
+  stageVolume: readonly [bigint, bigint, bigint];
+  stageVolumeTarget: readonly [bigint, bigint, bigint];
+  totalVolume: bigint;
+  volumeTargetMockUSD: bigint;
   stageEndSqrtPriceX96: readonly [bigint, bigint, bigint];
   remainingSellableHP: bigint;
+  supplyPoolFee: number;
+  bossPoolFee: number;
   bossHPCurrency0: boolean;
   bossTickLower: number;
   bossTickUpper: number;
@@ -47,6 +59,7 @@ export type PlayerSnapshot = {
   claimAllowance: bigint;
   hasAttacked: boolean;
   victoryClaimed: boolean;
+  rewardCredit: bigint;
 };
 
 export type BossPoolSnapshot = {
@@ -76,6 +89,10 @@ export async function readState(
 ): Promise<BossPoolSnapshot> {
   const { manifest } = deployment;
   const { hook, router, bossHP, roy, mockUSD, poolManager } = manifest.addresses;
+  const encounterMode = deployment.encounterMode ?? STANDALONE_MODE;
+  const hpToken = deployment.hpToken;
+  const rewardToken = deployment.rewardToken;
+  if (!hpToken || !rewardToken) throw new Error("Verified deployment is missing token metadata.");
   return withLatestSupportedBlock(client, async (blockNumber, blockTimestamp) => {
     const [
       status,
@@ -106,6 +123,8 @@ export async function readState(
       bossHPInHook,
       bossHPInRouter,
       bossHPInPoolManager,
+      supplyPoolKey,
+      bossPoolKey,
     ] = await Promise.all([
       client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "status", blockNumber }),
       client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "currentStage", blockNumber }),
@@ -135,17 +154,40 @@ export async function readState(
       client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [hook], blockNumber }),
       client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [router], blockNumber }),
       client.readContract({ address: bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [poolManager], blockNumber }),
+      client.readContract({ address: router, abi: bossRouterAbi, functionName: "supplyPoolKey", blockNumber }),
+      client.readContract({ address: router, abi: bossRouterAbi, functionName: "bossPoolKey", blockNumber }),
     ]);
+    const [volume0, volume1, volume2, target0, target1, target2, totalVolume, volumeTargetMockUSD] = encounterMode === "factory"
+      ? await Promise.all([
+          client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageVolume", args: [0], blockNumber }),
+          client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageVolume", args: [1], blockNumber }),
+          client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageVolume", args: [2], blockNumber }),
+          client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageVolumeTarget", args: [0], blockNumber }),
+          client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageVolumeTarget", args: [1], blockNumber }),
+          client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "stageVolumeTarget", args: [2], blockNumber }),
+          client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "totalVolume", blockNumber }),
+          client.readContract({ address: hook, abi: bossPoolHookAbi, functionName: "volumeTargetMockUSD", blockNumber }),
+        ])
+      : [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n] as const;
     const round: RoundSnapshot = {
       blockNumber,
       blockTimestamp,
+      encounterMode,
+      hpToken,
+      rewardToken,
       deadline,
       status,
       currentStage,
       stageSold: [sold0, sold1, sold2],
       stageCapacity: [capacity0, capacity1, capacity2],
+      stageVolume: [volume0, volume1, volume2],
+      stageVolumeTarget: [target0, target1, target2],
+      totalVolume,
+      volumeTargetMockUSD,
       stageEndSqrtPriceX96: [endPrice0, endPrice1, endPrice2],
       remainingSellableHP,
+      supplyPoolFee: supplyPoolKey.fee,
+      bossPoolFee: bossPoolKey.fee,
       bossHPCurrency0,
       bossTickLower,
       bossTickUpper,
@@ -175,6 +217,7 @@ async function readPlayerAtBlock(
   blockNumber: bigint,
 ): Promise<PlayerSnapshot> {
   const { addresses } = deployment.manifest;
+  const encounterMode = deployment.encounterMode ?? STANDALONE_MODE;
   const [
     nativeBalance,
     mockUSDBalance,
@@ -184,15 +227,21 @@ async function readPlayerAtBlock(
     claimAllowance,
     hasAttacked,
     victoryClaimed,
+    rewardCredit,
   ] = await Promise.all([
     client.getBalance({ address: account, blockNumber }),
     client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "balanceOf", args: [account], blockNumber }),
     client.readContract({ address: addresses.roy, abi: royTokenAbi, functionName: "balanceOf", args: [account], blockNumber }),
     client.readContract({ address: addresses.bossHP, abi: bossHpAbi, functionName: "balanceOf", args: [account], blockNumber }),
     client.readContract({ address: addresses.mockUSD, abi: mockUsdAbi, functionName: "allowance", args: [account, addresses.router], blockNumber }),
-    client.readContract({ address: addresses.bossHP, abi: bossHpAbi, functionName: "allowance", args: [account, addresses.hook], blockNumber }),
+    encounterMode === "standalone"
+      ? client.readContract({ address: addresses.bossHP, abi: bossHpAbi, functionName: "allowance", args: [account, addresses.hook], blockNumber })
+      : Promise.resolve(0n),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "hasAttacked", args: [account], blockNumber }),
     client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "victoryClaimed", args: [account], blockNumber }),
+    encounterMode === "factory"
+      ? client.readContract({ address: addresses.hook, abi: bossPoolHookAbi, functionName: "rewardCredit", args: [account], blockNumber })
+      : Promise.resolve(0n),
   ]);
   return {
     blockNumber,
@@ -205,6 +254,7 @@ async function readPlayerAtBlock(
     claimAllowance,
     hasAttacked,
     victoryClaimed,
+    rewardCredit,
   };
 }
 

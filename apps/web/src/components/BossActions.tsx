@@ -7,10 +7,10 @@ import {
   type ApprovalStatus,
   type AttackQuote,
   type AttackResult,
-  type RoundSnapshot,
   type RewardPreview,
 } from "@boss-pool/chain";
-import { displayAmount, roundStatusLabel } from "@/lib/format";
+import { displayAmount, displayEstimate, roundStatusLabel } from "@/lib/format";
+import { writeStateMatchesEncounter } from "@/lib/battle";
 import { type useBossPool } from "@/lib/useBossPool";
 
 type Arena = ReturnType<typeof useBossPool>;
@@ -20,7 +20,9 @@ type QuoteState = {
   account?: string;
   walletChainId?: number;
   deploymentTxHash: string;
+  hookAddress: string;
   stageSold: bigint;
+  stageVolume: bigint;
   bossPrice: bigint;
   receivedAt: number;
 };
@@ -28,20 +30,17 @@ type ActionResult =
   | { kind: "approval"; hash: string; token: string; spender: string; amount: bigint }
   | { kind: "attack"; hash: string; result: AttackResult }
   | { kind: "reward"; hash: string; hpAmount: bigint; payout: bigint }
-  | { kind: "nft"; hash: string; tokenId: bigint }
-  | { kind: "faucet"; hash: string; amount: bigint };
+  | { kind: "nft"; hash: string; tokenId: bigint };
 
 const MOCK_USD_DECIMALS = 6;
-const BOSS_HP_DECIMALS = 18;
-const PUBLIC_FAUCET_AMOUNT = 100n * 10n ** BigInt(MOCK_USD_DECIMALS);
 const DEFAULT_SLIPPAGE_BPS = 100;
+const ATTACK_CAP = 1_000_000n;
 
 export function BossActions({
   arena,
 }: {
   arena: Arena;
 }) {
-  const [amountText, setAmountText] = useState("50");
   const [quoteState, setQuoteState] = useState<QuoteState | null>(null);
   const [quoteBusy, setQuoteBusy] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -57,19 +56,29 @@ export function BossActions({
   const account = arena.wallet.account;
   const player = live?.player;
   const round = live?.round;
-  const inputAmount = parseTokenAmount(amountText, MOCK_USD_DECIMALS);
-  const hpAmount = parseTokenAmount(claimText, BOSS_HP_DECIMALS);
+  const factory = round?.encounterMode === "factory";
+  const hpToken = round?.hpToken;
+  const rewardToken = round?.rewardToken;
+  const claimToken = factory ? rewardToken : hpToken;
+  const claimableAmount = player ? factory ? player.rewardCredit : player.bossHPBalance : 0n;
+  const inputAmount = ATTACK_CAP;
+  const hpAmount = parseTokenAmount(claimText, claimToken?.decimals ?? 18);
   const attackAllowance = player?.attackAllowance;
   const claimAllowance = player?.claimAllowance;
   const heldBossHP = player?.bossHPBalance;
+  const rewardCredit = player?.rewardCredit;
   const eligibleHP = round?.finalEligibleHP;
   const redeemedHP = round?.redeemedHP;
   const originalPrize = round?.originalPrize;
   const writeBusy = arena.writeState.status === "prompting" || arena.writeState.status === "pending" || arena.writeState.status === "unresolved";
-  const inputError = amountText.length > 0 && inputAmount === null ? "Enter a MockUSD amount with up to 6 decimal places." : null;
-  const claimInputError = claimText.length > 0 && hpAmount === null ? "Enter a BossHP amount with up to 18 decimal places." : null;
+  const writeMatches = writeStateMatchesEncounter(arena.writeState, arena.network,
+    live?.hookAddress ?? arena.selectedHookAddress ?? arena.requestedHookAddress);
+  const claimInputError = claimText.length > 0 && hpAmount === null ? `Enter a ${claimToken?.symbol ?? "token"} amount with up to ${claimToken?.decimals ?? 18} decimal places.` : null;
   const chainTimestamp = round?.blockTimestamp ?? 0n;
-  const active = Boolean(round && round.status === 1 && chainTimestamp < round.deadline);
+  const observedTimestamp = round && live
+    ? round.blockTimestamp + BigInt(Math.max(0, Math.floor((now - live.readAt) / 1_000)))
+    : chainTimestamp;
+  const active = Boolean(round && round.status === 1 && observedTimestamp < round.deadline);
   const quoteTimestamp = quoteState
     ? quoteState.quote.quotedAt + BigInt(Math.max(0, Math.floor((now - quoteState.receivedAt) / 1_000)))
     : chainTimestamp;
@@ -90,7 +99,7 @@ export function BossActions({
       inputAmount !== null && inputAmount > 0n
         ? sdk.getApproval({ kind: "attack", maxMockUSD: inputAmount }, account)
         : null,
-      hpAmount !== null && hpAmount > 0n && defeated
+      hpAmount !== null && hpAmount > 0n && defeated && !factory
         ? sdk.getApproval({ kind: "claimReward", hpAmount }, account)
         : null,
     ];
@@ -110,18 +119,20 @@ export function BossActions({
       });
     }
     return () => { activeRequest = false; };
-  }, [sdk, account, inputAmount, hpAmount, defeated, attackAllowance, claimAllowance, heldBossHP, eligibleHP, redeemedHP, originalPrize]);
+  }, [sdk, account, inputAmount, hpAmount, defeated, factory, attackAllowance, claimAllowance, heldBossHP, rewardCredit, eligibleHP, redeemedHP, originalPrize]);
 
   const quoteFresh = useMemo(() => {
     if (!quoteState || !live || !round) return false;
     const { quote } = quoteState;
     return quoteState.network === arena.network &&
+      quoteState.hookAddress.toLowerCase() === live.hookAddress.toLowerCase() &&
       quoteState.deploymentTxHash.toLowerCase() === live.manifest.deploymentTxHash.toLowerCase() &&
       quoteState.account?.toLowerCase() === account?.toLowerCase() &&
       quoteState.walletChainId === arena.wallet.chainId &&
       quote.chainId === live.manifest.chainId &&
       quote.stage === round.currentStage &&
       round.stageSold[quote.stage] === quoteState.stageSold &&
+      round.stageVolume[quote.stage] === quoteState.stageVolume &&
       round.bossCurrentSqrtPriceX96 === quoteState.bossPrice &&
       inputAmount !== null && quote.maxMockUSD === inputAmount &&
       chainTimestamp < quote.expiresAt && quoteTimestamp < quote.expiresAt && active;
@@ -132,7 +143,6 @@ export function BossActions({
     : 0;
   const attackApproval = approvals.attack;
   const claimApproval = approvals.claim;
-  const needsFaucet = Boolean(player && inputAmount !== null && player.mockUSDBalance < inputAmount);
   const hasInputBalance = Boolean(player && inputAmount !== null && inputAmount > 0n && player.mockUSDBalance >= inputAmount);
   const attackReady = Boolean(
     sdk && account && arena.canWrite && !arena.networkMismatch && active && hasInputBalance &&
@@ -143,6 +153,7 @@ export function BossActions({
     if (!sdk || !round || inputAmount === null || inputAmount <= 0n) return;
     setQuoteBusy(true);
     setQuoteError(null);
+    setQuoteState(null);
     try {
       const quote = await sdk.quoteAttack({
         maxMockUSD: inputAmount,
@@ -156,7 +167,9 @@ export function BossActions({
         account,
         walletChainId: arena.wallet.chainId,
         deploymentTxHash: live?.manifest.deploymentTxHash ?? "",
+        hookAddress: live?.hookAddress ?? "",
         stageSold: round.stageSold[round.currentStage],
+        stageVolume: round.stageVolume[round.currentStage],
         bossPrice: round.bossCurrentSqrtPriceX96,
         receivedAt: Date.now(),
       });
@@ -188,7 +201,7 @@ export function BossActions({
   async function claimReward() {
     if (!sdk || hpAmount === null || hpAmount <= 0n || !account) return;
     try {
-      const confirmed = await arena.runPending("Claim BossHP reward", () => sdk.claimReward(hpAmount));
+      const confirmed = await arena.runPending("Claim encounter reward", () => sdk.claimReward(hpAmount));
       if (confirmed?.status === "confirmed") {
         setLastResult({ kind: "reward", hash: confirmed.hash, hpAmount: confirmed.result.hpAmount, payout: confirmed.result.payout });
       }
@@ -209,18 +222,6 @@ export function BossActions({
     }
   }
 
-  async function faucetMockUSD() {
-    if (!sdk) return;
-    try {
-      const confirmed = await arena.runPending("Faucet MockUSD", () => sdk.faucetMockUSD(PUBLIC_FAUCET_AMOUNT));
-      if (confirmed?.status === "confirmed") {
-        setLastResult({ kind: "faucet", hash: confirmed.hash, amount: confirmed.result.amount });
-      }
-    } catch {
-      // The shared write status retains rejection and receipt errors.
-    }
-  }
-
   async function attack() {
     if (!sdk || !quoteFresh || !quoteState) return;
     setQuoteError(null);
@@ -230,17 +231,18 @@ export function BossActions({
         setLastResult({ kind: "attack", hash: confirmed.hash, result: confirmed.result });
       }
     } catch (error) {
-      if (error instanceof RequoteRequiredError) setQuoteError(error.message);
+      if (error instanceof RequoteRequiredError) {
+        setQuoteState(null);
+        setQuoteError(error.message);
+      }
     }
   }
 
   const statusText = round ? roundStatusLabel(round.status) : arena.deployment.kind === "not-deployed" ? "Not deployed" : arena.deployment.kind === "error" ? "Unavailable" : "Checking";
-  const attackBlockReason = arena.network === "robinhood-testnet"
-    ? "This enrollment-era Robinhood deployment is read-only in the current player UI."
-    : !account
+  const attackBlockReason = !account
     ? "Connect a wallet before attacking. The quote remains public."
     : arena.networkMismatch
-      ? `Switch the wallet to ${arena.network === "local" ? "local chain 31337" : arena.network === "base-sepolia" ? "Base Sepolia 84532" : "historical Robinhood testnet 46630"}.`
+      ? `Switch the wallet to ${arena.network === "local" ? "local chain 31337" : "Base Sepolia 84532"}.`
       : !active
         ? round?.status === 3 ? "The boss has been defeated." : round?.status === 4 ? "This round has expired." : "Attack is unavailable outside an active round."
         : !hasInputBalance
@@ -263,15 +265,18 @@ export function BossActions({
             <p className="mt-1 text-sm text-fog">{statusText} · Stage {round ? round.currentStage + 1 : "—"} / 3</p>
           </div>
           {round && <div className="text-right">
-            <p className="font-mono text-[9px] tracking-[0.12em] text-dim">CURRENT STAGE HP</p>
-            <p className="mt-1 text-sm text-fog">{displayAmount(remainingHp(round), BOSS_HP_DECIMALS)} remaining</p>
+            <p className="font-mono text-[9px] tracking-[0.12em] text-dim">{factory ? "CURRENT STAGE VOLUME" : "CURRENT STAGE HP"}</p>
+            <p className="mt-1 break-all text-sm text-fog">{factory
+              ? `${displayAmount(round.stageVolume[round.currentStage], 6)} / ${displayAmount(round.stageVolumeTarget[round.currentStage], 6)} mUSD`
+              : `${displayAmount(round.remainingSellableHP, hpToken?.decimals ?? 18)} ${hpToken?.symbol ?? "HP"} remaining`}</p>
+            {factory && player && <p className="mt-1 text-xs text-muted">Purchased {displayAmount(player.bossHPBalance, hpToken?.decimals ?? 18)} {hpToken?.symbol ?? "MEME"}</p>}
           </div>}
         </div>
         {round && <p className="mt-2 font-mono text-[9px] text-faint">ON-CHAIN DEADLINE · {formatUtc(round.deadline)}</p>}
         </>
       )}
 
-      <section aria-labelledby="quote-heading">
+      {!defeated && <section aria-labelledby="quote-heading">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="eyebrow">STEP 01 · PUBLIC PREVIEW</p>
@@ -279,18 +284,8 @@ export function BossActions({
           </div>
           <span className="font-mono text-[9px] tracking-[0.1em] text-dim">NO WALLET OR ALLOWANCE NEEDED</span>
         </div>
-        <label className="mt-3 block text-xs text-muted" htmlFor="attack-cap">MockUSD input cap</label>
-        <div className="mt-1 flex gap-2">
-          <input
-            id="attack-cap"
-            value={amountText}
-            onChange={(event) => { setAmountText(event.target.value); setQuoteError(null); }}
-            inputMode="decimal"
-            autoComplete="off"
-            aria-invalid={Boolean(inputError)}
-            aria-describedby={inputError ? "attack-cap-error" : undefined}
-            className="min-w-0 flex-1 rounded-lg border border-white/12 bg-ink px-3 py-2.5 font-mono text-sm text-fog outline-none focus:border-accent/70"
-          />
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <p className="text-sm text-fog">1 MockUSD maximum per attack</p>
           <button
             type="button"
             onClick={() => void requestQuote()}
@@ -300,7 +295,6 @@ export function BossActions({
             {quoteBusy ? "QUOTING…" : "GET QUOTE"}
           </button>
         </div>
-        {inputError && <p id="attack-cap-error" className="mt-1.5 text-xs text-danger" role="alert">{inputError}</p>}
         {arena.deployment.kind === "not-deployed" && <p className="mt-2 text-xs text-muted">No deployment manifest exists for this network, so no quote is available.</p>}
         {arena.deployment.kind === "error" && <p className="mt-2 text-xs text-danger" role="status">Public quote unavailable: {arena.deployment.message}</p>}
         {round && !active && !quoteError && (
@@ -319,12 +313,12 @@ export function BossActions({
               {quoteFresh ? "FRESH QUOTE" : "QUOTE STALE · REQUOTE BEFORE APPROVAL OR ATTACK"}
             </p>
             <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-              <QuoteMetric label="BOSShp ESTIMATE" amount={quoteState.quote.bossHPOut} decimals={BOSS_HP_DECIMALS} unit="HP" />
+              <QuoteMetric label={`${hpToken?.symbol ?? "TOKEN"} ESTIMATE`} amount={quoteState.quote.bossHPOut} decimals={hpToken?.decimals ?? 18} unit={hpToken?.symbol ?? "HP"} />
               <QuoteMetric label="MOCKUSD SPENT" amount={quoteState.quote.mockUSDSpent} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
               <QuoteMetric label="MOCKUSD REFUND" amount={quoteState.quote.mockUSDRefunded} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
-              <QuoteMetric label="ROY BOUGHT" amount={quoteState.quote.royBought} decimals={BOSS_HP_DECIMALS} unit="ROY" />
-              <QuoteMetric label="ROY SPENT" amount={quoteState.quote.roySpent} decimals={BOSS_HP_DECIMALS} unit="ROY" />
-              <QuoteMetric label="ROY REFUND" amount={quoteState.quote.royRefunded} decimals={BOSS_HP_DECIMALS} unit="ROY" />
+              <QuoteMetric label="ATTACK TOKEN BOUGHT" amount={quoteState.quote.royBought} decimals={18} unit="Attack Token" />
+              <QuoteMetric label="ATTACK TOKEN SPENT" amount={quoteState.quote.roySpent} decimals={18} unit="Attack Token" />
+              <QuoteMetric label="ATTACK TOKEN REFUND" amount={quoteState.quote.royRefunded} decimals={18} unit="Attack Token" />
             </div>
             <div className="mt-2 text-xs text-muted">
               {quoteState.quote.bossDefeated
@@ -334,30 +328,33 @@ export function BossActions({
                   : `Stage ${quoteState.quote.stage + 1} remains active.`}
               <span
                 className="ml-2 text-faint"
-                title={`Exact floors: ${displayAmount(quoteState.quote.minRoyOut, BOSS_HP_DECIMALS)} ROY and ${displayAmount(quoteState.quote.minBossHPOut, BOSS_HP_DECIMALS)} HP`}
+                title={`Exact floors: ${displayAmount(quoteState.quote.minRoyOut, 18)} Attack Token and ${displayAmount(quoteState.quote.minBossHPOut, hpToken?.decimals ?? 18)} ${hpToken?.symbol ?? "HP"}`}
               >
-                Min ≈ {displayEstimate(quoteState.quote.minRoyOut, BOSS_HP_DECIMALS)} ROY + {displayEstimate(quoteState.quote.minBossHPOut, BOSS_HP_DECIMALS)} HP · block {quoteState.quote.quotedBlock.toString()}
+                Min ≈ {displayEstimate(quoteState.quote.minRoyOut, 18)} Attack Token + {displayEstimate(quoteState.quote.minBossHPOut, hpToken?.decimals ?? 18)} {hpToken?.symbol ?? "HP"} · block {quoteState.quote.quotedBlock.toString()}
               </span>
             </div>
             <details className="mt-2 text-[10px] text-faint">
               <summary className="cursor-pointer font-mono tracking-[0.08em]">EXACT DECIMAL VALUES</summary>
               <dl className="mt-1 grid grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2">
-                <ExactValue label="BossHP output" amount={quoteState.quote.bossHPOut} decimals={BOSS_HP_DECIMALS} unit="HP" />
+                <ExactValue label={`${hpToken?.symbol ?? "Token"} output`} amount={quoteState.quote.bossHPOut} decimals={hpToken?.decimals ?? 18} unit={hpToken?.symbol ?? "HP"} />
                 <ExactValue label="MockUSD spent" amount={quoteState.quote.mockUSDSpent} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
                 <ExactValue label="MockUSD refund" amount={quoteState.quote.mockUSDRefunded} decimals={MOCK_USD_DECIMALS} unit="mUSD" />
-                <ExactValue label="ROY bought" amount={quoteState.quote.royBought} decimals={BOSS_HP_DECIMALS} unit="ROY" />
-                <ExactValue label="ROY spent" amount={quoteState.quote.roySpent} decimals={BOSS_HP_DECIMALS} unit="ROY" />
-                <ExactValue label="ROY refund" amount={quoteState.quote.royRefunded} decimals={BOSS_HP_DECIMALS} unit="ROY" />
-                <ExactValue label="Minimum ROY output" amount={quoteState.quote.minRoyOut} decimals={BOSS_HP_DECIMALS} unit="ROY" />
-                <ExactValue label="Minimum BossHP output" amount={quoteState.quote.minBossHPOut} decimals={BOSS_HP_DECIMALS} unit="HP" />
+                <ExactValue label="Attack Token bought" amount={quoteState.quote.royBought} decimals={18} unit="Attack Token" />
+                <ExactValue label="Attack Token spent" amount={quoteState.quote.roySpent} decimals={18} unit="Attack Token" />
+                <ExactValue label="Attack Token refund" amount={quoteState.quote.royRefunded} decimals={18} unit="Attack Token" />
+                <ExactValue label="Minimum Attack Token output" amount={quoteState.quote.minRoyOut} decimals={18} unit="Attack Token" />
+                <ExactValue label={`Minimum ${hpToken?.symbol ?? "HP"} output`} amount={quoteState.quote.minBossHPOut} decimals={hpToken?.decimals ?? 18} unit={hpToken?.symbol ?? "HP"} />
               </dl>
             </details>
             <p className="mt-1 font-mono text-[9px] text-faint">
               {quoteFresh ? `${quoteSecondsLeft}s remaining` : "Get another quote to refresh this preview"} · 1% output tolerance
             </p>
+            <p className="mt-1 text-xs text-muted">
+              Supply pool fee: {quoteState.quote.supplyPoolFee / 10_000}% · Boss pool fee: {quoteState.quote.bossPoolFee / 10_000}%
+            </p>
           </div>
         )}
-      </section>
+      </section>}
 
       <div className="hairline my-4 border-t" />
 
@@ -365,25 +362,16 @@ export function BossActions({
         <p className="eyebrow">PLAYER READINESS</p>
         <h3 id="readiness-heading" className="mt-1 text-base font-medium">Complete these actions in order</h3>
         {!account ? (
-          <p className="mt-2 text-xs leading-relaxed text-muted">Connect a wallet in the header to attack or claim. Public round reads and quotes work without a wallet.</p>
+          <p className="mt-2 text-xs leading-relaxed text-muted">Connect a wallet to attack or claim. Public round reads and quotes work without a wallet.</p>
         ) : !player ? (
           <p className="mt-2 text-xs text-muted">Reading this account on the selected network…</p>
         ) : (
           <div className="mt-3 space-y-3">
             <p className="break-words text-[11px] leading-relaxed text-faint">
-              {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD · {displayAmount(player.royBalance, BOSS_HP_DECIMALS)} ROY · {displayAmount(player.bossHPBalance, BOSS_HP_DECIMALS)} BossHP · {displayAmount(player.nativeBalance, BOSS_HP_DECIMALS)} ETH gas
+              {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD · {displayAmount(player.royBalance, 18)} Attack Token · {displayAmount(player.bossHPBalance, hpToken?.decimals ?? 18)} {hpToken?.symbol ?? "HP"}{factory ? ` · ${displayAmount(player.rewardCredit, rewardToken?.decimals ?? 18)} reward credit` : ""} · {displayAmount(player.nativeBalance, 18)} ETH gas
               <span className="ml-2">{player.hasAttacked ? "ATTACKED" : "NO ATTACK YET"}</span>
             </p>
-            <ReadinessRow step="A" title="MockUSD faucet" state={needsFaucet ? "needed" : "ready"}>
-              <p className="text-xs text-muted">Balance: {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD</p>
-              {needsFaucet && (
-                <ActionButton disabled={!arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord)} onClick={() => void faucetMockUSD()}>
-                  Faucet 100 mUSD
-                </ActionButton>
-              )}
-            </ReadinessRow>
-
-            <ReadinessRow step="B" title="Router allowance" state={!quoteState ? "waiting" : !quoteFresh ? "stale" : attackApproval?.approvalNeeded ? "needed" : "ready"}>
+            {!defeated && <><ReadinessRow step="A" title="Router allowance" state={!quoteState ? "waiting" : !quoteFresh ? "stale" : attackApproval?.approvalNeeded ? "needed" : "ready"}>
               {!quoteState ? <p className="text-xs text-muted">Get the public quote above before approving the attack input.</p> : (
                 <>
                   {attackApproval && (
@@ -404,12 +392,13 @@ export function BossActions({
               )}
             </ReadinessRow>
 
-            <ReadinessRow step="C" title="Attack" state={attackReady ? "ready" : active ? "waiting" : "closed"}>
+            <ReadinessRow step="B" title="Attack" state={attackReady ? "ready" : active ? "waiting" : "closed"}>
               <p className="text-xs leading-relaxed text-muted" role="status">{attackBlockReason}</p>
               <ActionButton primary disabled={!attackReady} onClick={() => void attack()}>
                 ATTACK · STAGE {round ? round.currentStage + 1 : "—"}
               </ActionButton>
             </ReadinessRow>
+            </>}
           </div>
         )}
       </section>
@@ -419,14 +408,16 @@ export function BossActions({
           <div className="hairline my-4 border-t" />
           <section aria-labelledby="reward-heading">
             <p className="eyebrow">POST-DEFEAT CLAIMS</p>
-            <h3 id="reward-heading" className="mt-1 text-base font-medium">HP rights and victory NFT are separate</h3>
+            <h3 id="reward-heading" className="mt-1 text-base font-medium">Reward rights and victory NFT are separate</h3>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div className="min-w-0">
-                <p className="font-mono text-[9px] tracking-[0.1em] text-dim">TRANSFERABLE HP REWARD RIGHTS</p>
-                <p className="mt-1 text-xs text-muted">Wallet holds {displayAmount(player.bossHPBalance, BOSS_HP_DECIMALS)} HP. No enrollment or attack history is required to redeem transferred HP.</p>
-                {player.bossHPBalance > 0n && (
+                <p className="font-mono text-[9px] tracking-[0.1em] text-dim">{factory ? "ATTACK REWARD CREDIT" : "TRANSFERABLE HP REWARD RIGHTS"}</p>
+                <p className="mt-1 text-xs text-muted">{factory
+                  ? `This wallet has ${displayAmount(claimableAmount, claimToken?.decimals ?? 18)} ${claimToken?.symbol ?? "MEME"} reward credit. Claiming credit leaves purchased MEME in the wallet.`
+                  : `Wallet holds ${displayAmount(claimableAmount, claimToken?.decimals ?? 18)} ${claimToken?.symbol ?? "BossHP"}. No attack history is required to redeem transferred HP.`}</p>
+                {claimableAmount > 0n && (
                   <>
-                    <label htmlFor="reward-hp-amount" className="mt-2 block text-xs text-muted">BossHP to surrender</label>
+                    <label htmlFor="reward-hp-amount" className="mt-2 block text-xs text-muted">{factory ? `${claimToken?.symbol ?? "MEME"} credit to claim` : `${claimToken?.symbol ?? "BossHP"} to surrender`}</label>
                     <div className="mt-1 flex gap-2">
                       <input
                         id="reward-hp-amount"
@@ -437,30 +428,34 @@ export function BossActions({
                         aria-invalid={Boolean(claimInputError)}
                         className="min-w-0 flex-1 rounded-lg border border-white/12 bg-ink px-2.5 py-2 font-mono text-xs text-fog outline-none focus:border-accent/70"
                       />
-                      <button type="button" className="rounded border border-white/12 px-2 text-[9px] text-muted" onClick={() => setClaimText(displayAmount(player.bossHPBalance, BOSS_HP_DECIMALS))}>
+                      <button type="button" className="rounded border border-white/12 px-2 text-[9px] text-muted" onClick={() => setClaimText(displayAmount(claimableAmount, claimToken?.decimals ?? 18))}>
                         MAX
                       </button>
                     </div>
                     {claimInputError && <p className="mt-1 text-xs text-danger" role="alert">{claimInputError}</p>}
                     {rewardError && <p className="mt-1 text-xs text-danger" role="status">{rewardError}</p>}
-                    {rewardPreview && <p className="mt-1 text-xs text-live-soft">Estimated payout: {displayAmount(rewardPreview.payout, MOCK_USD_DECIMALS)} mUSD</p>}
-                    {claimApproval && (
+                    {rewardPreview && <p className="mt-1 text-xs text-live-soft">Estimated payout: {displayAmount(rewardPreview.payout, rewardToken?.decimals ?? 18)} {rewardToken?.symbol ?? "reward token"}</p>}
+                    {!factory && claimApproval && (
                       <p className="mt-1 break-all font-mono text-[9px] text-faint">
-                        BossHP {shortAddress(claimApproval.tokenAddress)} → BossHook {shortAddress(claimApproval.spenderAddress)} · unlimited approval
+                        {claimToken?.symbol ?? "BossHP"} {shortAddress(claimApproval.tokenAddress)} → BossHook {shortAddress(claimApproval.spenderAddress)} · unlimited approval
                       </p>
                     )}
-                    {claimApproval?.approvalNeeded ? (
+                    {factory ? (
+                      <ActionButton disabled={!arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord) || !rewardPreview?.claimable} onClick={() => void claimReward()}>
+                        Claim reward credit
+                      </ActionButton>
+                    ) : claimApproval?.approvalNeeded ? (
                       <ActionButton disabled={!arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord) || !rewardPreview?.claimable} onClick={() => void submitApproval({ kind: "claimReward", hpAmount: hpAmount ?? 0n }, "Approve BossHP redemption")}>
-                        Approve BossHP for BossHook
+                        Approve {claimToken?.symbol ?? "BossHP"} for BossHook
                       </ActionButton>
                     ) : (
                       <ActionButton disabled={!arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord) || !claimApproval || !rewardPreview?.claimable} onClick={() => void claimReward()}>
-                        Surrender HP and claim mUSD
+                        Surrender HP and claim {rewardToken?.symbol ?? "reward"}
                       </ActionButton>
                     )}
                   </>
                 )}
-                {player.bossHPBalance === 0n && <p className="mt-2 text-xs text-faint">No unredeemed BossHP is held by this account.</p>}
+                {claimableAmount === 0n && <p className="mt-2 text-xs text-faint">{factory ? "No reward credit is available for this account." : `No unredeemed ${claimToken?.symbol ?? "BossHP"} is held by this account.`}</p>}
               </div>
               <div className="hairline border-l pl-3">
                 <p className="font-mono text-[9px] tracking-[0.1em] text-dim">PARTICIPATION-BASED VICTORY NFT</p>
@@ -480,9 +475,15 @@ export function BossActions({
         </>
       )}
 
-      {lastResult && <ConfirmedResult result={lastResult} />}
-      {arena.writeState.status !== "idle" && <WriteStatus state={arena.writeState} />}
-      {arena.pendingRecord && <p className="mt-2 text-xs text-danger">A transaction from {arena.pendingRecord.network} is unresolved. Resolve its saved hash before another write.</p>}
+      {lastResult && <ConfirmedResult result={lastResult} hpToken={hpToken} claimToken={claimToken} rewardToken={rewardToken} />}
+      {writeMatches && arena.writeState.status !== "idle" && <WriteStatus state={arena.writeState} hpToken={hpToken} rewardToken={rewardToken} />}
+      {writeBusy && !writeMatches && <p className="mt-4 text-xs text-accent-soft" role="status">A wallet action for another boss is still in progress. It stays attached to its original encounter.</p>}
+      {arena.pendingRecord && <div className="mt-2">
+        <p className="text-xs text-muted">{writeMatches ? `A transaction from ${arena.pendingRecord.network} is saved for this boss.` : "A transaction for another boss is saved."} Check its receipt before another write.</p>
+        <ActionButton disabled={arena.writeState.status === "pending" || arena.writeState.status === "prompting"} onClick={() => void arena.resumePending()}>
+          Check saved transaction
+        </ActionButton>
+      </div>}
       {round && !active && !defeated && round.status === 4 && (
         <p className="hairline mt-4 border-t pt-3 text-xs text-muted">Round expired at its on-chain deadline. Attacks are closed.</p>
       )}
@@ -564,23 +565,25 @@ function ExactValue({ label, amount, decimals, unit }: { label: string; amount: 
   return <div className="flex flex-wrap gap-x-1"><dt>{label}:</dt><dd className="break-all">{displayAmount(amount, decimals)} {unit}</dd></div>;
 }
 
-function ConfirmedResult({ result }: { result: ActionResult }) {
+function ConfirmedResult({ result, hpToken, claimToken, rewardToken }: {
+  result: ActionResult;
+  hpToken?: { symbol: string; decimals: number };
+  claimToken?: { symbol: string; decimals: number };
+  rewardToken?: { symbol: string; decimals: number };
+}) {
   let text: string;
   switch (result.kind) {
     case "approval":
       text = `Unlimited allowance set · ${shortAddress(result.token)} → ${shortAddress(result.spender)}`;
       break;
     case "attack":
-      text = `Confirmed ${displayAmount(result.result.bossHPOut, BOSS_HP_DECIMALS)} HP output · ${displayAmount(result.result.mockUSDSpent, MOCK_USD_DECIMALS)} mUSD spent · ${displayAmount(result.result.royRefunded, BOSS_HP_DECIMALS)} ROY returned`;
+      text = `Confirmed ${displayAmount(result.result.bossHPOut, hpToken?.decimals ?? 18)} ${hpToken?.symbol ?? "HP"} output · ${displayAmount(result.result.mockUSDSpent, MOCK_USD_DECIMALS)} mUSD spent · ${displayAmount(result.result.royRefunded, 18)} Attack Token returned`;
       break;
     case "reward":
-      text = `Surrendered ${displayAmount(result.hpAmount, BOSS_HP_DECIMALS)} HP · received ${displayAmount(result.payout, MOCK_USD_DECIMALS)} mUSD`;
+      text = `${claimToken?.symbol ?? "HP"} reward amount ${displayAmount(result.hpAmount, claimToken?.decimals ?? 18)} · received ${displayAmount(result.payout, rewardToken?.decimals ?? 18)} ${rewardToken?.symbol ?? "reward token"}`;
       break;
     case "nft":
       text = `Victory NFT #${result.tokenId} confirmed`;
-      break;
-    case "faucet":
-      text = `Faucet delivered ${displayAmount(result.amount, MOCK_USD_DECIMALS)} mUSD`;
       break;
   }
   return (
@@ -591,12 +594,16 @@ function ConfirmedResult({ result }: { result: ActionResult }) {
   );
 }
 
-function WriteStatus({ state }: { state: Arena["writeState"] }) {
+function WriteStatus({ state, hpToken, rewardToken }: {
+  state: Arena["writeState"];
+  hpToken?: { symbol: string; decimals: number };
+  rewardToken?: { symbol: string; decimals: number };
+}) {
   if (state.status === "prompting") {
     return <p className="mt-4 text-xs text-muted" role="status">Wallet prompt: {state.action}. No game state changes until a receipt confirms.</p>;
   }
   if (state.status === "pending") {
-    return <p className="mt-4 text-xs text-accent-soft" role="status">{state.action} submitted. Waiting for a confirmed receipt; game HP has not changed yet.</p>;
+    return <p className="mt-4 text-xs text-accent-soft" role="status">{state.action} submitted. Waiting for a confirmed receipt; encounter state has not changed yet.</p>;
   }
   if (state.status === "unresolved") {
     return <p className="mt-4 text-xs text-danger" role="status">{state.action} is unresolved: {state.message}</p>;
@@ -605,7 +612,7 @@ function WriteStatus({ state }: { state: Arena["writeState"] }) {
     return (
       <div className="mt-4 text-xs text-live-soft" role="status">
         <p>Confirmed · {state.record.request.hash}</p>
-        <p className="mt-1 text-muted">{recoveredSummary(state.result)}</p>
+        <p className="mt-1 text-muted">{recoveredSummary(state.result, hpToken, rewardToken)}</p>
       </div>
     );
   }
@@ -613,13 +620,13 @@ function WriteStatus({ state }: { state: Arena["writeState"] }) {
   return <p className={`mt-4 break-words text-xs ${state.status === "rejected" ? "text-muted" : "text-danger"}`} role="status">{state.status.toUpperCase()}: {state.message}{state.hash ? ` · ${state.hash}` : ""}</p>;
 }
 
-function recoveredSummary(result: unknown): string {
+function recoveredSummary(result: unknown, hpToken?: { symbol: string; decimals: number }, rewardToken?: { symbol: string; decimals: number }): string {
   if (!result || typeof result !== "object") return "Receipt validated by the shared chain SDK.";
   if ("bossHPOut" in result && typeof result.bossHPOut === "bigint") {
-    return `Received ${displayAmount(result.bossHPOut, BOSS_HP_DECIMALS)} BossHP.`;
+    return `Received ${displayAmount(result.bossHPOut, hpToken?.decimals ?? 18)} ${hpToken?.symbol ?? "encounter token"}.`;
   }
   if ("payout" in result && typeof result.payout === "bigint") {
-    return `Received ${displayAmount(result.payout, MOCK_USD_DECIMALS)} mUSD.`;
+    return `Received ${displayAmount(result.payout, rewardToken?.decimals ?? 18)} ${rewardToken?.symbol ?? "reward token"}.`;
   }
   if ("tokenId" in result && typeof result.tokenId === "bigint") return `Confirmed token #${result.tokenId}.`;
   if ("events" in result && Array.isArray(result.events)) {
@@ -631,12 +638,6 @@ function recoveredSummary(result: unknown): string {
   return "Receipt validated by the shared chain SDK.";
 }
 
-function remainingHp(round: RoundSnapshot) {
-  const sold = round.stageSold[round.currentStage] ?? 0n;
-  const cap = round.stageCapacity[round.currentStage] ?? 0n;
-  return cap > sold ? cap - sold : 0n;
-}
-
 function parseTokenAmount(value: string, decimals: number): bigint | null {
   const normalized = value.trim();
   if (!/^(?:\d+)(?:\.\d*)?$/.test(normalized)) return null;
@@ -644,13 +645,6 @@ function parseTokenAmount(value: string, decimals: number): bigint | null {
   if (fraction.length > decimals) return null;
   const scale = 10n ** BigInt(decimals);
   return BigInt(whole) * scale + BigInt((fraction + "0".repeat(decimals)).slice(0, decimals) || "0");
-}
-
-function displayEstimate(value: bigint, decimals: number, fractionDigits = 4): string {
-  const places = Math.min(decimals, fractionDigits);
-  const factor = 10n ** BigInt(decimals - places);
-  const rounded = (value + factor / 2n) / factor;
-  return displayAmount(rounded, places);
 }
 
 function shortAddress(address: string): string {

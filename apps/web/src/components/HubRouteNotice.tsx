@@ -2,13 +2,6 @@
 
 import { useEffect, useRef } from "react";
 
-function focusHubCanvas() {
-  const canvas = document.querySelector("section canvas");
-  if (!(canvas instanceof HTMLCanvasElement)) return;
-  canvas.tabIndex = -1;
-  canvas.focus();
-}
-
 /** Closed expansion route. Not a boss gate and not a travel action. */
 export function HubRouteNotice({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -40,7 +33,6 @@ export function HubRouteNotice({ onClose }: { onClose: () => void }) {
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
-      focusHubCanvas();
     };
   }, [onClose]);
 

@@ -4,6 +4,9 @@ pragma solidity ^0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {BossFactory} from "../src/BossFactory.sol";
 import {BossHP} from "../src/BossHP.sol";
 import {BossHook} from "../src/BossHook.sol";
 import {BossRouter} from "../src/BossRouter.sol";
@@ -11,6 +14,7 @@ import {BossCollectibles} from "../src/BossCollectibles.sol";
 import {MockUSD} from "../src/MockUSD.sol";
 import {RoyToken} from "../src/RoyToken.sol";
 import {HookMiner} from "../src/libraries/HookMiner.sol";
+import {BossPricing} from "../src/libraries/BossPricing.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
@@ -54,6 +58,74 @@ contract UnauthorizedSwapProbe is IUnlockCallback {
     }
 }
 
+contract SupplySwapProbe is IUnlockCallback {
+    IPoolManager public immutable manager;
+
+    constructor(IPoolManager manager_) {
+        manager = manager_;
+    }
+
+    function swap(PoolKey calldata key, bool zeroForOne, uint256 amount) external {
+        manager.unlock(abi.encode(key, zeroForOne, amount, msg.sender));
+    }
+
+    function unlockCallback(bytes calldata data) external returns (bytes memory) {
+        require(msg.sender == address(manager), "manager only");
+        (PoolKey memory key, bool zeroForOne, uint256 amount, address trader) =
+            abi.decode(data, (PoolKey, bool, uint256, address));
+        uint160 priceLimit = zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
+        BalanceDelta delta = manager.swap(key, SwapParams(zeroForOne, -int256(amount), priceLimit), bytes(""));
+        Currency input = zeroForOne ? key.currency0 : key.currency1;
+        int128 inputDelta = zeroForOne ? delta.amount0() : delta.amount1();
+        if (inputDelta < 0) {
+            manager.sync(input);
+            require(
+                IERC20(Currency.unwrap(input)).transferFrom(trader, address(manager), uint256(uint128(-inputDelta)))
+            );
+            manager.settle();
+        }
+        Currency output = zeroForOne ? key.currency1 : key.currency0;
+        int128 outputDelta = zeroForOne ? delta.amount1() : delta.amount0();
+        if (outputDelta > 0) manager.take(output, trader, uint256(uint128(outputDelta)));
+        return bytes("");
+    }
+}
+
+contract TaxedMemeToken is ERC20 {
+    constructor() ERC20("Taxed meme", "TAX") { _mint(msg.sender, 10_000e18); }
+
+    function _update(address from, address to, uint256 value) internal override {
+        if (from != address(0) && to != address(0)) {
+            uint256 fee = value / 100;
+            super._update(from, address(0), fee);
+            value -= fee;
+        }
+        super._update(from, to, value);
+    }
+}
+
+contract SixDecimalMeme is ERC20 {
+    constructor(address initialHolder, uint256 supply) ERC20("Six decimal meme", "M6") {
+        _mint(initialHolder, supply);
+    }
+
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
+}
+
+contract TestMemeToken is ERC20 {
+    constructor(address initialHolder, uint256 supply) ERC20("CREATE2 meme", "C2M") {
+        _mint(initialHolder, supply);
+    }
+}
+
+contract TestMemeDeployer {
+    function deploy(bytes32 salt, address holder, uint256 supply) external returns (IERC20) {
+        return IERC20(address(new TestMemeToken{salt: salt}(holder, supply)));
+    }
+}
+
 contract BossPoolCoreTest is Test {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
@@ -63,7 +135,7 @@ contract BossPoolCoreTest is Test {
         IPoolManager manager;
         MockUSD mockUSD;
         RoyToken roy;
-        BossHP bossHP;
+        IERC20 bossHP;
         BossCollectibles collectibles;
         BossRouter router;
         BossHook hook;
@@ -123,8 +195,7 @@ contract BossPoolCoreTest is Test {
             bossHP,
             collectibles,
             address(this),
-            PRIZE,
-            uint256(roundDeadline)
+            BossHook.RoundConfig(PRIZE, uint256(roundDeadline), 300e18, 0, false, false, 0, 0, 0)
         );
         bytes memory initCode = abi.encodePacked(vm.getCode("out/BossHook.sol/BossHook.json"), constructorArgs);
         TestCreate2Deployer create2Deployer = new TestCreate2Deployer();
@@ -158,6 +229,361 @@ contract BossPoolCoreTest is Test {
         _clearAllStagesWithTwoRefills();
         _transferAndRedeemEligibleHP();
         _claimVictoryNFTs();
+    }
+
+    function test_FactoryMemePurchasesKeepTokensAndIsolateBossRewards() public {
+        _seedSupplyPool();
+        BossFactory factory = _factory();
+        RoyToken meme = new RoyToken(address(this), 10_000e18);
+        // Existing supply is held outside the game and is never reward credit.
+        meme.transfer(BOB, 3_000e18);
+        BossFactory.LaunchConfig memory launchConfig =
+            BossFactory.LaunchConfig(meme, 1_800e18, 1_000, 24e6, roundDeadline, 0);
+        assertLt(factory.quoteLaunch(launchConfig).hpPriceTick, 0, "18-decimal quote exercises negative-tick search");
+        HP1Round memory first = _launch(factory, meme, 1_800e18, 1_000, 24e6, bytes32(uint256(1)), address(this));
+        HP1Round memory second = _launch(factory, meme, 1_800e18, 1_000, 24e6, bytes32(uint256(1)), BOB);
+        assertEq(factory.bossCount(), 2);
+        assertTrue(first.hook.bossPoolId() != second.hook.bossPoolId());
+        assertEq(first.router.owner(), address(this));
+        assertEq(first.hook.maker(), address(this));
+        assertEq(first.hook.rewardCredit(BOB), 0);
+        assertGt(meme.balanceOf(address(this)), 0, "launch needs only funded allocation, not all token supply");
+        assertEq(second.hook.totalVolume(), 0, "wallet transfers do not advance the volume target");
+        vm.expectRevert(BossRouter.InvalidAttack.selector);
+        first.router.attackWithRoy(1e18, 1, 0, block.timestamp + 1 hours);
+
+        _attackForRound(first, ALICE, 1e6, 0);
+        assertEq(first.hook.stageVolume(0), 1e6);
+        assertGt(first.hook.remainingSellableHP(), 0, "volume gates advance before the current HP position empties");
+        uint256 volumeBeforeQuote = first.hook.totalVolume();
+        uint256 soldBeforeQuote = first.hook.stageSold(0);
+        BossRouter.QuoteResult memory stageQuote = first.router.quoteAttackWithMockUSD(3e6, 0);
+        assertTrue(stageQuote.stageCleared);
+        assertFalse(stageQuote.bossDefeated);
+        assertEq(stageQuote.nextStage, 1);
+        assertEq(first.hook.totalVolume(), volumeBeforeQuote, "Factory quote does not persist volume");
+        assertEq(first.hook.stageSold(0), soldBeforeQuote, "Factory quote does not persist MEME output");
+
+        uint256 refillReserve = meme.balanceOf(address(first.router));
+        vm.prank(address(first.router));
+        meme.transfer(address(this), refillReserve);
+        uint256 bobUSDBeforeFailedClear = mockUSD.balanceOf(BOB);
+        uint256 volumeBeforeFailedClear = first.hook.totalVolume();
+        uint256 stageSoldBeforeFailedClear = first.hook.stageSold(0);
+        vm.startPrank(BOB);
+        mockUSD.approve(address(first.router), type(uint256).max);
+        vm.expectRevert();
+        first.router.attackWithMockUSD(3e6, 1, 1, 0, block.timestamp + 1 hours);
+        vm.stopPrank();
+        assertEq(mockUSD.balanceOf(BOB), bobUSDBeforeFailedClear, "failed stage release rolls back player input");
+        assertEq(first.hook.totalVolume(), volumeBeforeFailedClear, "failed stage release rolls back volume");
+        assertEq(first.hook.stageSold(0), stageSoldBeforeFailedClear, "failed stage release rolls back HP credit");
+        meme.transfer(address(first.router), refillReserve);
+
+        AttackAmounts memory clearAttack = _attackForRound(first, BOB, 3e6, 0);
+        assertGe(first.hook.stageVolume(0), first.hook.stageVolumeTarget(0));
+        assertEq(clearAttack.usdSpent, stageQuote.mockUSDSpent);
+        assertEq(clearAttack.royBought, stageQuote.royBought);
+        assertEq(clearAttack.roySpent, stageQuote.roySpent);
+        assertEq(clearAttack.hpOut, stageQuote.bossHPOut);
+        _attackForRound(first, ALICE, 1_000e6, 1);
+        assertGe(first.hook.stageVolume(1), first.hook.stageVolumeTarget(1));
+        _attackForRound(first, BOB, 1_000e6, 2);
+        assertEq(uint8(first.hook.status()), uint8(BossHook.RoundStatus.Defeated));
+        assertGe(first.hook.totalVolume(), first.hook.volumeTargetMockUSD());
+        assertEq(first.hook.rewardCredit(ALICE) + first.hook.rewardCredit(BOB), first.hook.finalEligibleHP());
+        assertEq(second.hook.stageSold(0), 0);
+        assertEq(second.hook.rewardCredit(ALICE), 0);
+
+        uint256 aliceCredit = first.hook.rewardCredit(ALICE);
+        uint256 aliceTokens = meme.balanceOf(ALICE);
+        address outsider = address(0xCAFE);
+        vm.prank(ALICE);
+        meme.transfer(outsider, aliceTokens);
+        vm.expectRevert(BossHook.ClaimUnavailable.selector);
+        vm.prank(outsider);
+        first.hook.claimReward(aliceCredit);
+
+        uint256 memeBeforeClaim = meme.balanceOf(ALICE);
+        vm.prank(ALICE);
+        uint256 alicePrize = first.hook.claimReward(aliceCredit);
+        assertEq(alicePrize, Math.mulDiv(180e18, aliceCredit, first.hook.finalEligibleHP()));
+        assertEq(meme.balanceOf(ALICE) - memeBeforeClaim, alicePrize);
+        assertEq(meme.balanceOf(outsider), aliceTokens, "claim does not consume or burn meme tokens");
+        assertEq(first.hook.rewardCredit(ALICE), 0);
+        vm.expectRevert(BossHook.ClaimUnavailable.selector);
+        vm.prank(ALICE);
+        first.hook.claimReward(aliceCredit);
+        assertEq(first.collectibles.nextTokenId(), 1, "purchases and prize claims do not mint NFTs");
+        vm.prank(ALICE);
+        first.hook.claimVictoryNFT();
+        assertEq(first.collectibles.balanceOf(ALICE), 1);
+
+        vm.expectRevert(BossRouter.InvalidSetup.selector);
+        first.router.recoverAfterDeadline();
+        vm.warp(first.deadline);
+        uint256 prizeBalance = meme.balanceOf(address(first.hook));
+        first.router.recoverAfterDeadline();
+        assertEq(meme.balanceOf(address(first.hook)), prizeBalance, "LP recovery cannot withdraw outstanding prizes");
+        assertEq(meme.balanceOf(address(first.router)), 0);
+        assertEq(roy.balanceOf(address(first.router)), 0);
+        uint256 bobCredit = first.hook.rewardCredit(BOB);
+        vm.prank(BOB);
+        first.hook.claimReward(bobCredit);
+        second.hook.expire();
+        vm.prank(BOB);
+        second.hook.refundExpiredPrize();
+        vm.prank(BOB);
+        second.router.recoverAfterDeadline();
+        assertEq(meme.balanceOf(address(second.hook)), 0);
+        assertEq(meme.totalSupply(), 10_000e18);
+        assertEq(manager.getNonzeroDeltaCount(), 0);
+    }
+
+    function test_FactorySixDecimalVolumePurchasesAndAtomicFunding() public {
+        _seedSupplyPool();
+        BossFactory factory = _factory();
+        SixDecimalMeme meme = new SixDecimalMeme(address(this), 10_000e6);
+        BossFactory.LaunchConfig memory config =
+            BossFactory.LaunchConfig(meme, 10_000e6, 1_000, 24e6, roundDeadline, 0);
+        bytes32 userSalt = bytes32(uint256(3));
+        vm.expectRevert(BossFactory.InvalidLaunch.selector);
+        factory.quoteLaunch(BossFactory.LaunchConfig(meme, 10_000e6, 1_000, 5, roundDeadline, 0));
+        BossFactory.LaunchQuote memory quote = factory.quoteLaunch(config);
+        config.maxAttackTokenPerMockUSDX128 = quote.maxRoyPerMockUSDX128;
+        assertEq(quote.prizeAmount, 1_000e6);
+        assertEq(quote.battleTokenBudget, 9_000e6);
+        assertEq(int256(quote.hpPriceTick) % 60, 0);
+        bytes memory code = factory.hookInitCode(address(this), userSalt, config, _routerCode(), _hookCode());
+        (, bytes32 hookSalt) = HookMiner.find(address(factory), HOOK_FLAGS, code, bytes(""));
+        mockUSD.approve(address(factory), type(uint256).max);
+        meme.approve(address(factory), type(uint256).max);
+        (BossHook volumeHook, BossRouter volumeRouter) =
+            factory.launchBoss(config, userSalt, hookSalt, _routerCode(), _hookCode());
+        HP1Round memory round = _round(volumeHook, volumeRouter, meme);
+        assertEq(address(round.hook.rewardToken()), address(meme));
+        assertEq(round.hook.volumeTargetMockUSD(), 24e6);
+        for (uint8 stage; stage < 3; stage++) {
+            uint256 volumeBefore = round.hook.totalVolume();
+            AttackAmounts memory amounts = _attackForRound(round, ALICE, round.hook.stageVolumeTarget(stage), stage);
+            uint256 spent = round.hook.totalVolume() - volumeBefore;
+            uint256 out = amounts.hpOut;
+            assertGt(out, 0);
+            assertEq(round.hook.stageSold(stage), out);
+            assertEq(spent, round.hook.stageVolumeTarget(stage));
+        }
+        assertEq(meme.balanceOf(ALICE), round.hook.finalEligibleHP());
+        assertEq(round.hook.rewardCredit(ALICE), meme.balanceOf(ALICE));
+        uint256 credit = round.hook.rewardCredit(ALICE);
+        vm.prank(ALICE);
+        assertEq(round.hook.claimReward(credit), 1_000e6);
+        assertEq(manager.getNonzeroDeltaCount(), 0);
+    }
+
+    function test_FactoryVolumeTailClearsWithinCallerCapAndCreditsActualVolume() public {
+        _seedSupplyPool();
+        BossFactory factory = _factory();
+        SixDecimalMeme meme = new SixDecimalMeme(address(this), 10_000e6);
+        HP1Round memory round = _launch(factory, meme, 10_000e6, 1_000, 24e6, bytes32(uint256(30)), address(this));
+        uint256 target = round.hook.stageVolumeTarget(0);
+
+        _attackForRound(round, ALICE, target - 1, 0);
+        assertEq(round.hook.stageVolume(0), target - 1);
+        assertEq(round.hook.currentStage(), 0);
+
+        BossRouter.QuoteResult memory quote = round.router.quoteAttackWithMockUSD(1e6, 0);
+        assertTrue(quote.stageCleared, "a normal caller cap can route the unspendable tail");
+        assertLe(quote.mockUSDSpent, 1e6, "the quote remains within the caller cap");
+
+        uint256 volumeBefore = round.hook.stageVolume(0);
+        uint256 bobUSDBefore = mockUSD.balanceOf(BOB);
+        uint256 bobRoyBefore = roy.balanceOf(BOB);
+        uint256 bobHPBefore = meme.balanceOf(BOB);
+        AttackAmounts memory tail = _attackForRound(round, BOB, 1e6, 0);
+        uint256 credited = FullMath.mulDiv(tail.usdSpent, tail.roySpent, tail.royBought);
+        assertEq(tail.usdSpent, quote.mockUSDSpent);
+        assertEq(tail.royBought, quote.royBought);
+        assertEq(tail.roySpent, quote.roySpent);
+        assertEq(tail.hpOut, quote.bossHPOut);
+        assertEq(round.hook.stageVolume(0) - volumeBefore, credited, "only the measured purchase share is credited");
+        assertGe(round.hook.stageVolume(0), target);
+        assertEq(round.hook.currentStage(), 1);
+        assertEq(round.hook.stageSold(1), 0, "tail damage stays with its starting stage");
+        assertEq(bobUSDBefore - mockUSD.balanceOf(BOB), tail.usdSpent);
+        assertEq(roy.balanceOf(BOB) - bobRoyBefore, tail.royBought - tail.roySpent);
+        assertEq(meme.balanceOf(BOB) - bobHPBefore, tail.hpOut);
+        assertEq(manager.getNonzeroDeltaCount(), 0);
+    }
+
+    function test_FactoryFrozenHookSaltSurvivesSupplyPriceMove() public {
+        _seedSupplyPool();
+        BossFactory factory = _factory();
+        RoyToken meme = new RoyToken(address(this), 10_000e18);
+        bytes32 userSalt = bytes32(uint256(31));
+        BossFactory.LaunchConfig memory config = BossFactory.LaunchConfig(meme, 1_800e18, 1_000, 24e6, roundDeadline, 0);
+        config.maxAttackTokenPerMockUSDX128 = factory.quoteLaunch(config).maxRoyPerMockUSDX128;
+        bytes memory routerCode = _routerCode();
+        bytes memory hookCode = _hookCode();
+        bytes memory initCode = factory.hookInitCode(address(this), userSalt, config, routerCode, hookCode);
+        (, bytes32 hookSalt) = HookMiner.find(address(factory), HOOK_FLAGS, initCode, bytes(""));
+
+        SupplySwapProbe probe = new SupplySwapProbe(manager);
+        PoolKey memory supplyKey = router.supplyPoolKey();
+        bool mockUSDIsCurrency0 = address(mockUSD) < address(roy);
+        mockUSD.faucet(address(this), 1e6);
+        mockUSD.approve(address(probe), type(uint256).max);
+        probe.swap(supplyKey, mockUSDIsCurrency0, 1e6);
+        assertEq(
+            keccak256(factory.hookInitCode(address(this), userSalt, config, routerCode, hookCode)),
+            keccak256(initCode),
+            "within-headroom spot movement keeps the CREATE2 init code stable"
+        );
+        assertEq(factory.quoteLaunch(config).maxRoyPerMockUSDX128, config.maxAttackTokenPerMockUSDX128);
+
+        mockUSD.approve(address(factory), type(uint256).max);
+        meme.approve(address(factory), type(uint256).max);
+        (BossHook launched,) = factory.launchBoss(config, userSalt, hookSalt, routerCode, hookCode);
+        assertEq(address(factory.bosses(keccak256(abi.encode(address(this), userSalt)))), address(launched));
+
+        vm.prank(address(router));
+        roy.transfer(address(this), 10_000e18);
+        roy.approve(address(probe), type(uint256).max);
+        probe.swap(supplyKey, !mockUSDIsCurrency0, 10_000e18);
+        vm.expectRevert(BossFactory.SupplyMarketUnavailable.selector);
+        factory.quoteLaunch(config);
+    }
+
+    function test_BossPricingSplitsAtBitmapBoundariesForPartialTicks() public pure {
+        uint160 lower = TickMath.getSqrtPriceAtTick(-61);
+        uint160 split = TickMath.getSqrtPriceAtTick(-60);
+        uint160 upper = TickMath.getSqrtPriceAtTick(0);
+        _assertSplitRoundsUp(lower, split, upper, false);
+
+        uint160 token0Lower = TickMath.getSqrtPriceAtTick(13_500);
+        uint160 boundaryPrice = TickMath.getSqrtPriceAtTick(15_360);
+        uint160 nextTickPrice = TickMath.getSqrtPriceAtTick(15_361);
+        uint160 token0Upper = boundaryPrice + (nextTickPrice - boundaryPrice) / 2;
+        assertEq(TickMath.getTickAtSqrtPrice(token0Upper), 15_360);
+        _assertSplitRoundsUp(token0Lower, boundaryPrice, token0Upper, true);
+    }
+
+    function test_FactoryVolumeStagesWithMemeAsCurrency0() public {
+        _seedSupplyPool();
+        BossFactory factory = _factory();
+        TestMemeDeployer deployer = new TestMemeDeployer();
+        IERC20 meme;
+        for (uint256 i; i < 8; i++) {
+            IERC20 candidate = deployer.deploy(bytes32(i), address(this), 10_000e18);
+            if (address(candidate) < address(roy)) {
+                meme = candidate;
+                break;
+            }
+        }
+        assertTrue(address(meme) != address(0), "fixture finds MEME below the attack-token address");
+        assertLt(uint160(address(meme)), uint160(address(roy)));
+
+        HP1Round memory round =
+            _launch(factory, meme, 1_800e18, 1_000, 24e6, bytes32(uint256(4)), address(this));
+        assertTrue(round.hook.bossIsCurrency0());
+        for (uint8 stage; stage < 3; stage++) {
+            _attackForRound(round, ALICE, round.hook.stageVolumeTarget(stage), stage);
+            assertEq(round.hook.stageVolume(stage), round.hook.stageVolumeTarget(stage));
+        }
+        assertEq(round.hook.totalVolume(), 24e6);
+        assertEq(uint8(round.hook.status()), uint8(BossHook.RoundStatus.Defeated));
+        assertEq(manager.getNonzeroDeltaCount(), 0);
+    }
+
+    function test_FactoryRejectsInvalidLaunchesAtomically() public {
+        _seedSupplyPool();
+        BossFactory factory = _factory();
+        TaxedMemeToken meme = new TaxedMemeToken();
+        meme.approve(address(factory), type(uint256).max);
+        BossFactory.LaunchConfig memory config =
+            BossFactory.LaunchConfig(meme, 2_000e18, 1_000, 24e6, roundDeadline, 0);
+        bytes memory routerCode = _routerCode();
+        bytes memory hookCode = _hookCode();
+        vm.expectRevert(BossFactory.InvalidLaunch.selector);
+        factory.launchBoss(config, bytes32(0), bytes32(0), hex"00", hookCode);
+        config.maxAttackTokenPerMockUSDX128 = factory.quoteLaunch(config).maxRoyPerMockUSDX128;
+        bytes memory code = factory.hookInitCode(address(this), bytes32(0), config, routerCode, hookCode);
+        (, bytes32 salt) = HookMiner.find(address(factory), HOOK_FLAGS, code, bytes(""));
+        vm.expectRevert(BossFactory.TokenFundingMismatch.selector);
+        factory.launchBoss(config, bytes32(0), salt, routerCode, hookCode);
+        assertEq(meme.balanceOf(address(this)), 10_000e18);
+        assertEq(meme.totalSupply(), 10_000e18, "failed transfer tax is rolled back");
+        assertEq(factory.bossCount(), 0);
+        (address predictedRouter, address predictedCollectibles) = factory.predictAddresses(address(this), bytes32(0), meme, routerCode);
+        assertEq(predictedRouter.code.length, 0);
+        assertEq(predictedCollectibles.code.length, 0);
+
+        // Reject a target too small to split across all three stage gates.
+        RoyToken tiny = new RoyToken(address(this), 100);
+        config.token = tiny;
+        config.tokenAllocation = 100;
+        config.volumeTargetMockUSD = 5;
+        tiny.approve(address(factory), 100);
+        vm.expectRevert(BossFactory.InvalidLaunch.selector);
+        factory.quoteLaunch(config);
+        assertEq(tiny.balanceOf(address(this)), 100);
+        assertEq(factory.bossCount(), 0);
+    }
+
+    function _factory() private returns (BossFactory) {
+        return BossFactory(vm.deployCode("out/BossFactory.sol/BossFactory.json", abi.encode(manager, mockUSD, roy, keccak256(_routerCode()), keccak256(_hookCode()))));
+    }
+
+    function _routerCode() private view returns (bytes memory) {
+        return vm.getCode("out/BossRouter.sol/BossRouter.json");
+    }
+
+    function _hookCode() private view returns (bytes memory) {
+        return vm.getCode("out/BossHook.sol/BossHook.json");
+    }
+
+    function _launch(
+        BossFactory factory,
+        IERC20 token,
+        uint256 tokenAllocation,
+        uint16 prizeBps,
+        uint256 targetVolume,
+        bytes32 userSalt,
+        address maker
+    )
+        private returns (HP1Round memory round)
+    {
+        BossFactory.LaunchConfig memory config =
+            BossFactory.LaunchConfig(token, tokenAllocation, prizeBps, targetVolume, roundDeadline, 0);
+        config.maxAttackTokenPerMockUSDX128 = factory.quoteLaunch(config).maxRoyPerMockUSDX128;
+        bytes memory code = factory.hookInitCode(maker, userSalt, config, _routerCode(), _hookCode());
+        (address expectedHook, bytes32 salt) = HookMiner.find(address(factory), HOOK_FLAGS, code, bytes(""));
+        mockUSD.faucet(maker, targetVolume + 1e6);
+        vm.startPrank(maker);
+        mockUSD.approve(address(factory), type(uint256).max);
+        token.approve(address(factory), type(uint256).max);
+        (round.hook, round.router) = factory.launchBoss(config, userSalt, salt, _routerCode(), _hookCode());
+        vm.stopPrank();
+        round.manager = manager;
+        round.mockUSD = mockUSD;
+        round.roy = roy;
+        round.bossHP = token;
+        round.deadline = roundDeadline;
+        round.collectibles = round.hook.collectibles();
+        assertEq(address(round.hook), expectedHook);
+        assertEq(address(factory.bosses(keccak256(abi.encode(maker, userSalt)))), expectedHook);
+        assertTrue(round.hook.externalHP());
+        assertEq(uint8(round.hook.status()), uint8(BossHook.RoundStatus.Active));
+    }
+
+    function _round(BossHook hook_, BossRouter router_, IERC20 token) private view returns (HP1Round memory round) {
+        round.manager = manager;
+        round.mockUSD = mockUSD;
+        round.roy = roy;
+        round.bossHP = token;
+        round.hook = hook_;
+        round.router = router_;
+        round.deadline = roundDeadline;
+        round.collectibles = hook_.collectibles();
     }
 
     function test_PublicQuoteNeedsNoFundingOrAllowanceAndMatchesDirectAttackWithoutEffects() public {
@@ -247,7 +673,7 @@ contract BossPoolCoreTest is Test {
         assertGe(router.minimumBossHPForVictoryPath(), 1_802e18);
         assertLe(router.minimumBossHPForVictoryPath(), 1_803e18);
         assertEq(bossHP.totalSupply(), BOSS_HP_SUPPLY);
-        assertEq(roy.balanceOf(ALICE), 0, "fresh attacker needs no starter ROY");
+        assertEq(roy.balanceOf(ALICE), 0, "fresh attacker needs no starter Attack Token");
         assertEq(collectibles.balanceOf(ALICE), 0, "fresh attacker needs no entry NFT");
         assertEq(mockUSD.allowance(ALICE, address(hook)), 0, "attack needs no Hook approval");
         uint256 aliceUSD = mockUSD.balanceOf(ALICE);
@@ -503,7 +929,7 @@ contract BossPoolCoreTest is Test {
 
         PoolKey memory bossKey = round.router.bossPoolKey();
         (uint160 startPrice,,,) = round.manager.getSlot0(bossKey.toId());
-        assertEq(startPrice, TickMath.getSqrtPriceAtTick(0), "human ROY/HP starts at 1");
+        assertEq(startPrice, TickMath.getSqrtPriceAtTick(0), "human Attack Token/HP starts at 1");
 
         vm.prank(address(0xCAFE));
         BossRouter.QuoteResult memory initialQuote = round.router.quoteAttackWithMockUSD(1e6, 0);
@@ -524,7 +950,7 @@ contract BossPoolCoreTest is Test {
         assertEq(initialQuote.roySpent, partialAttack.roySpent);
         assertEq(initialQuote.bossHPOut, partialAttack.hpOut);
         (uint160 partialPrice,,,) = round.manager.getSlot0(bossKey.toId());
-        assertLt(partialPrice, startPrice, "human ROY/HP rises as the pool price falls");
+        assertLt(partialPrice, startPrice, "human Attack Token/HP rises as the pool price falls");
 
         BossRouter.QuoteResult memory clearQuote = round.router.quoteAttackWithMockUSD(1_000e6, 0);
         assertTrue(clearQuote.stageCleared);
@@ -538,13 +964,13 @@ contract BossPoolCoreTest is Test {
         assertEq(clearQuote.roySpent, clearAttack.roySpent);
         assertEq(clearQuote.bossHPOut, clearAttack.hpOut);
         assertGt(clearAttack.hpOut, 0);
-        assertGt(clearAttack.royBought, clearAttack.roySpent, "unused supply-pool ROY returns to the player");
+        assertGt(clearAttack.royBought, clearAttack.roySpent, "unused supply-pool Attack Token returns to the player");
         assertEq(round.hook.currentStage(), 1);
         assertEq(round.hook.stageSold(1), 0, "clearing attack cannot spill");
         assertEq(
             round.hook.stageEndSqrtPriceX96(0),
             TickMath.getSqrtPriceAtTick(-1_920),
-            "human ROY/HP ends at the configured upper price"
+            "human Attack Token/HP ends at the configured upper price"
         );
         assertEq(-TickMath.getTickAtSqrtPrice(round.hook.stageEndSqrtPriceX96(0)), 1_920);
         (uint160 resetPrice,,,) = round.manager.getSlot0(bossKey.toId());
@@ -598,8 +1024,7 @@ contract BossPoolCoreTest is Test {
             round.bossHP,
             round.collectibles,
             address(this),
-            PRIZE,
-            uint256(round.deadline)
+            BossHook.RoundConfig(PRIZE, uint256(round.deadline), 300e18, 0, false, false, 0, 0, 0)
         );
         bytes memory initCode = abi.encodePacked(vm.getCode("out/BossHook.sol/BossHook.json"), constructorArgs);
         TestCreate2Deployer create2Deployer = new TestCreate2Deployer();
@@ -663,6 +1088,30 @@ contract BossPoolCoreTest is Test {
             maxMockUSD, 1, 1, stage, block.timestamp + 1 hours
         );
         vm.stopPrank();
+    }
+
+    function _feeAdjustedStepInput(uint160 lower, uint160 upper, uint128 liquidity, bool token0In)
+        private
+        pure
+        returns (uint256)
+    {
+        uint256 netInput = token0In
+            ? SqrtPriceMath.getAmount0Delta(lower, upper, liquidity, true)
+            : SqrtPriceMath.getAmount1Delta(lower, upper, liquidity, true);
+        return FullMath.mulDivRoundingUp(netInput, 1_000_000, 997_000);
+    }
+
+    function _assertSplitRoundsUp(uint160 lower, uint160 split, uint160 upper, bool token0In) private pure {
+        for (uint128 factor = 1; factor <= 256; factor++) {
+            uint128 liquidity = factor * 1e18;
+            uint256 expected = _feeAdjustedStepInput(lower, split, liquidity, token0In)
+                + _feeAdjustedStepInput(split, upper, liquidity, token0In);
+            if (expected > _feeAdjustedStepInput(lower, upper, liquidity, token0In)) {
+                assertEq(BossPricing.stageRoyInputRequirement(lower, upper, liquidity, token0In), expected);
+                return;
+            }
+        }
+        assertTrue(false, "test range must expose per-step fee rounding");
     }
 
     function _positionLiquidity(uint256 salt) private view returns (uint128 liquidity) {

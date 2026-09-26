@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Mono, Space_Grotesk } from "next/font/google";
+import { DM_Mono, Silkscreen, Space_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
+import { BossPoolProvider } from "@/components/BossPoolProvider";
+import { FactoryOperationProvider } from "@/components/FactoryOperationProvider";
+import { WalletChooserHost } from "@/components/WalletControl";
+import { WalletProvider } from "@/wallet/WalletProvider";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -17,9 +21,34 @@ const dmMono = DM_Mono({
   display: "swap",
 });
 
+const silkscreen = Silkscreen({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-silkscreen",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "Boss Pool · Local Arena",
-  description: "Pixel-art boss raid on Uniswap v4. Every hit buys real BossHP.",
+  title: "Boss BoostPad",
+  description:
+    "Boss BoostPad turns a token pool into a boss raid. Fighters swap to attack and share the prize.",
+  openGraph: {
+    title: "Boss BoostPad",
+    description:
+      "Boss BoostPad turns a token pool into a boss raid. Fighters swap to attack and share the prize.",
+    images: [{ url: "/images/boss-boostpad.png", width: 1024, height: 1024, alt: "Boss BoostPad" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "Boss BoostPad",
+    description:
+      "Boss BoostPad turns a token pool into a boss raid. Fighters swap to attack and share the prize.",
+    images: ["/images/boss-boostpad.png"],
+  },
+  icons: {
+    icon: "/images/boss-boostpad.png",
+    apple: "/images/boss-boostpad.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -30,8 +59,15 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${dmMono.variable}`}>
-      <body>{children}</body>
+    <html lang="en" className={`${spaceGrotesk.variable} ${dmMono.variable} ${silkscreen.variable}`}>
+      <body>
+        <WalletProvider>
+          <FactoryOperationProvider>
+            <BossPoolProvider>{children}</BossPoolProvider>
+          </FactoryOperationProvider>
+          <WalletChooserHost />
+        </WalletProvider>
+      </body>
     </html>
   );
 }

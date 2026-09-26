@@ -1,35 +1,31 @@
-const CMD_CLASS =
-  "min-h-[44px] border-2 border-[#2b4a8b] bg-[#f7f3e3] px-2 py-2 font-mono text-[10px] tracking-[0.14em] text-[#2b4a8b] transition-transform duration-150 ease-[var(--ease-out-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff] hover:bg-[#2b4a8b]/10 active:scale-[0.97] disabled:cursor-not-allowed disabled:border-[#8a93a6]/60 disabled:text-[#8a93a6] disabled:opacity-60";
+const ROW = "flex min-h-11 w-full flex-1 items-center gap-4 px-4 py-2 text-left text-[#092B61] focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-[#8ab4ff] disabled:cursor-not-allowed disabled:text-[#6d7c9c] lg:py-1";
 
-/**
- * COMMAND window: 2×2 battle commands. BURN ROY is the only functional one
- * and takes focus on open; RUN closes (equivalent to ESC); MAGIC/ITEM are
- * always disabled with explanatory titles.
- */
-export function CommandWindow({
-  canAttack,
-  onAttack,
-  onClose,
-}: {
-  canAttack: boolean;
-  onAttack: () => void;
+export function CommandWindow({ label, disabled, onAction, onClose }: {
+  label: string;
+  disabled: boolean;
+  onAction: () => void;
   onClose: () => void;
 }) {
   return (
-    <div className="window-chrome w-[min(26vw,260px)] max-md:w-[48vw] p-2.5">
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" autoFocus disabled={!canAttack} onClick={onAttack} className={CMD_CLASS}>
-          BURN ROY
-        </button>
-        <button type="button" disabled title="Not in the mock build" className={CMD_CLASS}>
-          MAGIC
-        </button>
-        <button type="button" disabled title="Inventory is a later milestone" className={CMD_CLASS}>
-          ITEM
-        </button>
-        <button type="button" onClick={onClose} className={CMD_CLASS}>
-          RUN
-        </button>
+    <div className="h-full bg-[#092B61] p-1 font-pixel shadow-[4px_4px_0_#041833]">
+      <div className="flex h-full flex-col border-2 border-white bg-[#FFF9E9]">
+        <div lang="ja" className="bg-[#092B61] px-4 py-3 text-[22px] leading-none text-white lg:py-2">コマンド？</div>
+        <div className="flex flex-1 flex-col divide-y-4 divide-[#092B61]">
+          {[
+            { kana: "やく", label, icon: "⚔", disabled, onClick: onAction },
+            { kana: "まほう", label: "MAGIC", icon: "✦", disabled: true, title: "Magic is not available." },
+            { kana: "アイテム", label: "ITEM", icon: "▣", disabled: true, title: "Inventory is not available." },
+            { kana: "にげる", label: "RUN", icon: "➜", disabled: false, onClick: onClose },
+          ].map((command) => (
+            <button key={command.label} type="button" disabled={command.disabled} title={command.title} onClick={command.onClick} className={`${ROW} ${command.onClick === onAction && !disabled ? "bg-[#DCEEFF]" : ""}`}>
+              <span aria-hidden className="grid size-10 shrink-0 place-items-center bg-[#092B61] text-[26px] leading-none text-white lg:size-[clamp(36px,6.2vh,56px)]">{command.icon}</span>
+              <span className="flex min-w-0 flex-col items-start gap-1">
+                <span lang="ja" className="text-[clamp(12px,1.8vh,16px)] leading-none">{command.kana}</span>
+                <span className="text-[clamp(18px,2.9vh,26px)] leading-none">{command.label}</span>
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -4,14 +4,14 @@ This slice turns the plan into executable local contracts, a Bun workspace, a ge
 
 ## Implemented behavior
 
-- Standard fixed-supply ROY and BossHP, test-only MockUSD, entry/victory NFTs, enrollment and starter ROY.
-- BossRouter executes the real v4 MockUSD/ROY/BossHP route. BossHook records purchased HP without burning, gates the current stage and freezes eligible HP at defeat.
+- Standard fixed-supply Attack Token and BossHP, test-only MockUSD, entry/victory NFTs, enrollment and starter Attack Token.
+- BossRouter executes the real v4 MockUSD/Attack Token/BossHP route. BossHook records purchased HP without burning, gates the current stage and freezes eligible HP at defeat.
 - Three stages, two same-pool reserve-funded resets, fresh incremental LP positions, player settlement before maintenance, and atomic failed-transition rollback.
 - Transferable HP reward rights, partial/final redemption into permanent custody, independent victory-NFT eligibility, expiry and prize refund.
 - Initialization requires complete HP custody and funded transition requirements, and rejects an unusable supply seed. Setup, enrollment and attacks reject the exclusive deadline.
 - Fixed 3,000-pip LP fees and zero protocol fee are enforced for the supported local route.
 
-The Hook chooses `[0,1920]` for HP0 or `[-1920,0]` for HP1. Both normalize to 1 → approximately 1.211659 ROY/HP. HP1 refill quotes include separate rounding across the -60 bitmap boundary. The measured first-stage total in the HP1 regression is 331.219793595396366740 ROY.
+The Hook chooses `[0,1920]` for HP0 or `[-1920,0]` for HP1. Both normalize to 1 → approximately 1.211659 Attack Token/HP. HP1 refill quotes include separate rounding across the -60 bitmap boundary. The measured first-stage total in the HP1 regression is 331.219793595396366740 Attack Token.
 
 ## Focused evidence
 
@@ -34,11 +34,11 @@ The source review resolved enrollment, deadline, initial custody, supply-capacit
 
 Use [the generated manifest](../apps/web/public/deployments/local.json) for exact current addresses, pool keys, ticks, prices, balances and receipt. The final observed deployment uses chain 31337, RPC `http://127.0.0.1:8547`, and recorded deployment receipt block 24. Its BossHP is currency0 and its range is `[0,1920]`; HP1 is separately covered in the shared contract fixture. Earlier local deployment metadata was superseded after the token-order correction.
 
-ROY supply is 100,000, all initially held by Router. The supply LP consumes approximately 50,000 ROY, leaving a 10,000 starter budget and approximately 40,000 inaccessible surplus. MockUSD funding is 5,001 to Router plus the separate 1,000 prize. Actual LP debits and the unused MockUSD cushion are recorded in the manifest. These are finite-range v4 amounts; the older full-range 207.58-MockUSD cost illustration is not a measured cost for this deployment.
+Attack Token supply is 100,000, all initially held by Router. The supply LP consumes approximately 50,000 Attack Token, leaving a 10,000 starter budget and approximately 40,000 inaccessible surplus. MockUSD funding is 5,001 to Router plus the separate 1,000 prize. Actual LP debits and the unused MockUSD cushion are recorded in the manifest. These are finite-range v4 amounts; the older full-range 207.58-MockUSD cost illustration is not a measured cost for this deployment.
 
 ## Limits and next slices
 
-The arena reads round state and protocol custody. Browser-wallet connection, the complete attack/claim interface and finished game assets remain downstream work. The held-ROY route, LP/treasury/fee recovery and production NFT metadata are also deferred. There is no recovery path for Router treasury/LP assets in this foundation, so they remain locked; permanently redeemed HP is intentionally never recoverable.
+The arena reads round state and protocol custody. Browser-wallet connection, the complete attack/claim interface and finished game assets remain downstream work. The held-Attack Token route, LP/treasury/fee recovery and production NFT metadata are also deferred. There is no recovery path for Router treasury/LP assets in this foundation, so they remain locked; permanently redeemed HP is intentionally never recoverable.
 
 A fresh Robinhood testnet `eth_chainId` probe on 26 September again returned HTTP 403 from this environment. No target-chain ID/bytecode result or deployment was obtained. BP11 remains the target-chain release gate. The local deployment uses the pinned v4 PoolManager; [contracts/README.md](../contracts/README.md) records dependency provenance and per-file licenses.
 

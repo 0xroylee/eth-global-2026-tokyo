@@ -1,0 +1,103 @@
+{
+  "reviewedCodeCommit": "93ae695a24e57fca5b3c083bf80c82d9eae878d9",
+  "finalSdkAndWebCodeCommit": "c64bcb5d8a020c5f074c8917813faa89f6fda369",
+  "reviewModel": "gpt-6-sol high",
+  "implementationModel": "gpt-6-luna xhigh",
+  "solidityTests": {
+    "suite": "BossPoolCoreTest",
+    "passed": 12
+  },
+  "typescriptTests": {
+    "passed": 17,
+    "scope": "Factory SDK, form guards, operation ownership, and battle receipt helpers"
+  },
+  "runtimeBytes": {
+    "BossFactory": 20355,
+    "BossHook": 21404,
+    "BossRouter": 24307,
+    "routerLimit": 24576
+  },
+  "finalBuildChecks": {
+    "typecheck": "passed",
+    "webBuild": "passed"
+  },
+  "publishedFactoryReadOnlyCheck": {
+    "chainId": 84532,
+    "factory": "0x77794cD6099e9d676bd1DC378308d86344A66962",
+    "status": "incompatible",
+    "routerCodeHash": "0x6e9fff0011912d8f33a941acc53cf8ddf2d5074158a02f873774093adc013d00",
+    "hookCodeHash": "0x574675c8b95dc0d60eac5efff7ec128d1cece2127ca46391c42d733ed729ec48",
+    "expectedRouterCodeHash": "0x02091b890ff922b5f2493012b76a2993e6dd33a1aa7cdccd5da4e2545a67157c",
+    "expectedHookCodeHash": "0xb26ab06541a7d6b2c04a84f01e865a2244fea4f031b87f4c453af475a76e92b5",
+    "requiresNewDeployment": true
+  },
+  "factorySdkSmoke": {
+    "status": "passed",
+    "chainId": 31337,
+    "factory": "0x322813fd9a801c5507c9de605d63cea4f2ce6c44",
+    "token": "0xa85233c63b9ee964add6f2cffe00fd84eb32338f",
+    "quote": {
+      "prizeAmount": "1000000000",
+      "frozenRate": "3806887966256966826657755932358033726579182364614039"
+    },
+    "launched": {
+      "hash": "0x2216ac0f6a6534381ab14f8499d87e4b62717285e67232c3b1ce98d97beca7ab",
+      "bossId": "0x4be2d9f660778e6980d7da234337fef8ef32e9b63adb051f3ae4f6aa6407dd8b",
+      "maker": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "token": "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f",
+      "hook": "0xD92DeA85C4042029614b8FA33Edd18f2C613eAc0",
+      "router": "0x844732160F5EB2Da3c29d3D5914e3d80a09F460b",
+      "collectibles": "0xaFB069dd8e8Ca2edEb4367C9Fc6584e118B1d289"
+    },
+    "capturedOperations": 3,
+    "recoverySubmittedNoTransaction": true
+  },
+  "rewardReceiptRecovery": {
+    "status": "passed",
+    "hash": "0x3cb6f7756c1107b19358b27e07bcdd2c2b6d00b27793dad28f58d877fe7fa5a6",
+    "payout": "555555",
+    "hpAmount": "1000000000000000000",
+    "nonceUnchanged": true,
+    "redeemedHPUnchanged": true,
+    "activityMatched": true
+  },
+  "standaloneSdkJourney": {
+    "status": "completed",
+    "sourceCommit": "93ae695a24e57fca5b3c083bf80c82d9eae878d9",
+    "sourceDirty": false,
+    "chainId": 31337,
+    "successfulReceipts": 14,
+    "finalReceiptBlock": 74,
+    "hashes": [
+      "0x4bb3ee00e5bffb1d86a451e684801ce60df43e3b8147a5b646379ced8568c98e",
+      "0x5c3eaa37220979dd97d3606c7171f61416e1e3fc92420dd33a70b3bd3f4747a9",
+      "0xb4c3b0f550a9ed6d72032bb13f29eba10c379a606ee8f41500d05da7c9c27254",
+      "0x1587f1651bceb1b4dae860c0213333e0c74b3e473f1a7a9217245a86f291fd16",
+      "0x95f0cee5dc898567352bfb9a211dcd70d26f49ca4771d2791ee7a4c6c5ddb649",
+      "0x570b41d3371e8883368acd2b8d79fb0a2e8e74e0496b94cfd520a95c383320a4",
+      "0xcec2032d5f40ebe8057b103b28a0fcfc5be8e7ad6194d110fdf7376c85ce6c8c",
+      "0x22f0c61187e4113519e7168fbc63d26812d77fb0456d4e3dec20aad35f38832d",
+      "0xad2dec4e400388fb62d1c8a19a1ccebdbdbc29a88f3177b8ff128684bff288b1",
+      "0x1920abab9f2788bd9a65ccea8234a197892cf5a6ace627536b7e81742763d6b9",
+      "0x008a1977a2edcdd0e014f368795edc8b3ea933ae34ee3cc9862c4c443f5709ea",
+      "0xe1dbedeee117b781b459bacb9df69601f4e81305c9c0a54dc504487001596dfa",
+      "0x46b90e3409e788a87fb9562bbadf4ea9cded2fc67ad5d1ed257461fcc465aa0d",
+      "0x3d71418608bacd683eab165294c0220f3410c2aa8ce99696a95503b9643dbed0"
+    ]
+  },
+  "desktopBrowser": {
+    "viewport": [
+      1280,
+      720
+    ],
+    "noFactoryConfiguredState": true,
+    "invalidTokenAddressRejected": true,
+    "scrollingActionsReachable": true,
+    "publishedFactoryMismatchDisplayed": true,
+    "incompatibleFactoryLaunchControlsDisabled": true
+  },
+  "limits": [
+    "No public-network deployment or transaction was performed by this review task; the original Factory deployment was published separately.",
+    "Injected-wallet popup confirmation remains a manual check."
+  ]
+}

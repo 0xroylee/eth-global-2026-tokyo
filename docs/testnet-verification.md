@@ -19,7 +19,7 @@ The live BossHP pool uses BossHP as currency1 and ticks `[-1920, 0]`. Stage 0 be
 
 ## Two-wallet exercise
 
-The reusable exercise completed with 19 successful player receipts. The first receipt is block `124393774`; the last is `124394012`. The final verified state is block `124394014`. Exercise gas was `3,512,481`. Player A partially attacked stage 0; Player B cleared stage 0; Player A cleared stage 1; Player B cleared stage 2. The two clear transactions each performed one reserve refill and reset the pool to `sqrtPriceX96 = 79228162514264337593543950336` (tick 0, normalized ROY/HP price 1). The last stage defeated the boss without a refill or stage advance.
+The reusable exercise completed with 19 successful player receipts. The first receipt is block `124393774`; the last is `124394012`. The final verified state is block `124394014`. Exercise gas was `3,512,481`. Player A partially attacked stage 0; Player B cleared stage 0; Player A cleared stage 1; Player B cleared stage 2. The two clear transactions each performed one reserve refill and reset the pool to `sqrtPriceX96 = 79228162514264337593543950336` (tick 0, normalized Attack Token/HP price 1). The last stage defeated the boss without a refill or stage advance.
 
 | Action | Explorer transaction |
 | --- | --- |
@@ -43,7 +43,7 @@ Each stage's actual `stageSold` output ended one BossHP base unit below its nomi
 
 All integer token amounts in this report are base units. At defeat, `finalEligibleHP` was `1799999999999999999997` and `currentStage` remained `2`. Player B transferred all `1189922146802389035629` BossHP base units to A without changing stage damage. A surrendered `1e18` HP base units for `555555` MockUSD base units, then surrendered the remaining `1798999999999999999997` HP base units for `999444444` base units. `redeemedHP` equaled `finalEligibleHP`; the Hook held all surrendered HP. The two floor-rounded claims paid `999999999` of the `1000000000` base-unit prize, leaving one MockUSD base unit. Victory NFTs `3` and `4` were delivered to A and B independently.
 
-BossHP total supply remained `2000000000000000000000`; ROY total supply remained `100000000000000000000000`. The actual attack receipts also reconcile MockUSD spend and refunds, intermediate ROY refunds, BossHP output delivered to each player, stage counters, and both refills. The full receipt and block-state record is [`evidence/robinhood-testnet.json`](evidence/robinhood-testnet.json). It contains public addresses and transaction data, with signer material and RPC URL omitted.
+BossHP total supply remained `2000000000000000000000`; Attack Token total supply remained `100000000000000000000000`. The actual attack receipts also reconcile MockUSD spend and refunds, intermediate Attack Token refunds, BossHP output delivered to each player, stage counters, and both refills. The full receipt and block-state record is [`evidence/robinhood-testnet.json`](evidence/robinhood-testnet.json). It contains public addresses and transaction data, with signer material and RPC URL omitted.
 
 The first exercise attempt stopped before any writes when one RPC backend rejected a pinned-block read. Before the successful run, the runner added a bounded retry for that read at the same block. Write submissions are not retried.
 

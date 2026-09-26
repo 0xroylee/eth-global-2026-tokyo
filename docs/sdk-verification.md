@@ -2,16 +2,34 @@
 
 Updated 26 September 2026. The current implementation uses the generated contract ABI, the `@boss-pool/chain` SDK, and the Next.js player app. The package API and setup examples live in the [chain SDK guide](../packages/chain/README.md).
 
-The active target is Base Sepolia, chain `84532`. Its RPC is reachable, but no Boss Pool manifest or deployment has been verified there. The browser defaults to Base Sepolia and shows a not-deployed state while the manifest is absent. The testnet transactions below are historical Robinhood evidence on chain `46630`; they do not verify Base Sepolia.
+The active target is Base Sepolia, chain `84532`, with a verified deployment manifest published under `apps/web/public/deployments/base-sepolia.json`. The browser defaults to that network. The testnet transactions below are historical Robinhood evidence on chain `46630`; they do not verify a Base Sepolia gameplay journey.
 
-The previous quote contract changes came from `b98b685fadd5`; SDK and UI work followed in `1802ffd6d812` and `4033d7b7818f`. Commit `eb213a6` removed enrollment, entry fees, starter ROY, and entry-NFT minting. The direct-attack local journey below tests the current source; the earlier local and Robinhood journeys are historical enrollment-era evidence. The Robinhood PoolManager is team-deployed from pinned v4-core source, not an official deployment.
+The previous quote contract changes came from `b98b685fadd5`; SDK and UI work followed in `1802ffd6d812` and `4033d7b7818f`. Commit `eb213a6` removed enrollment, entry fees, starter Attack Token, and entry-NFT minting. The direct-attack local journey below tests the current source; the earlier local and Robinhood journeys are historical enrollment-era evidence. The Robinhood PoolManager is team-deployed from pinned v4-core source, not an official deployment.
 
 ## Local and browser checks
+
+PR #39's visual conflict resolution was checked at `d34bc6974fc34835e29a5ffd69d9319e20ca4c87`. Typecheck, production web build, and the three existing battle tests passed. Browser checks covered the merged live page at 1280×800, 390×844, 320×640, and 844×390. The narrow layouts had no horizontal overflow, the boss and dialogue stayed separate, and the exit target measured 44px high. SWAP ATTACK opened a real 1 MockUSD quote with both 0.3% pool fees; missing deployment data remained unavailable. The merge preserves the shared transaction provider, confirmed effects, and reward controls. No wallet transaction or new gameplay journey was run for this presentation change.
+
+The live battle integration is implemented through commit `3b537e7fcd4c2ee40c5fc91d15ae8be38438ab71` in PR #37. `/mock-battle` now uses the shared SDK and a transaction provider that survives navigation to the hub.
+
+| Check | Result |
+| --- | --- |
+| `bun run typecheck` and `bun run web:build` | Passed after the shared-provider and final-hit feedback fixes. |
+| `bun test apps/web/src/lib/battle.test.ts` | Three tests passed, covering confirmed attack identity, original-stage damage, recovered receipts, invalid origins, and the chain-derived countdown. |
+| Existing local SDK journey | 14 successful transactions on isolated chain 31337, ending at block 32. All stages, refills, external BossHP transfer, claims, and optional NFTs completed. |
+| Browser public quote | The fixed 1 MockUSD cap quoted `10.077853197610964369` BossHP without a wallet. Both pool fees displayed as 0.3%. No HP changed from the quote. |
+| Shared round updates | The browser advanced to Stage 3 and Defeated after the separate SDK wallets completed the round. It displayed no invented wallet share while disconnected. |
+| Missing manifest and failed RPC | Both showed unavailable values and disabled attacks. No mock HP or deadline appeared. |
+| Navigation and layout | Escape closed the action dialog before leaving the route. Mobile layouts were inspected at 390px and 320px; the 320px document and main content had no horizontal overflow. |
+
+The SDK journey ran against the integration working tree before its code commit. Its local journal is `.scratch/boss-pool-exercise/local-20260926T114322865Z-48962.json`; it records `sourceDirty: true`. Later fixes changed UI ownership, messages, and quote invalidation, without changing the tested SDK transaction implementation. The temporary local deployment manifest was restored after verification.
+
+Browser checks exercised public quotes and confirmed state updates. They did not approve wallet popups or execute a browser-originated attack or claim. The manual wallet checklist below remains outstanding. No Base Sepolia transaction was submitted for this integration.
 
 The direct-attack implementation passed the final gate at commit `3450be71dcac758e39acddeae2664cd0035e7666`:
 
 - Frozen dependency install, contract build and runtime sizes, five focused Foundry cases, generated ABI consistency, TypeScript typecheck, production web build, local read smoke, and the existing map checker all passed.
-- The shared local SDK journey completed **14 successful transactions** on chain `31337`, ending at block `54`. It covers public preapproval quotes, direct fresh-wallet attacks, all three stages and both refills, stale quote rejection, refunds, transferable HP redemption, custody, and optional victory NFTs `1` and `2`. No entry fee, starter ROY, or NFT is required for an attack. See the [direct-attack local journal](evidence/local-sdk-direct-attack.json).
+- The shared local SDK journey completed **14 successful transactions** on chain `31337`, ending at block `54`. It covers public preapproval quotes, direct fresh-wallet attacks, all three stages and both refills, stale quote rejection, refunds, transferable HP redemption, custody, and optional victory NFTs `1` and `2`. No entry fee, starter Attack Token, or NFT is required for an attack. See the [direct-attack local journal](evidence/local-sdk-direct-attack.json).
 - A prior attempt used an Anvil fixture that had been idle longer than the quote TTL. Its first attack was rejected as expired after four preparation transactions; no attack was sent. A freshly seeded round completed the 14-transaction run above. Run the exercise shortly after seeding a local round.
 - The public page returned a quote from a fresh direct-attack local deployment without showing enrollment UI. Base Sepolia correctly showed Not Deployed; historical Robinhood displayed the defeated round. Native amount-field and network-selector keyboard handling passed. A clean reload after the development hot update showed no console error.
 - The earlier local 18-transaction journey at `ebb9b87`, recorded in `.scratch/boss-pool-exercise/local-20260926T090227138Z-79386.json`, used the former enrollment contracts. It is historical evidence, separate from the current 14-transaction proof.
@@ -31,13 +49,13 @@ The completion run did not redeploy or replay the round. It verified the 16 save
 | Player B victory NFT | Token ID `4`, block `124492657` | [Transaction](https://explorer.testnet.chain.robinhood.com/tx/0xaa31624cd18a6b8bdcf9de5f7532498712478d495bab49593be4f2fdbfb72b43) |
 | Completion checks | Two new receipts; all 16 previous receipts rechecked | [NFT completion evidence](evidence/robinhood-sdk-nft-completion.json) |
 
-The final eligible and redeemed BossHP totals both equal `1799999999999999999997` base units. The Hook paid `999999999` of the `1000000000` MockUSD prize base units. BossHP supply and reconciled custody both equal `2000000000000000000000` base units. ROY supply is `100000000000000000000000` base units. The completion evidence records ownership of NFT `3` by Player A and NFT `4` by Player B.
+The final eligible and redeemed BossHP totals both equal `1799999999999999999997` base units. The Hook paid `999999999` of the `1000000000` MockUSD prize base units. BossHP supply and reconciled custody both equal `2000000000000000000000` base units. Attack Token supply is `100000000000000000000000` base units. The completion evidence records ownership of NFT `3` by Player A and NFT `4` by Player B.
 
 The testnet fixture is Defeated and cannot run another fight. Expiry and prize-refund behavior have local Foundry evidence only. They have no Robinhood testnet receipts.
 
 ## Manual browser-wallet checklist
 
-Use a fresh local round for writes. The historical Robinhood fixture is Defeated; Base Sepolia has no Boss Pool deployment yet. Keep any test wallet separate from personal funds, and never use an Anvil development key on a public network.
+Use a fresh local round for writes. The historical Robinhood fixture is Defeated. Base Sepolia has a deployment manifest, but its browser-wallet journey has not been verified here. Keep any test wallet separate from personal funds, and never use an Anvil development key on a public network.
 
 1. Open the app with a fresh local deployment and no wallet connected. Confirm that round state and an attack quote load without a wallet prompt.
 2. Connect a dedicated test wallet. Confirm that the app shows the selected account and that the active chain matches the selected deployment.

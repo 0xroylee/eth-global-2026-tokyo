@@ -31,7 +31,7 @@ async function main() {
   if (
     round.bossTickLower !== expectedTicks[0] || round.bossTickUpper !== expectedTicks[1] ||
     round.bossInitialSqrtPriceX96 !== expectedStart || round.stageEndSqrtPriceX96.some((price) => price !== 0n)
-  ) throw new Error("Boss pool bounds do not preserve the normalized 1.0-to-1.211659 ROY-per-HP band.");
+  ) throw new Error("Boss pool bounds do not preserve the normalized 1.0-to-1.211659 Attack Token-per-HP band.");
   const heldBossHP = round.bossHPInHook + round.bossHPInRouter + round.bossHPInPoolManager;
   if (heldBossHP !== round.bossHPTotalSupply || round.finalEligibleHP !== 0n || round.redeemedHP !== 0n) {
     throw new Error("BossHP custody does not reconcile across the live seed contracts.");

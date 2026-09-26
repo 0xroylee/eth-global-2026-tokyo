@@ -22,8 +22,16 @@ import {
   bossRouterAbi,
   mockUsdAbi,
 } from "./generated/abi";
-import { isVerifiedDeployment, ROBINHOOD_TESTNET_CHAIN_ID, type VerifiedDeployment } from "./deployment";
+import {
+  isVerifiedDeployment,
+  ROBINHOOD_TESTNET_CHAIN_ID,
+  type DeploymentProvenance,
+  type EncounterMode,
+  type TokenMetadata,
+  type VerifiedDeployment,
+} from "./deployment";
 import { readPlayer, readRound, readState, type RoundSnapshot } from "./reads";
+import { readActivity, type ReadActivityOptions } from "./activity";
 
 const CLAIMABLE_STATUS = 3;
 const ACTIVE_STATUS = 1;
@@ -69,6 +77,8 @@ export type AttackQuote = {
   minRoyOut: bigint;
   minBossHPOut: bigint;
   slippageBps: number;
+  supplyPoolFee: number;
+  bossPoolFee: number;
   stageCleared: boolean;
   bossDefeated: boolean;
   nextStage: number;
@@ -108,6 +118,8 @@ export type PendingRequest = {
   account: Address;
   target: Address;
   calldata: Hex;
+  /** Absent only on saved operations created before encounter routing was added. */
+  encounter?: { hookAddress: Address; mode: EncounterMode; provenance: DeploymentProvenance };
 };
 
 export type ConfirmedTransaction<T> = {
@@ -148,7 +160,12 @@ export type AttackResult = {
 };
 export type RewardPreview = {
   account?: Address;
+  /** @deprecated Use amount and amountKind; Factory amount is reward credit, not BossHP. */
   hpAmount: bigint;
+  amount: bigint;
+  amountKind: "boss-hp" | "reward-credit";
+  rewardCreditUsed: bigint;
+  rewardToken: TokenMetadata;
   originalPrize: bigint;
   finalEligibleHP: bigint;
   redeemedHP: bigint;
@@ -158,7 +175,12 @@ export type RewardPreview = {
 };
 export type RewardClaimResult = {
   account: Address;
+  /** @deprecated Use amount and amountKind; Factory amount is reward credit, not BossHP. */
   hpAmount: bigint;
+  amount: bigint;
+  amountKind: "boss-hp" | "reward-credit";
+  rewardCreditUsed: bigint;
+  rewardToken: TokenMetadata;
   payout: bigint;
   events: readonly DecodedContractEvent[];
 };
@@ -239,6 +261,17 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
   if (!isVerifiedDeployment(deployment, publicClient)) {
     throw new Error("Call verifyDeployment with this public client before creating the Boss Pool SDK.");
   }
+  const verifiedHookAddress = deployment.hookAddress;
+  const verifiedEncounterMode = deployment.encounterMode;
+  const verifiedProvenance = deployment.provenance;
+  if (!verifiedHookAddress || !verifiedEncounterMode || !verifiedProvenance) {
+    throw new Error("Verified deployment is missing its encounter identity or provenance.");
+  }
+  const verifiedEncounterIdentity = {
+    hookAddress: verifiedHookAddress as Address,
+    mode: verifiedEncounterMode as EncounterMode,
+    provenance: verifiedProvenance as DeploymentProvenance,
+  };
   if (publicClient.chain && publicClient.chain.id !== deployment.chainId) {
     throw new Error(`Public client is configured for chain ${publicClient.chain.id}; deployment is on ${deployment.chainId}.`);
   }
@@ -307,6 +340,9 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
   }
 
   async function getApproval(action: ApprovalAction, account: Address): Promise<ApprovalStatus> {
+    if (action.kind === "claimReward" && deployment.encounterMode === "factory") {
+      throw new BossPoolSdkError("APPROVAL_NOT_REQUIRED", "Factory reward claims consume reward credit and require no token approval.");
+    }
     const amount = approvalAmount(action);
     const result = await readApproval(action, account);
     return { ...result, requiredAllowance: amount, approvalNeeded: result.currentAllowance < amount, approvalAmount: maxUint256 };
@@ -417,6 +453,8 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
       minRoyOut: minimumOutput(quote.royBought, slippageBps),
       minBossHPOut: minimumOutput(quote.bossHPOut, slippageBps),
       slippageBps,
+      supplyPoolFee: round.supplyPoolFee,
+      bossPoolFee: round.bossPoolFee,
       stageCleared: quote.stageCleared,
       bossDefeated: quote.bossDefeated,
       nextStage: quote.nextStage,
@@ -540,15 +578,23 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
       throw new BossPoolSdkError("REWARD_NOT_AVAILABLE", "Reward preview is available only after the round is Defeated.");
     }
     if (round.redeemedHP + hpAmount > round.finalEligibleHP) {
-      throw new BossPoolSdkError("REWARD_AMOUNT_EXCEEDS_REMAINING", "Requested BossHP exceeds the remaining eligible supply.");
+      throw new BossPoolSdkError("REWARD_AMOUNT_EXCEEDS_REMAINING", "Requested reward amount exceeds the remaining eligible supply.");
     }
-    if (state.player && hpAmount > state.player.bossHPBalance) {
-      throw new BossPoolSdkError("INSUFFICIENT_PLAYER_BOSShp", "Account does not hold the requested BossHP amount.");
+    const isFactory = round.encounterMode === "factory";
+    if (state.player && hpAmount > (isFactory ? state.player.rewardCredit : state.player.bossHPBalance)) {
+      throw new BossPoolSdkError(
+        isFactory ? "INSUFFICIENT_REWARD_CREDIT" : "INSUFFICIENT_PLAYER_BOSShp",
+        isFactory ? "Account does not have the requested reward credit." : "Account does not hold the requested BossHP amount.",
+      );
     }
     const payout = round.originalPrize * hpAmount / round.finalEligibleHP;
     return {
       account,
       hpAmount,
+      amount: hpAmount,
+      amountKind: isFactory ? "reward-credit" : "boss-hp",
+      rewardCreditUsed: isFactory ? hpAmount : 0n,
+      rewardToken: round.rewardToken,
       originalPrize: round.originalPrize,
       finalEligibleHP: round.finalEligibleHP,
       redeemedHP: round.redeemedHP,
@@ -560,7 +606,7 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
 
   async function claimReward(hpAmount: bigint): Promise<PendingOperation<RewardClaimResult>> {
     const { account } = await requireWalletAccount();
-    await previewReward(hpAmount, account);
+    const preview = await previewReward(hpAmount, account);
     await publicClient.simulateContract({
       address: hook,
       abi: bossPoolHookAbi,
@@ -587,9 +633,22 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
         const event = onlyEvent(events, "RewardClaimed");
         assertEventAddress(event.args.player, account, "Reward event player does not match the selected wallet.");
         if (asBigInt(event.args.bossHPIn) !== hpAmount) {
-          throw new BossPoolSdkError("RECEIPT_EVENT_MISMATCH", "Reward event surrendered a different BossHP amount.");
+          throw new BossPoolSdkError("RECEIPT_EVENT_MISMATCH", "Reward event consumed a different amount than requested.");
         }
-        return { account, hpAmount, payout: asBigInt(event.args.mockUSDOut), events };
+        const payout = asBigInt(event.args.mockUSDOut);
+        if (payout !== preview.payout) {
+          throw new BossPoolSdkError("RECEIPT_EVENT_MISMATCH", "Reward payout differs from the verified preview.");
+        }
+        return {
+          account,
+          hpAmount,
+          amount: hpAmount,
+          amountKind: preview.amountKind,
+          rewardCreditUsed: preview.rewardCreditUsed,
+          rewardToken: preview.rewardToken,
+          payout,
+          events,
+        };
       },
     });
   }
@@ -701,6 +760,10 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     if (request.chainId !== deployment.chainId) {
       throw new BossPoolSdkError("RECOVERY_CHAIN_MISMATCH", "Pending transaction belongs to another chain.");
     }
+    if ((deployment.encounterMode === "factory" && !request.encounter) ||
+        (request.encounter && !matchesEncounterIdentity(request.encounter, deployment))) {
+      throw new BossPoolSdkError("RECOVERY_ENCOUNTER_MISMATCH", "Pending transaction belongs to a different or unverified encounter.");
+    }
     let abi: Abi;
     let eventSpecs: EventSpec[];
     let expectedApproval: { spender: Address; value: bigint } | undefined;
@@ -713,6 +776,9 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
         if (sameAddress(request.target, mockUSD)) abi = mockUsdAbi;
         else if (sameAddress(request.target, bossHP)) abi = bossHpAbi;
         else throw new BossPoolSdkError("RECOVERY_TARGET_MISMATCH", "Approval target is not a configured token.");
+        if (deployment.encounterMode === "factory" && sameAddress(request.target, bossHP)) {
+          throw new BossPoolSdkError("RECOVERY_TARGET_MISMATCH", "Factory reward credit never requires a MEME token approval.");
+        }
         const call = decodeFunctionData({ abi, data: request.calldata });
         if (call.functionName !== "approve") throw new BossPoolSdkError("RECOVERY_CALL_MISMATCH", "Pending approval calldata is not ERC-20 approve.");
         const args = call.args;
@@ -849,6 +915,7 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
     readRound: () => readRound(publicClient, deployment),
     readPlayer: (account: Address) => readPlayer(publicClient, deployment, account),
     readState: (account?: Address) => readState(publicClient, deployment, account),
+    readActivity: (activityOptions?: ReadActivityOptions) => readActivity(publicClient, deployment, activityOptions),
     quoteAttack,
     prepareAttack,
     getApproval,
@@ -903,6 +970,7 @@ export function createBossPoolSdk(options: BossPoolSdkOptions) {
         account: pending.account,
         target: pending.target,
         calldata: pending.calldata,
+        encounter: verifiedEncounterIdentity,
       },
       wait: async () => {
         let replacement: ReplacementReturnType<Chain | undefined> | undefined;
@@ -993,10 +1061,11 @@ function decodeExpectedEvents(
       try {
         const event = decodeEventLog({ abi: spec.abi, data: log.data, topics: log.topics, strict: true });
         if (event.eventName === spec.eventName) {
+          const args = normalizeDecodedEventArgs(event.eventName, event.args as unknown as Record<string, unknown>);
           decoded.push({
             address: log.address,
             eventName: event.eventName,
-            args: event.args,
+            args,
             transactionHash: log.transactionHash ?? receipt.transactionHash,
             logIndex: Number(log.logIndex ?? BigInt(decoded.length)),
           } as unknown as DecodedContractEvent);
@@ -1010,6 +1079,15 @@ function decodeExpectedEvents(
     }
   }
   return decoded;
+}
+
+function normalizeDecodedEventArgs(eventName: string, args: Record<string, unknown>): Record<string, unknown> {
+  if (eventName !== "RewardClaimed") return args;
+  return {
+    player: args.player,
+    bossHPIn: args.bossHPIn ?? args.rewardCreditUsed,
+    mockUSDOut: args.mockUSDOut ?? args.memeTokenPrize,
+  };
 }
 
 function onlyEvent<Name extends DecodedContractEvent["eventName"]>(
@@ -1063,6 +1141,26 @@ function assertEventAddress(value: unknown, expected: Address, message: string):
 
 function sameAddress(left: Address, right: Address): boolean {
   return left.toLowerCase() === right.toLowerCase();
+}
+
+function matchesEncounterIdentity(value: unknown, deployment: VerifiedDeployment): boolean {
+  if (!value || typeof value !== "object") return false;
+  const identity = value as Record<string, unknown>;
+  if (typeof identity.hookAddress !== "string" || !/^0x[\da-fA-F]{40}$/.test(identity.hookAddress) ||
+      identity.hookAddress.toLowerCase() !== deployment.hookAddress?.toLowerCase() ||
+      identity.mode !== deployment.encounterMode || !identity.provenance || typeof identity.provenance !== "object") return false;
+  const left = identity.provenance as Record<string, unknown>;
+  const right = deployment.provenance;
+  if (!right || left.kind !== right.kind) return false;
+  if (right.kind === "standalone") {
+    return typeof left.deploymentTxHash === "string" && left.deploymentTxHash.toLowerCase() === right.deploymentTxHash.toLowerCase() &&
+      left.deployedAtBlock === right.deployedAtBlock;
+  }
+  return typeof left.factoryAddress === "string" && left.factoryAddress.toLowerCase() === right.factoryAddress.toLowerCase() &&
+    left.factoryDeployedAtBlock === right.factoryDeployedAtBlock &&
+    typeof left.bossId === "string" && left.bossId.toLowerCase() === right.bossId.toLowerCase() &&
+    typeof left.launchTxHash === "string" && left.launchTxHash.toLowerCase() === right.launchTxHash.toLowerCase() &&
+    left.launchLogIndex === right.launchLogIndex && left.launchBlockNumber === right.launchBlockNumber;
 }
 
 function sameHex(left: Hex, right: Hex): boolean {

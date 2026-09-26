@@ -1,3 +1,4 @@
+import { getAddress, isAddress } from "viem";
 import roster from "./boss-roster.json";
 
 /** Bosses the hub can open. Positions live on the Tiled marker layer. */
@@ -19,6 +20,36 @@ type RosterEntry = {
   category: string;
   accent: string;
 };
+
+export type BossPresentation = {
+  name: string;
+  japaneseName?: string;
+  stageImages: readonly [string, string, string];
+};
+
+const POOL_UNIS_PRESENTATION: BossPresentation = {
+  name: "Pool Unis",
+  japaneseName: "プール・ユニス",
+  stageImages: [
+    "/images/boss-cat-form-a.png?v=6",
+    "/images/boss-cat-form-b.png?v=6",
+    "/images/boss-cat-form-c.png?v=8",
+  ],
+};
+
+/** A presentation is a checked-in choice for one chain and Hook; it never verifies a contract. */
+const BOSS_PRESENTATIONS: Readonly<Record<string, BossPresentation>> = {
+  "84532:0xe217b4840049f928d4392030ac86ace6b3766ac0": POOL_UNIS_PRESENTATION,
+  "84532:0xc11d07448948ac4757592e91d8f5155907ef6ac0": POOL_UNIS_PRESENTATION,
+};
+
+export function findBossPresentation(chainId: number, hookAddress: string, localDefaultHookAddress?: string): BossPresentation | undefined {
+  if (!isAddress(hookAddress, { strict: false })) return undefined;
+  const normalized = getAddress(hookAddress.toLowerCase()).toLowerCase();
+  if (chainId === 31337 && localDefaultHookAddress && isAddress(localDefaultHookAddress, { strict: false }) &&
+      normalized === getAddress(localDefaultHookAddress.toLowerCase()).toLowerCase()) return POOL_UNIS_PRESENTATION;
+  return BOSS_PRESENTATIONS[`${chainId}:${normalized}`];
+}
 
 export type BossDefinition = {
   id: BossId;
@@ -55,7 +86,7 @@ export type BossDefinition = {
 const CORE_BOSSES: readonly BossDefinition[] = [
   {
     id: "cat",
-    name: "Roy",
+    name: "Pool Unis",
     ticker: "ROY",
     tagline: "The evolving cat. Three forms, one pool.",
     portrait: "/images/boss-cat-form-a.png",

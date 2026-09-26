@@ -1,0 +1,158 @@
+{
+  "verifiedAt": "2026-09-26T15:29:05.100601+00:00",
+  "baselineCommit": "f720bfe6b0690c20019270671bd9c25193db110e",
+  "implementationModel": "gpt-6-luna xhigh",
+  "reviewModel": "gpt-6-sol high",
+  "standaloneJourney": {
+    "status": "completed",
+    "successfulReceipts": 14,
+    "chainId": 31337,
+    "transactionHashes": [
+      "0x9690f83024e309a64feb9a687687143e10b70489d602179309578dcd2e28df68",
+      "0x935f8e5b02f0db1cdd41698ca010610594cd965cf42dac482804457aa94f3d61",
+      "0xee686312371006721d6b2c90c3a80db0d2378c490a288f7910a9b283d0cd4f62",
+      "0xc307b0e5262d6c1b475065479a3b0f133f2dab959334602a1d95a1f594fc68d9",
+      "0x7c10e741c42db2d7c426093646da32ecd2920d004b5d14fff66d498af6f7326e",
+      "0x60d074647302b23148ee347f2634f5336666f7ee9f566e1470d555d2b340b186",
+      "0x8805035d5bd8fe84e877118a33d6a0a5f58625759dd28ab1c38d19d323bbcce8",
+      "0x2142f43e38a2babb4b276c2e00cae9688a799b879de48767fe7f11050df710c2",
+      "0x242199465223a51ec7b456e58e4f907769fe6480a7e5eae516014a4a3aa9b589",
+      "0xd24174215f13d4a669a875638e0a188b7219b826e24b7db7efee457909273c4f",
+      "0x7ce350dd3e1eb242423118022dfc8428a2be8fcb19f16e8bc5621e0d94434408",
+      "0xf176cf91c84cf0949a42c470dc676cd00de2bbaf68456fc9451accca7dbedc8a",
+      "0x4522ce1d592ba2f81dc611d00d0edb9bec2f8c73e90172b66bc46dcf281bca15",
+      "0x1d0a9a19dcd49cf46c33886ade3931f3c49b8dc18b1c9539462edcb3cc65e4ff"
+    ]
+  },
+  "factoryJourney": {
+    "status": "completed",
+    "chainId": 31337,
+    "memeDecimals": 6,
+    "distinctBosses": [
+      {
+        "bossId": "0xdd04ee1dc9055d2731b02df3cdde0502a134eaf1ab6af7d077b35c5cfb8230a9",
+        "hook": "0x5F09a9Dec1d13A0E712553B3c8EeE56730a0EAc0",
+        "router": "0x65e361D4C99B90689ceb302dD333C98A8fB521A0",
+        "token": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
+        "launchHash": "0x8ef6792799e3e0d29f51241e8b83deb5cabb61c2b3085bb4f3a9b4658250b0e7",
+        "acceptedRate": "3806887966256966826657755932358033726579182364614039"
+      },
+      {
+        "bossId": "0x9cd6aadf7dd8c67d7c7ac232d679b3107142f3957dc769b66440e6da86630c41",
+        "hook": "0x706ade2a2d22AED1B1C159F0D409D56a4eda2aC0",
+        "router": "0x28cA4a965f0CDCc662eB17f6a2862bE69Fa237b6",
+        "token": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
+        "launchHash": "0x70a1b3890d8d29c4d1483b51816240ed7da2719cef52f8195ffd71dae0031fd0",
+        "acceptedRate": "3806887966256966826657755932358033726579182364614039"
+      }
+    ],
+    "attackCount": 6,
+    "claimCount": 2,
+    "wrongBossQuoteRejection": "deployment-changed",
+    "unknownHookRejection": "BOSS_NOT_FOUND",
+    "nonAttackerHoldingMemeRejected": "INSUFFICIENT_REWARD_CREDIT",
+    "rewardCredit": {
+      "initialTransferredMeme": "123456",
+      "nonAttackerMeme": "100",
+      "nonAttackerRewardCredit": "0",
+      "nonAttackerPreviewError": "INSUFFICIENT_REWARD_CREDIT",
+      "nonAttackerProbeAmount": "100",
+      "walletMemeAfterAttacks": "1486005544",
+      "creditAfterDefeat": "1485882088",
+      "hookAllowanceBefore": "0",
+      "hookAllowanceAfter": "0"
+    },
+    "receiptRecovery": {
+      "hash": "0xb8df9e62c043136e971da9712986eec378659e16aca4dfefebe858dca16a6b9f",
+      "receiptBlock": "28",
+      "blockBefore": "36",
+      "blockAfter": "36",
+      "nonceBefore": 10,
+      "nonceAfter": 10,
+      "sentTransaction": false,
+      "freshlyResolvedHook": "0x5F09a9Dec1d13A0E712553B3c8EeE56730a0EAc0",
+      "originalManifestReverified": true
+    },
+    "otherBoss": {
+      "hook": "0x706ade2a2d22AED1B1C159F0D409D56a4eda2aC0",
+      "router": "0x28cA4a965f0CDCc662eB17f6a2862bE69Fa237b6",
+      "status": 1,
+      "currentStage": 0,
+      "totalVolume": "0"
+    }
+  },
+  "checks": {
+    "typecheck": "passed",
+    "webBuild": "passed",
+    "battleTests": {
+      "passed": 5,
+      "assertions": 30
+    },
+    "diffCheck": "passed",
+    "independentReview": "no remaining findings"
+  },
+  "desktopBrowser": {
+    "bareRouteToHook": true,
+    "legacyRouteToHook": true,
+    "mappedStandaloneAppearance": true,
+    "factoryPublicQuoteWithSixDecimalToken": true,
+    "factoryVictoryCreditCopy": true,
+    "unknownAndInvalidHooksBlockQuotes": true,
+    "hubRestoresStandalone": true,
+    "networkSwitchPreservesHook": true,
+    "expiredBaseSepoliaRoundClosed": true,
+    "consoleErrorsObserved": false,
+    "temporaryLocalManifestRestored": true,
+    "currentBaseSepoliaFactoryActiveAndQuoted": true,
+    "currentFactoryQuoteBlock": "47334083"
+  },
+  "limitations": [
+    "No new Base Sepolia deployment or gameplay transaction was submitted.",
+    "Injected-wallet signing was not exercised in the browser.",
+    "The existing standalone round remains expired. The current Factory is compatible; public-chain player transactions remain untested."
+  ],
+  "sourceSha256": {
+    "packages/chain/src/deployment.ts": "f37ad2bec26c8957ac682f5981b83eab40a55fb30d50ff9e0301e513ad6469b9",
+    "packages/chain/src/reads.ts": "6d642944f1a1a244a70ac5445d6e7d38c3083140df212ea220b2bbc9e71564f1",
+    "packages/chain/src/sdk.ts": "a96629859b87f796ff8c66435225271d1b06b3f00a3ee90f4df1e5d6ef0b6b73",
+    "apps/web/src/lib/useBossPool.ts": "717f06a4b1b09973ea6879698d7d71bd10d872492533c432719e28ec33b100d9",
+    "apps/web/src/lib/battle.ts": "72e5c83ae5d6a6de6ad8e84f784cc69eca7acf1b1c8a38a4e7ea4f245608eff2",
+    "apps/web/src/lib/battle.test.ts": "bd5c8f24caade12f1c4c7aa7ac51a580743b43aa6a019484edc9c2fd1045c707",
+    "apps/web/src/components/battle/BattleView.tsx": "d54e01082e20466f97a705dc1cf7b173fc82138a49179b7b50640a16a9963a61",
+    "apps/web/src/components/BossActions.tsx": "17cdf3421b9692aaea6d3f4096cbec1ec98335fd6361f73e16133da606e7596f",
+    "apps/web/src/game/bosses.ts": "23ca22d7defcb47268cae74742a687862e3b79066dd1be3d6537ee0035c55b2f",
+    "apps/web/src/app/battle/[pool_id]/page.tsx": "7c36ebfabbfcd0caff2b054a4d4d76abedfefa1da85f264a2bd83bf49b53f268",
+    "scripts/local-battle-routing-smoke.ts": "64d4a47b8a3a2b807bdfa5d81aff9f2f2a8347dfaafc48d0b3f0165c7f0843b9"
+  },
+  "integratedMain": "d467ca1",
+  "publicFactoryReadOnly": {
+    "chainId": 84532,
+    "hook": "0xc11D07448948AC4757592E91D8f5155907Ef6AC0",
+    "router": "0x087D22c53082ED7841cB5716cB699111a02b0dEf",
+    "factory": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
+    "factoryBlock": 47332647,
+    "mode": "factory",
+    "stage": 1,
+    "status": 1,
+    "deadline": "2026-10-03T14:42:42.000Z",
+    "totalVolume": "0",
+    "token": {
+      "address": "0x5a5517f63714f44F19337d34ab29d5ACC652e4CF",
+      "symbol": "BHP",
+      "decimals": 18
+    },
+    "quote": {
+      "mockUSDSpent": "1",
+      "tokenOutput": "132.304025798271019315",
+      "quotedBlock": "47333916"
+    },
+    "submittedTransactions": 0
+  },
+  "postIntegrationChanges": [
+    "Merged current compatible Factory deployment and preserved hub keyboard/dialog handling.",
+    "Mapped the new Factory Hook to Pool Unis by explicit user selection.",
+    "Limited Factory event pages to 1000 blocks after reproducing the Base Sepolia RPC range limit.",
+    "Enabled native viem Multicall and HTTP batching only for Base Sepolia after reproducing the RPC per-second method limit.",
+    "Cancelled obsolete encounter reads immediately after manifest loading."
+  ]
+}
