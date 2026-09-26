@@ -1,6 +1,7 @@
 // Structural and reachability check for public/game/hub.json.
 // Run from apps/web: bun run map:check
 import { HUB_LAYERS, HUB_TILESET } from "../src/game/hubTiles";
+import { BOSSES } from "../src/game/bosses";
 
 const WIDTH = 40;
 const HEIGHT = 30;
@@ -65,12 +66,20 @@ const markers = objectLayers[0]!;
 const spawns = markers.objects.filter((o) => o.name === "spawn");
 assert(spawns.length === 1 && spawns[0]!.point === true, "markers must contain exactly one point named spawn");
 const gates = markers.objects.filter((o) => o.name === "gate");
-assert(gates.length === 3, `markers must contain three gates, got ${gates.length}`);
+assert(gates.length === 12, `markers must contain twelve gates, got ${gates.length}`);
+// One gate per boss, so the roster and the map cannot drift apart.
 const bossIds = gates
-  .map((g) => g.properties?.find((p) => p.name === "bossId")?.value)
+  .map((g) => String(g.properties?.find((p) => p.name === "bossId")?.value))
   .sort();
-assert(bossIds.join(",") === "cat,locked,macro-whale", `gate bossIds must be cat, locked, macro-whale; got ${bossIds.join(",")}`);
+const rosterIds = BOSSES.map((boss) => boss.id).sort();
+assert(bossIds.length === rosterIds.length, `markers must have one gate per boss: ${bossIds.length} gates, ${rosterIds.length} bosses`);
+assert(
+  bossIds.join(",") === rosterIds.join(","),
+  `gate bossIds must match bosses.ts (${rosterIds.join(",")}); got ${bossIds.join(",")}`,
+);
 for (const gate of gates) assert(gate.width > 0 && gate.height > 0 && !gate.point, "gates must be rectangles");
+const sages = markers.objects.filter((o) => o.name === "sage");
+assert(sages.length === 1 && sages[0]!.point === true, `markers must contain exactly one point named sage, got ${sages.length}`);
 const exits = markers.objects.filter((o) => o.name === "region-exit");
 assert(exits.length === 1, `markers must contain one region-exit, got ${exits.length}`);
 const regionExit = exits[0]!;
