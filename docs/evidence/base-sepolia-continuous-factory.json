@@ -1,0 +1,68 @@
+{
+  "chainId": 84532,
+  "factory": "0x1392633904edb77aec9f1aed81d4f0773f72c8c7",
+  "previousFactory": "0x353749ffa9640c4152dd28068c416adfc2eb168e",
+  "transactionHash": "0x48b3c5d6a87f4432d8c0e974bb21370c146f4134067092d3e2de1d71082a85ef",
+  "blockNumber": 47341945,
+  "deployer": "0x45d4e78c6ac2df422f02f3b9cf3a8271cd6c2262",
+  "gasUsed": "3772390",
+  "effectiveGasPrice": "6000000",
+  "transactionFeeWei": "22634340000000",
+  "routerCodeHash": "0x60b4e72101c0eece991872c4c7295a4b2ccbf8d81598f842409cd1b66c71bd7f",
+  "hookCodeHash": "0x5ca09a209d8456bf912313dbc75fd6e81c23183ccbcf4cf51b644de9ca13689d",
+  "factoryCreationCodeHash": "0x2c7a5a99547d89fe0e76ae231d619a143c7c17adb5345a3d5a520c336be359a7",
+  "factoryInitCodeHash": "0x20c75867baa21a192213ef039bffed0111aceacba3ea43da8f3f7ebf2f144734",
+  "runtimeCodeHash": "0xb3c0c3e7889f6b2f4be7c6726af4c106b751da41cf816cd6291ca3c8d43c907d",
+  "runtimeBytes": 17059,
+  "constructorArgs": [
+    "0x1EF1e7e79B14AFB530d9671A79B7B173FE41a1c3",
+    "0x184B037F95A8E7a6E956AACad2244E5ded40d487",
+    "0x6e5390D3231beb061c1E49916806F2f26B3Feb22",
+    "0x60b4e72101c0eece991872c4c7295a4b2ccbf8d81598f842409cd1b66c71bd7f",
+    "0x5ca09a209d8456bf912313dbc75fd6e81c23183ccbcf4cf51b644de9ca13689d",
+    "0x0000000000000000000000000000000000000000"
+  ],
+  "buildCompatibility": "compatible",
+  "bossCount": "0",
+  "saleBudgetBps": 10000,
+  "sourceRevision": "a3130b5dbd9a7364756e8fc4e0ce0d2ca22a5739",
+  "contractSourceRevision": "d0ad8d87ca5bab80c927e7412bd2a200a75549c5",
+  "compiler": {
+    "solc": "0.8.26",
+    "evmVersion": "cancun",
+    "viaIR": true,
+    "optimizerRuns": 200,
+    "v4Core": "46c6834698c48bc4a463a86d8420f4eb1d7f3b75"
+  },
+  "verifiedAt": "2026-09-26T19:50:52.136Z",
+  "rules": {
+    "continuousLiquidity": true,
+    "initialSaleInventory": "full post-prize allocation",
+    "stageCooldownSeconds": [
+      60,
+      120
+    ],
+    "stageVolumeRatio": [
+      1,
+      2,
+      3
+    ],
+    "deadline": "0",
+    "creatorWithdrawals": false,
+    "ownerSurplusPositionOnly": true,
+    "playerClaimsExpire": false,
+    "feeController": "0x0000000000000000000000000000000000000000",
+    "bossPoolFee": 3000,
+    "supplyPoolFee": 3000
+  },
+  "readOnlyLaunchQuote": {
+    "prizeAmount": "1000000000000000000000",
+    "battleTokenBudget": "9000000000000000000000",
+    "saleHPBudget": "9000000000000000000000",
+    "requiredBattleTokenFunding": "9000000000000000000000",
+    "estimatedAttackToken": "668222453656902511414",
+    "stageOneHP": "1500000000000000000000",
+    "hpPriceTick": -25980,
+    "maxRoyPerMockUSDX128": "3789738636001464975628547786588400165369676310724346"
+  }
+}

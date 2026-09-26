@@ -15,3 +15,4 @@ contracts/broadcast/
 # Local agent loop state (internal only, never part of the submission)
 .edison/
 .playwright-mcp/
+.vercel/
