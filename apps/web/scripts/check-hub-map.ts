@@ -71,6 +71,14 @@ const bossIds = gates
   .sort();
 assert(bossIds.join(",") === "cat,locked,macro-whale", `gate bossIds must be cat, locked, macro-whale; got ${bossIds.join(",")}`);
 for (const gate of gates) assert(gate.width > 0 && gate.height > 0 && !gate.point, "gates must be rectangles");
+const exits = markers.objects.filter((o) => o.name === "region-exit");
+assert(exits.length === 1, `markers must contain one region-exit, got ${exits.length}`);
+const regionExit = exits[0]!;
+const exitId = regionExit.properties?.find((p) => p.name === "exitId")?.value;
+const exitStatus = regionExit.properties?.find((p) => p.name === "status")?.value;
+assert(exitId === "east-route", `region-exit exitId must be east-route, got ${String(exitId)}`);
+assert(exitStatus === "coming-soon", `region-exit status must be coming-soon, got ${String(exitStatus)}`);
+assert(regionExit.width === HUB_TILESET.tileSize && regionExit.height === HUB_TILESET.tileSize * 3, "region-exit must cover the three barrier tiles");
 
 // Collision grid and reachability
 const collision = tileLayers.find((l) => l.name === HUB_LAYERS.collision)!;
@@ -106,6 +114,12 @@ while (queue.length) {
   }
 }
 for (const a of approaches) assert(reachable[a.row * WIDTH + a.col], `${a.bossId} gate is not reachable from spawn`);
+
+const barrier = toTile(regionExit.x, regionExit.y);
+for (let row = barrier.row; row < barrier.row + 3; row++) {
+  assert(blocked(barrier.col, row), `region-exit barrier ${barrier.col},${row} must stay blocked`);
+}
+assert(reachable[13 * WIDTH + 36], "region-exit approach center 36,13 is not reachable from spawn");
 
 // Outer edge is fully blocked
 for (let col = 0; col < WIDTH; col++) {

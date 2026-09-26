@@ -3,6 +3,7 @@ import { BOSSES, findBoss, isBossId, type BossDefinition, type BossId } from "./
 import type { GameBridge } from "./bridge";
 import { HUB_LAYERS, HUB_TILESET } from "./hubTiles";
 import { makeCroppedTexture } from "./textures";
+import { HubAtmosphere } from "./HubAtmosphere";
 
 /** World units are map pixels; the camera zooms them for the viewport. */
 const ZOOM = 3;
@@ -33,6 +34,18 @@ const TILE_ANIMATIONS: { frames: readonly number[]; durations: readonly number[]
   { frames: [HUB_TILESET.gid.torchA, HUB_TILESET.gid.torchB, HUB_TILESET.gid.torchC], durations: [166, 167, 167] },
 ];
 const TILE_CLOCK_PERIOD = 1000;
+const WALK_ROWS = ["down", "left", "right", "up"] as const;
+type Facing = (typeof WALK_ROWS)[number];
+/** Neutral pose is the second cell of each direction row. */
+const IDLE_COLUMN = 1;
+/** Foot pixel row inside the 32×32 cell. Origin and the feet collider share it. */
+const FOOT_ROW = 31;
+const PAGE_CONTROL = "button, a, input, select, textarea, [contenteditable='true'], [role='button']";
+
+function isPageControlTarget(event: KeyboardEvent): boolean {
+  const target = event.target;
+  return target instanceof Element && target.closest(PAGE_CONTROL) !== null;
+}
 
 /** Shape of Phaser's per-tile data that `Tileset.getAnimatedTileId` reads. */
 type TileAnimationData = {
@@ -50,7 +63,20 @@ export class HubScene extends Phaser.Scene {
   private nearGate: Gate | null = null;
   private modalOpen = false;
   private reduceMotion = false;
+  private facing: Facing = "down";
+  private lastX = 0;
+  private lastY = 0;
+  private guideStep: "off" | "move" | "find" | "inspect" = "off";
+  private guideDistance = 0;
+  private guideMoved = false;
+  private guideAnchorX = 0;
+  private guideAnchorY = 0;
+  private hintTarget: Gate | null = null;
+  private hintArrow: Phaser.GameObjects.Triangle | null = null;
+  private regionZone: Phaser.Geom.Rectangle | null = null;
+  private nearRegion = false;
   private unsubscribe: (() => void)[] = [];
+  private atmosphere!: HubAtmosphere;
 
   constructor() {
     super("hub");
@@ -61,17 +87,21 @@ export class HubScene extends Phaser.Scene {
   }
 
   preload() {
+    this.load.on("loaderror", () => this.bridge.emit("scene:error", {}));
     this.load.tilemapTiledJSON("hub", "/game/hub.json");
     this.load.image("tiles", "/game/tiles.png");
-    this.load.image("player-master", "/images/player-you-master.png");
+    this.load.spritesheet("player-walk", "/game/player-compact-walk.png", { frameWidth: 32, frameHeight: 32 });
     for (const boss of BOSSES) {
       if (boss.portrait) this.load.image(`portrait-master-${boss.id}`, boss.portrait);
     }
   }
 
   create() {
-    // Strip the embedded "YOU" label and size the player for the tile scale.
-    makeCroppedTexture(this, "player", "player-master", { x: 330, y: 40, w: 600, h: 1010 }, 32);
+    this.gates = [];
+    this.nearGate = null;
+    this.regionZone = null;
+    this.nearRegion = false;
+    this.registerWalk();
     makeCroppedTexture(this, "portrait-cat", "portrait-master-cat", { x: 120, y: 60, w: 880, h: 1240 }, 28);
     makeCroppedTexture(this, "portrait-macro-whale", "portrait-master-macro-whale", { x: 160, y: 80, w: 940, h: 940 }, 28);
 
@@ -101,6 +131,7 @@ export class HubScene extends Phaser.Scene {
     }
 
     const gateBodies = this.buildGates(map);
+    this.buildRegionExit(map);
     this.buildPlayer(spawn.x, spawn.y);
     this.physics.add.collider(this.player, collision);
     this.physics.add.collider(this.player, gateBodies);
@@ -110,23 +141,43 @@ export class HubScene extends Phaser.Scene {
     this.cameras.main.setRoundPixels(true);
 
     this.setupInput();
+    this.atmosphere = new HubAtmosphere(this, map);
     // Sets reduceMotion and applies tile animation for the current preference.
     this.watchReducedMotion();
 
     this.unsubscribe.push(
+      this.bridge.onCommand("guide:step", ({ step }) => {
+        const enteringMove = step === "move" && this.guideStep !== "move";
+        this.guideStep = step;
+        if (enteringMove) {
+          this.guideDistance = 0;
+          this.guideMoved = false;
+          this.guideAnchorX = this.player.x;
+          this.guideAnchorY = this.player.y;
+        }
+        if (step !== "find") this.hintArrow?.setVisible(false);
+      }),
       this.bridge.onCommand("ui:modal", ({ open }) => {
         this.modalOpen = open;
-        if (open) this.player.setVelocity(0, 0);
-        // Hand the keyboard to React while a panel or control owns focus.
-        if (this.input.keyboard) this.input.keyboard.enabled = !open;
+        this.player.setVelocity(0, 0);
+        if (open) this.showIdle();
+        if (!this.input.keyboard) return;
+        this.input.keyboard.enabled = !open;
+        // Drop keys that went up while Phaser was ignoring the keyboard, so closing a panel does not resume a drift.
+        if (!open) this.input.keyboard.resetKeys();
       }),
     );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.hintArrow?.destroy();
+      this.hintArrow = null;
+      this.regionZone = null;
+      this.nearRegion = false;
       this.unsubscribe.forEach((u) => u());
       this.unsubscribe = [];
     });
 
     this.exposeDevProbe();
+    this.bridge.emit("region:near", { exitId: null });
     this.bridge.emit("scene:ready", {});
   }
 
@@ -137,10 +188,17 @@ export class HubScene extends Phaser.Scene {
       playerX: this.player.x,
       playerY: this.player.y,
       playerScaleY: this.player.scaleY,
+      facing: this.facing,
+      frame: this.player.frame.name,
+      walking: this.player.anims.isPlaying,
       nearGate: this.nearGate?.boss.id ?? null,
       glowScale: this.nearGate?.glow.scaleX ?? null,
       glowAlpha: this.nearGate?.glow.alpha ?? null,
       reduceMotion: this.reduceMotion,
+      guideStep: this.guideStep,
+      guideDistance: this.guideDistance,
+      hintVisible: this.hintArrow?.visible ?? false,
+      nearRegion: this.nearRegion,
       gates: this.gates.map((g) => ({ id: g.boss.id, zone: { x: g.zone.x, y: g.zone.y, w: g.zone.width, h: g.zone.height } })),
     });
     (window as unknown as { __bpHub?: () => ReturnType<typeof probe> }).__bpHub = probe;
@@ -150,8 +208,11 @@ export class HubScene extends Phaser.Scene {
   }
 
   update(time: number) {
-    this.updateMovement(time);
+    this.atmosphere.update(time, this.reduceMotion);
+    this.updateMovement();
     this.updateGateProximity();
+    this.updateRegionProximity();
+    this.updateGuideHint(time);
   }
 
   /** Gates come from the Tiled `markers` layer; returns their blocking bodies. */
@@ -202,8 +263,28 @@ export class HubScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0)
         .setDepth(LABEL_DEPTH + 1);
+      const caption = boss.locked
+        ? null
+        : this.add
+            .text(cx, label.y + label.height, "BOSS POOL", {
+              fontFamily: "var(--font-dm-mono), monospace",
+              fontSize: "4px",
+              color: "#f5b04a",
+              letterSpacing: 0.6,
+              resolution: ZOOM,
+            })
+            .setOrigin(0.5, 0)
+            .setDepth(LABEL_DEPTH + 1);
+      const blockHeight = label.height + (caption?.height ?? 0);
       const plate = this.add
-        .rectangle(cx, label.y + label.height / 2, label.width + 6, label.height + 3, 0x0b0e18, 0.75)
+        .rectangle(
+          cx,
+          label.y + blockHeight / 2,
+          Math.max(label.width, caption?.width ?? 0) + 6,
+          blockHeight + 3,
+          0x0b0e18,
+          0.75,
+        )
         .setDepth(LABEL_DEPTH);
       plate.setStrokeStyle(1, color, 0.6);
 
@@ -220,12 +301,37 @@ export class HubScene extends Phaser.Scene {
     return bodies;
   }
 
+  private registerWalk() {
+    WALK_ROWS.forEach((facing, row) => {
+      const key = `player-walk-${facing}`;
+      if (this.anims.exists(key)) return;
+      this.anims.create({
+        key,
+        frames: this.anims.generateFrameNumbers("player-walk", { start: row * 4, end: row * 4 + 3 }),
+        frameRate: 8,
+        repeat: -1,
+      });
+    });
+  }
+
+  private idleFrame(facing: Facing = this.facing): number {
+    return WALK_ROWS.indexOf(facing) * 4 + IDLE_COLUMN;
+  }
+
+  private showIdle() {
+    if (this.player.anims.isPlaying) this.player.anims.stop();
+    this.player.setFrame(this.idleFrame());
+  }
+
   private buildPlayer(x: number, y: number) {
-    this.player = this.physics.add.sprite(x, y, "player");
-    this.player.setOrigin(0.5, 1).setDepth(y);
+    this.facing = "down";
+    this.lastX = x;
+    this.lastY = y;
+    this.player = this.physics.add.sprite(x, y, "player-walk", this.idleFrame());
+    this.player.setOrigin(0.5, FOOT_ROW / 32).setScale(1).setDepth(y);
     this.player.setCollideWorldBounds(true);
     const body = this.player.body as Phaser.Physics.Arcade.Body;
-    body.setSize(12, 8).setOffset((this.player.width - 12) / 2, this.player.height - 8);
+    body.setSize(12, 8).setOffset((this.player.width - 12) / 2, FOOT_ROW - 8);
     this.add.ellipse(0, 0, 14, 4, 0x000000, 0.3).setDepth(2).setName("player-shadow");
   }
 
@@ -237,14 +343,24 @@ export class HubScene extends Phaser.Scene {
     // Phaser calls preventDefault on every captured key page-wide, which
     // swallows Space on focused React buttons. Read keys without capturing.
     keyboard.clearCaptures();
-    // Event-driven so a quick tap registers regardless of frame timing.
-    const interact = () => {
-      if (this.modalOpen || !this.nearGate) return;
-      this.bridge.emit("gate:enter", { bossId: this.nearGate.boss.id });
+    // Listen on the window, not Phaser. A focused music or sound button otherwise
+    // keeps the key event off the canvas, so E never reaches the gate.
+    const interact = (event: KeyboardEvent) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || this.modalOpen) return;
+      const inspect = event.key === "e" || event.key === "E";
+      const activatesFocusedControl = event.key === " " || event.key === "Enter";
+      if (!inspect && !activatesFocusedControl) return;
+      if (activatesFocusedControl && isPageControlTarget(event)) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (this.nearGate) {
+        this.bridge.emit("gate:enter", { bossId: this.nearGate.boss.id });
+        return;
+      }
+      if (this.nearRegion) this.bridge.emit("region:inspect", { exitId: "east-route" });
     };
-    keyboard.on("keydown-E", interact);
-    keyboard.on("keydown-ENTER", interact);
-    keyboard.on("keydown-SPACE", interact);
+    window.addEventListener("keydown", interact, true);
+    this.unsubscribe.push(() => window.removeEventListener("keydown", interact, true));
   }
 
   /** Mirror prefers-reduced-motion inside the canvas; CSS cannot reach Phaser tweens. */
@@ -253,7 +369,8 @@ export class HubScene extends Phaser.Scene {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
     const apply = () => {
       this.reduceMotion = query.matches;
-      this.player.setScale(1, 1);
+      this.player.setScale(1);
+      this.showIdle();
       if (this.nearGate) this.startGatePulse(this.nearGate);
       this.applyTileAnimation();
     };
@@ -305,10 +422,13 @@ export class HubScene extends Phaser.Scene {
     });
   }
 
-  private updateMovement(time: number) {
+  private updateMovement() {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     if (this.modalOpen || !this.cursors) {
       body.setVelocity(0, 0);
+      this.showIdle();
+      this.guideAnchorX = this.player.x;
+      this.guideAnchorY = this.player.y;
       return;
     }
 
@@ -322,15 +442,131 @@ export class HubScene extends Phaser.Scene {
     const len = Math.hypot(vx, vy) || 1;
     body.setVelocity((vx / len) * PLAYER_SPEED, (vy / len) * PLAYER_SPEED);
 
-    if (vx !== 0) this.player.setFlipX(vx < 0);
+    const ax = Math.abs(vx);
+    const ay = Math.abs(vy);
+    if (ax > ay) this.facing = vx > 0 ? "right" : "left";
+    else if (ay > ax) this.facing = vy > 0 ? "down" : "up";
 
-    // Walk bob until a real walking sheet exists. Decorative, so it obeys reduced motion.
-    const moving = vx !== 0 || vy !== 0;
-    this.player.setScale(1, moving && !this.reduceMotion ? 1 + Math.sin(time / 70) * 0.03 : 1);
-    this.player.setDepth(this.player.y);
+    // Arcade resolves the previous frame's velocity before this update, so position delta is real movement.
+    const moved = Math.hypot(this.player.x - this.lastX, this.player.y - this.lastY) > 0.2;
+    this.lastX = this.player.x;
+    this.lastY = this.player.y;
+    const pushing = vx !== 0 || vy !== 0;
+    this.trackGuideTravel(pushing);
+    if (this.reduceMotion || !pushing || !moved) this.showIdle();
+    else {
+      const key = `player-walk-${this.facing}`;
+      if (!this.player.anims.isPlaying || this.player.anims.currentAnim?.key !== key) this.player.play(key);
+    }
 
+    this.player.setScale(1).setFlipX(false).setDepth(this.player.y);
     const shadow = this.children.getByName("player-shadow") as Phaser.GameObjects.Ellipse | null;
     shadow?.setPosition(this.player.x, this.player.y - 1);
+  }
+
+  /** Counts resolved travel during the move step. Walls, pauses, and idle frames do not add distance. */
+  private trackGuideTravel(pushing: boolean) {
+    if (this.guideStep !== "move" || this.guideMoved) return;
+    const travel = Math.hypot(this.player.x - this.guideAnchorX, this.player.y - this.guideAnchorY);
+    if (!this.modalOpen && pushing && travel > 0.2) {
+      this.guideDistance += travel;
+      if (this.guideDistance >= 24) {
+        this.guideMoved = true;
+        this.bridge.emit("guide:moved", {});
+      }
+    }
+    this.guideAnchorX = this.player.x;
+    this.guideAnchorY = this.player.y;
+  }
+
+  private updateGuideHint(time: number) {
+    const show = this.guideStep === "find" && !this.modalOpen;
+    if (!show) {
+      this.hintArrow?.setVisible(false);
+      return;
+    }
+    const target = this.chooseHintGate();
+    if (!target) {
+      this.hintArrow?.setVisible(false);
+      return;
+    }
+    if (!this.hintArrow) {
+      this.hintArrow = this.add.triangle(0, 0, 0, 5, 4, -3, -4, -3, 0xf5b04a).setDepth(LABEL_DEPTH - 1);
+    }
+    const centerX = target.zone.x + target.zone.width / 2;
+    const centerY = target.zone.y + target.zone.height / 2;
+    const angle = Math.atan2(centerY - this.player.y, centerX - this.player.x);
+    this.hintArrow
+      .setPosition(this.player.x + Math.cos(angle) * 16, this.player.y - 14 + Math.sin(angle) * 16)
+      .setRotation(angle - Math.PI / 2)
+      .setVisible(true)
+      .setAlpha(this.reduceMotion ? 0.9 : 0.65 + Math.sin(time / 420) * 0.2);
+  }
+
+  /** Nearest unlocked gate, keeping the current target until another is clearly closer. */
+  private chooseHintGate(): Gate | null {
+    const unlocked = this.gates.filter((gate) => !gate.boss.locked);
+    if (unlocked.length === 0) return null;
+    const distance = (gate: Gate) => {
+      const centerX = gate.zone.x + gate.zone.width / 2;
+      const centerY = gate.zone.y + gate.zone.height / 2;
+      return Math.hypot(centerX - this.player.x, centerY - this.player.y);
+    };
+    const nearest = [...unlocked].sort(
+      (a, b) => distance(a) - distance(b) || a.boss.id.localeCompare(b.boss.id),
+    )[0]!;
+    if (this.hintTarget && unlocked.includes(this.hintTarget) && distance(this.hintTarget) <= distance(nearest) + 24) {
+      return this.hintTarget;
+    }
+    this.hintTarget = nearest;
+    return nearest;
+  }
+
+  /** Wooden sign on the closed east route. The approach is the marker's own height, west of the barrier. */
+  private buildRegionExit(map: Phaser.Tilemaps.Tilemap) {
+    const markers = map.getObjectLayer(HUB_LAYERS.markers);
+    const obj = markers?.objects.find((marker) => marker.name === "region-exit");
+    if (!obj || obj.x === undefined || obj.y === undefined || !obj.width || !obj.height) return;
+    const exitId = obj.properties?.find((property: { name: string }) => property.name === "exitId")?.value;
+    if (exitId !== "east-route") return;
+
+    const reach = obj.height;
+    this.regionZone = new Phaser.Geom.Rectangle(obj.x - reach, obj.y, reach, obj.height);
+    // Board sits on the grass just north of the barrier so the path and player stay visible.
+    const cx = obj.x - 18;
+    const cy = obj.y - 14;
+    const title = this.add
+      .text(cx, cy - 4, "NEXT REGION", {
+        fontFamily: "var(--font-dm-mono), monospace",
+        fontSize: "5px",
+        color: "#f5b04a",
+        letterSpacing: 0.4,
+        resolution: ZOOM,
+      })
+      .setOrigin(0.5)
+      .setDepth(LABEL_DEPTH + 1);
+    const subtitle = this.add
+      .text(cx, cy + 4, "COMING SOON", {
+        fontFamily: "var(--font-dm-mono), monospace",
+        fontSize: "4px",
+        color: "#f3e2c4",
+        letterSpacing: 0.4,
+        resolution: ZOOM,
+      })
+      .setOrigin(0.5)
+      .setDepth(LABEL_DEPTH + 1);
+    this.add
+      .rectangle(cx, cy, Math.max(title.width, subtitle.width) + 8, title.height + subtitle.height + 6, 0x6a4324, 0.94)
+      .setStrokeStyle(1, 0xc48a45)
+      .setDepth(LABEL_DEPTH);
+  }
+
+  private updateRegionProximity() {
+    if (!this.regionZone) return;
+    const inside = Phaser.Geom.Rectangle.Contains(this.regionZone, this.player.x, this.player.y);
+    if (inside === this.nearRegion) return;
+    this.nearRegion = inside;
+    this.bridge.emit("region:near", { exitId: inside ? "east-route" : null });
   }
 
   private updateGateProximity() {

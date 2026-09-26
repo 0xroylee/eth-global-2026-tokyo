@@ -53,8 +53,8 @@ The delivery plan already lists transaction states, stale-stage requotes, reduce
 
 | Existing slice | Concrete frontend work |
 | --- | --- |
-| BP02/BP06 preparation | Migrate the local shell to Next.js and Tailwind. Separate local chain 31337 configuration from target-chain 46630 configuration. Preserve round reads and deployment validation while adding the verified target deployment path. |
-| BP03 | Connect through direct viem and the injected provider, switch network, handle account changes, show ETH/MockUSD balances, approve the enrollment spender, enroll, and render receipt-backed entry NFT/starter ROY results. |
+| BP02/BP06 preparation | Migrate the local shell to Next.js and Tailwind. Separate local chain 31337 configuration from Base Sepolia chain 84532 configuration. Preserve round reads and deployment validation while adding the verified target deployment path. |
+| BP03 | Connect through direct viem and the injected provider, switch network, handle account changes, show ETH/MockUSD balances, and approve BossRouter only when allowance is insufficient. Fresh wallets can attack directly without an entry NFT. |
 | BP04 | Define a supported authenticated quote/preview method; implement bounds, approvals, simulation, write, replacement/revert handling, confirmed output, refunds, and expected-stage requotes. |
 | BP05/BP06 | Build the three boss forms, readable stage HP and prize, attack controls, and confirmed transition animation. Restore canonical state after refresh; handle keyboard and reduced-motion use. |
 | BP07 | Show transferable BossHP holdings and the fixed reward rate. Approve and surrender HP for redemption. Keep historical contribution and the separate victory NFT claim visible as different facts. |
@@ -64,11 +64,10 @@ The approval map follows the actual contract spender:
 
 | Action | Token | Approval spender |
 | --- | --- | --- |
-| Enrollment | MockUSD | BossHook |
 | Attack | MockUSD | BossRouter |
 | Reward redemption | BossHP | BossHook |
 
-The generated ABI owns these calls. `attackWithMockUSD` accepts a MockUSD cap, minimum ROY and BossHP outputs, expected stage, and deadline. It requires enrollment and a positive minimum BossHP output. There is currently no dedicated on-chain quote function. A generic swap widget cannot replace this authenticated route. Pre-approval full-router simulation can fail because allowance is missing; a quote strategy must address that and re-simulate after approval. Do not show an invented preview or animate confirmed damage on transaction submission.
+The generated ABI owns these calls. `attackWithMockUSD` accepts a MockUSD cap, minimum ROY and BossHP outputs, expected stage, and deadline. It requires a positive minimum BossHP output. It buys ROY and BossHP in one transaction without enrollment, a starter grant, or an entry-NFT mint. There is currently no dedicated on-chain quote function. A generic swap widget cannot replace this authenticated route. Pre-approval full-router simulation can fail because allowance is missing; a quote strategy must address that and re-simulate after approval. Do not show an invented preview or animate confirmed damage on transaction submission.
 
 Keep `bigint` for amounts and derive confirmed damage from the successful transaction events. Refresh balances, allowances, stage state, and claims after receipts and account/network changes. Give each quote an account, chain, stage, input, and freshness context so an old result cannot authorize the next action.
 
@@ -80,8 +79,8 @@ The existing plan already defines B's UI ownership, the transaction-state vocabu
 
 | Area | Evidence in this checkout | Missing decision or work |
 | --- | --- | --- |
-| Web shell | [App.tsx](../apps/web/src/App.tsx) polls a local round every five seconds. [main.tsx](../apps/web/src/main.tsx) mounts React without a wallet provider. | Connection, enrollment, attacks, claims, and transaction recovery. |
-| Chain boundary | [Shared chain client](../packages/chain/src/index.ts) exports a manifest restricted to chain 31337 and loopback HTTP RPCs. | Add explicit Robinhood configuration and a verified deployment manifest. Preserve validation when extending the local-only boundary. |
+| Web shell | [GameShell.tsx](../apps/web/src/components/GameShell.tsx) reads a local round through `useLocalRound` without a wallet provider. | Connection, attacks, claims, and transaction recovery. |
+| Chain boundary | [Shared chain client](../packages/chain/src/index.ts) exports a manifest restricted to chain 31337 and loopback HTTP RPCs. | Add explicit Base Sepolia configuration and a verified deployment manifest. Preserve validation when extending the local-only boundary. |
 | Presentation | [styles.css](../apps/web/src/styles.css) provides a responsive read-only shell and one placeholder boss. | Three boss forms, game layout, typography/color tokens, loading/error presentation, mobile controls, and reduced-motion behavior. |
 | Client operations | Generated ABIs exist, but shared operations only validate deployments and read round data. | Player balances/allowances, authenticated previews/simulation, writes, receipt decoding, and error mapping. |
 | Migration status | The technical specification and delivery plan now record the Next.js/viem/Tailwind decision. [BP01 evidence](bp01-foundation.md) records the original local implementation. | Migrate the runnable Vite shell and record fresh verification before calling the selected frontend stack implemented. |

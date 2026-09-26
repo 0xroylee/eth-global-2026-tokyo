@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart TD
-    Entry["入場：MockUSD 換入場 NFT 及 starter ROY"] --> Attack["按 Attack"]
+    Entry["連接錢包，需要時授權 MockUSD"] --> Attack["按 Attack，一筆交易自動買 ROY 並攻擊"]
     Attack --> Hop1["MockUSD 換 ROY"]
     Hop1 --> Hop2["ROY 換當前 stage 的 BossHP"]
     Hop2 --> Count["afterSwap 累計 stageSold"]
@@ -17,7 +17,7 @@ flowchart TD
     Release --> Attack
     Check -->|最後一關售完| Victory["凍結實際 eligible HP 總量"]
     Victory --> Claim["持有人交回 HP 鎖住，領 MockUSD"]
-    Victory --> NFT["曾參戰玩家另領勝利 NFT"]
+    Victory --> NFT["曾參戰玩家可選擇另領勝利 NFT"]
 ```
 
 代幣轉帳唔造成新傷害，但可以轉移分獎權。Reserve、LP fee 同已兌獎 HP 唔可以混入可兌獎流通量。單一玩家交易最多影響一個 stage。
@@ -30,10 +30,10 @@ flowchart LR
     R -->|unlock / swap / modifyLiquidity| PM["Uniswap v4 PoolManager"]
     PM --> S["MockUSD / ROY supply pool"]
     PM --> B["ROY / BossHP boss pool"]
-    PM -->|Boss pool callbacks| H["BossHook：stage、入場、獎池、兌獎"]
+    PM -->|Boss pool callbacks| H["BossHook：stage、獎池、兌獎"]
     R -->|受限 transition 操作| H
-    W -->|enroll / claim| H
-    H --> C["標準 ERC-721：入場與勝利 NFT"]
+    W -->|claim| H
+    H --> C["標準 ERC-721：可選勝利 NFT"]
 ```
 
 兩個 pool 係 PoolManager 內嘅狀態。BossHook 只掛喺 Boss pool；supply pool 可用普通 v4 行為。BossRouter 同時負責轉階段，唔另建 StageManager。Token/NFT 重用標準實作。

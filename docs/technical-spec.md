@@ -1,6 +1,6 @@
 # Boss Pool technical specification
 
-Status: BP01 implements local no-burn contracts, transferable HP redemption and the shared real-v4 fixture. Four focused cases pass: the full HP0 round/claims path, an HP1 normalized-price/refill regression, deadline setup rejection and expiry. The workspace/local read shell is separate from the still-unimplemented full game UI. Robinhood target-chain deployment remains unverified.
+Status: BP01 implements local no-burn contracts, transferable HP redemption and the shared real-v4 fixture. Four focused cases pass: the full HP0 round/claims path, an HP1 normalized-price/refill regression, deadline setup rejection and expiry. The workspace/local read shell is separate from the still-unimplemented full game UI. Base Sepolia deployment remains unverified; Robinhood receipts are historical.
 
 ## Architecture
 
@@ -14,7 +14,7 @@ flowchart LR
     PM -->|router takes purchased BossHP for player| W
     R -->|guarded transition begin and completion| H
     R -->|refill swap and LP increment in current unlock| PM
-    W -->|enroll or redeem HP| H
+    W -->|redeem HP| H
 ```
 
 The two pools are states inside one PoolManager, not separate pool contracts. ROY is a payment asset. Purchased BossHP goes to the player and its actual output counts as damage. One attack uses at most one supply-pool swap and one player Boss-pool swap. A clearing attack may additionally trigger the controller-only reverse refill, which earns no contribution.
@@ -29,24 +29,24 @@ These boundaries guide the implementation. Actual BP01 source uses `BossHP`, `Ro
 
 | Contract | Responsibilities and custody | Main interface |
 | --- | --- | --- |
-| `BossHook` | Canonical pool and stage rules, sold counters, enrollment, frozen eligible supply, prize/entry ledgers, starter ROY, permanently surrendered HP, and reward/NFT eligibility | `activate`, `enroll`, `claimReward(hpAmount)`, `claimVictoryNFT`, `expire`, expired-prize recovery; authenticated v4 callbacks and router-only transition methods |
+| `BossHook` | Canonical pool and stage rules, sold counters, frozen eligible supply, prize ledger, permanently surrendered HP, and reward/NFT eligibility | `activate`, `claimReward(hpAmount)`, `claimVictoryNFT`, `expire`, expired-prize recovery; authenticated v4 callbacks and router-only transition methods |
 | `BossRouter` | User attack context, two-hop settlement, stage HP reserve, game-owned LP positions, recovered ROY, bounded refills and LP top-ups | `attackWithMockUSD`, PoolManager-only `unlockCallback`, hook-authorized setup; optional held-ROY route later |
 | `BossHPToken` | Standard fixed-supply ERC-20; initial allocation to the controlled reserve, ordinary player transfers, no public mint or burn extension | Standard ERC-20 interface |
-| `RoyToken` | Standard fixed-supply ERC-20 for LP and starter allocations | Standard ERC-20 interface |
-| `RoyCollectibles` | Entry and victory NFTs in one standard ERC-721 collection; minting authorized only by BossHook | Restricted entry/victory mint methods |
+| `RoyToken` | Standard fixed-supply ERC-20 for LP and locked reserves | Standard ERC-20 interface |
+| `BossCollectibles` | Optional victory NFTs in one standard ERC-721 collection; minting authorized only by BossHook | Restricted victory mint method |
 | `MockUSD` | Test-only ERC-20 faucet asset | Standard ERC-20 and test faucet |
 
 Reuse OpenZeppelin token implementations, SafeERC20, full-precision math, and a standard reentrancy guard. Reuse the pinned v4 hook interface/base and liquidity/settlement helpers. PoolManager is an existing protocol component. The two pools are records in it, not two new game contracts. No separate StageManager or reward-vault contract is required for this single-round MVP.
 
 BossHook is the sole source of stage state. BossRouter has a bounded execution mode and authenticated active-player context, not another independent HP ledger. The game configuration fixes both pool keys, the trusted router/manager, three stage liquidity plans, fee/range parameters, prize amount, and deadline before activation. Ordinary administration cannot edit them during the fight.
 
-Hook state includes `status`, `currentStage`, `stageSold[3]`, registered position data, `originalPrize`, `finalEligibleHP`, and `redeemedHP`. Keep `enrolled`, `hasAttacked`, and `victoryClaimed` only for the entry/NFT rules. Token payouts do not need a per-wallet damage amount or once-per-wallet token claim flag.
+Hook state includes `status`, `currentStage`, `stageSold[3]`, registered position data, `originalPrize`, `finalEligibleHP`, and `redeemedHP`. Keep `hasAttacked` and `victoryClaimed` for the optional victory-NFT rules. Fresh wallets can attack without enrollment. Token payouts do not need a per-wallet damage amount or once-per-wallet token claim flag.
 
 Use zero-based `currentStage` values 0, 1 and 2 in the contract ABI and `expectedStage`; the UI displays stage 1, 2 and 3. Keep the final index at 2 after defeat. Human stage labels in diagrams and historical prototype results are not array indices. BP01 freezes generated view/event shapes with this convention.
 
 The router's transition sequence is a private implementation step, not an arbitrary public stage-release command. Its calls into the hook are restricted to the configured router and current transition context. The hook verifies the registered price/liquidity result before advancing the stage exactly once. A failed verification reverts the entire attack transaction.
 
-Prize MockUSD and entry proceeds can share the hook address while maintaining separate ledgers. The prize ledger funds victory claims or the maker's expired-round refund. Attack/LP funds never borrow from it. Surrendered HP is never approved to the router or exposed through a generic recovery function. Reserve/LP HP stays under router control until the reward restrictions allow release.
+The hook holds the sponsor-funded MockUSD prize. There are no entry proceeds. The prize ledger funds victory claims or the maker's expired-round refund. Attack/LP funds never borrow from it. Surrendered HP is never approved to the router or exposed through a generic recovery function. Reserve/LP HP stays under router control until the reward restrictions allow release.
 
 ### Monorepo and ownership
 
@@ -83,11 +83,11 @@ Use a viem public client with the configured HTTP RPC for reads, simulations, an
 
 The wallet flow must handle account permission, network switching, rejection, `accountsChanged`, `chainChanged`, and disconnect events. Remove provider listeners on cleanup and discard stale player reads and quotes after an account or chain change. Recheck the selected account, chain, and expected stage before a write. Keep public round reads available without a connected wallet. [EIP-1193 provider API](https://eips.ethereum.org/EIPS/eip-1193)
 
-Preserve the existing approval, simulation, receipt, and stale-stage rules. Enrollment approves MockUSD to BossHook; attacks approve MockUSD to BossRouter; redemption approves BossHP to BossHook. Keep victory-NFT claims separate. Derive damage and stage transitions from confirmed receipts and refreshed canonical state.
+Preserve the existing approval, simulation, receipt, and stale-stage rules. Attacks approve MockUSD to BossRouter only when allowance is insufficient; redemption approves BossHP to BossHook. Each attack buys ROY and BossHP in one transaction without an entry-NFT mint. Keep victory-NFT claims separate. Derive damage and stage transitions from confirmed receipts and refreshed canonical state.
 
 ## Deployment and proof gate
 
-Target Robinhood testnet chain ID 46630. The documented RPC previously returned HTTP 403 from this environment. Verify RPC access, manager/periphery provenance, selected EVM/compiler compatibility, and actual bytecode. A local proof is not testnet evidence.
+Target Base Sepolia, chain ID 84532, with the documented public RPC `https://sepolia.base.org`. Verify RPC access, manager/periphery provenance, selected EVM/compiler compatibility, and actual bytecode. A local proof or historical Robinhood deployment is not Base Sepolia evidence.
 
 BP01 adapts the existing compact real-v4 scenario: both swaps, ordinary BossHP delivery, cumulative purchase accounting, current-stage completion, and the reserve-funded refill/LP addition with all deltas settled. Reuse existing upstream fixtures and settlement helpers. Then verify the real target-chain route after deployment.
 
@@ -99,7 +99,7 @@ The manifest records both pool keys/IDs, addresses, provenance, deployment block
 
 Use standard fixed-supply ERC-20 implementations for ROY and BossHP. Prefund BossHP and any paired ROY before activation. Stage release moves these existing assets into positions; it does not grant an unrestricted mint role. MockUSD is a test-only faucet asset.
 
-RoyCollectibles provides the entry and victory NFTs. Enrollment and historical attack eligibility live independently of token holdings. A boolean `hasAttacked` is sufficient if the victory NFT requires prior participation; no per-wallet damage amount is needed for token payouts. Preserve once-per-wallet enrollment and independent NFT reward claims.
+BossCollectibles provides optional victory NFTs. Historical attack eligibility lives independently of token holdings. A boolean `hasAttacked` is sufficient if the victory NFT requires prior participation; no per-wallet damage amount is needed for token payouts. Keep NFT reward claims independent of attacks and token redemption.
 
 BossHook owns current stage, `stageSold`, frozen eligible supply, redeemed HP totals, NFT claim flags, and prize accounting. Proposed callbacks are `beforeInitialize`, `beforeAddLiquidity`, `beforeRemoveLiquidity`, `beforeSwap`, and `afterSwap`. Damage accounting returns a zero hook delta and requires no `afterSwapReturnDelta` permission. Determine and mine the final permission mask before deployment.
 
@@ -110,7 +110,7 @@ Every BossHook callback verifies the configured PoolManager and complete canonic
 | Initialization | Fixed ROY/MockUSD key and seed settings | Fixed ROY/BossHP key and stage-plan settings |
 | Add liquidity | Normal setup rules | Only authenticated setup/stage release matching the frozen plan |
 | Remove principal | Locked from activation through deadline | Same; stage progression defaults to add-only |
-| Buy | Ordinary purchase; no damage | Registered attack path, enrolled player, expected active stage |
+| Buy | Ordinary purchase; no damage | Registered attack path, authenticated caller, expected active stage |
 | Reverse trade | Ordinary trade | Only the controller's bounded reserve-funded refill during transition; player sell-backs rejected |
 | afterSwap | No damage or reward issuance | Actual authorized player BossHP output increments `stageSold` and enters eligible circulation; maintenance excluded |
 
@@ -176,7 +176,6 @@ Each request pins expectedStage. A transaction that arrives after another player
 Keep these balances and authorities separate:
 
 - MockUSD prize escrow, used only for final victory claims or the defined expired-round refund.
-- Entry proceeds and starter ROY reserve.
 - LP assets already committed to the two pools.
 - Stage reserve of BossHP and any paired ROY required during play.
 - Unallocated treasury, time-locked until at least the round deadline.
@@ -185,7 +184,7 @@ Future-stage reserve must not be trapped behind the end-of-round treasury timelo
 
 Ordinary LP principal withdrawals are blocked from activation through the fixed deadline, even after an early victory. During play, only the frozen controller refill can move LP ROY into reserve custody. Keep LP fees uncollected for the current math model. Recovered ROY remains game-controlled through the deadline and cannot be spent as a player refund or prize.
 
-Enrollment and attacks stop at the deadline. If the boss survives, anyone can expire the round and the maker can reclaim the unawarded prize once. If stage 3 was defeated earlier, there is no prize refund to the maker. Entry payments and attack purchases are not refundable through expiry.
+Attacks stop at the deadline. If the boss survives, anyone can expire the round and the maker can reclaim the unawarded prize once. If stage 3 was defeated earlier, there is no prize refund to the maker. Attack purchases are not refundable through expiry.
 
 ## Rewards and client interface
 
@@ -193,7 +192,7 @@ Use integer base units, bigint in TypeScript, and decimal strings in JSON. Freez
 
 Transfers of unredeemed HP transfer reward rights. A wallet can claim again only with additional unredeemed tokens it holds; there is no once-per-wallet token claim flag. Never compute rewards from a live balance while leaving those same tokens transferable after payment. Do not shrink the denominator or use the remaining prize for later claims. Direct donations to claim custody do not count as redemptions. Integer reward dust remains locked. NFT eligibility and its once-per-wallet claim flag remain separate. The [reward calculation](refill-math.md#rewards-follow-eligible-bosshp) states the custody assumptions and the frozen-balance alternative.
 
-Proposed actions are activate, enroll, attackWithMockUSD, activatePendingStage for the trusted router, claimReward, claimVictoryNFT, expire, and the specific post-deadline recovery methods. Optional attackWithRoy skips the supply-pool swap. There is no direct held-BossHP damage action.
+Proposed actions are activate, attackWithMockUSD, activatePendingStage for the trusted router, claimReward, claimVictoryNFT, expire, and the specific post-deadline recovery methods. There is no direct held-BossHP damage action.
 
 Publish views for stage HP/status, `stageSold`, frozen eligible supply, redeemed HP, NFT eligibility/claim flags, pending/released stage allocations, reserve balances, LP positions, and deployment configuration. Derive token reward previews from holder balance and the frozen rate after victory; use attack events for historical damage. Emit AttackApplied with both hop amounts and actual BossHP output, followed by StageCleared and then StageLiquidityActivated/StageStarted only when the actual addition succeeds.
 
@@ -207,4 +206,4 @@ Use one reusable two-wallet core/E2E fixture with real v4 core. Adapt the existi
 
 Assert unchanged BossHP supply, output delivery equal to eligible issuance, transfers moving reward rights without new damage, one-time surrender of each redeemed token amount, locked protocol HP including after the deadline, rejection of player sell-backs, no premature future liquidity, no same-attack stage spill, reserve/player fund separation, single release per stage, and zero unsettled deltas. Extend the shared claim journey with a token transfer and redemption rather than adding a separate suite. Keep the failed-release rollback and focused access-control/expiry checks where the browser cannot reliably exercise them.
 
-Do not add a separate simulator, exhaustive test matrix, or broad fuzz suite. Reuse focused evidence until relevant code changes. The current `BossPoolCoreTest` fixture exercises the local no-burn path; it does not establish production audit coverage or Robinhood deployment.
+Do not add a separate simulator, exhaustive test matrix, or broad fuzz suite. Reuse focused evidence until relevant code changes. The current `BossPoolCoreTest` fixture exercises the local no-burn path; it does not establish production audit coverage or Base Sepolia deployment.
