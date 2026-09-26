@@ -1,0 +1,228 @@
+{
+  "chainId": 46630,
+  "deployer": "0x45d4E78C6AC2Df422F02F3b9CF3A8271cD6C2262",
+  "addresses": {
+    "hook": "0x0abE6314fEC4E33bc12862329920B7F61B7eEAC0",
+    "router": "0x353749Ffa9640C4152DD28068c416Adfc2eb168E",
+    "bossHP": "0x701E016541C503883B766fA3Fc94f799b2734cA7",
+    "roy": "0x5a5517f63714f44F19337d34ab29d5ACC652e4CF",
+    "mockUSD": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
+    "collectibles": "0xd70B65dd1d57999e031F661f345030f2075036A4",
+    "poolManager": "0x949Dc23961a14246771CE109FA6528f3af3E5163"
+  },
+  "pools": {
+    "supply": {
+      "id": "0x1da66f02d3c41084996e806a960fd64b2795741e524e06e6b37d10ab2097524a",
+      "key": {
+        "currency0": "0x5a5517f63714f44F19337d34ab29d5ACC652e4CF",
+        "currency1": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0000000000000000000000000000000000000000"
+      }
+    },
+    "boss": {
+      "id": "0x2317430c1f0bbc95ab336ebe0353968619ca31d834a42d6911f14d163aa7cf8d",
+      "key": {
+        "currency0": "0x5a5517f63714f44F19337d34ab29d5ACC652e4CF",
+        "currency1": "0x701E016541C503883B766fA3Fc94f799b2734cA7",
+        "fee": 3000,
+        "tickSpacing": 60,
+        "hooks": "0x0abE6314fEC4E33bc12862329920B7F61B7eEAC0"
+      }
+    }
+  },
+  "config": {
+    "hookFlags": "0x0000000000000000000000000000000000002Ac0",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "bossTicks": [
+      -1920,
+      0
+    ],
+    "bossIsCurrency0": false,
+    "bossInitialSqrtPriceX96": "79228162514264337593543950336",
+    "bossSqrtLowerX96": "71976280165737757769120291055",
+    "bossSqrtUpperX96": "79228162514264337593543950336",
+    "expectedStageTerminalSqrtPriceX96": "71976280165737757769120291055",
+    "supplyStartTick": -299520,
+    "supplyTicks": [
+      -305520,
+      -293520
+    ],
+    "initialSupplySqrtPriceX96": "24843375336937580588114",
+    "supplyLiquidity": "60494400020748062",
+    "supplyLPAccounting": {
+      "mockUSDFunded": "5001000000",
+      "royFunded": "100000000000000000000000",
+      "mockUSDDebited": "4916228255",
+      "royDebited": "49999999999999996922815"
+    },
+    "stageCapacity": [
+      "300000000000000000000",
+      "600000000000000000000",
+      "900000000000000000000"
+    ],
+    "stageLiquidity": [
+      "3277555758900103786129",
+      "6555111517800207572259",
+      "9832667276700311358389"
+    ],
+    "observedStageEndSqrtPriceX96": [
+      "0",
+      "0",
+      "0"
+    ],
+    "stageRoyInputRequirement": [
+      "331219793595396366740",
+      "662439587190792733479",
+      "993659380786189100217"
+    ],
+    "originalPrize": "1000000000",
+    "deadline": "1790399547"
+  },
+  "prefunded": {
+    "routerBossHP": "1700000000000000000000",
+    "routerROY": "50000000000000003077185",
+    "routerMockUSD": "84771745",
+    "ownerROY": "0",
+    "starterRoyBudget": "10000000000000000000000",
+    "starterRoyPaid": "0",
+    "starterRoyUnspent": "10000000000000000000000",
+    "lockedRouterROY": "40000000000000003077185",
+    "poolManagerBossHP": "300000000000000000000",
+    "mockUSDInHook": "1000000000"
+  },
+  "schemaVersion": 1,
+  "network": "robinhood-testnet",
+  "deployedAtBlock": 124390450,
+  "deploymentTxHash": "0xa4e3f50b1f819d6a6244f486ac421417a4bf0d1d4358c78212ec05c39307226e",
+  "deploymentReceipts": [
+    {
+      "transactionHash": "0x0514846403867448314ee748867de5095ef4d7e55b2bd9652d90020039b35878",
+      "blockNumber": 124390390,
+      "status": "success",
+      "gasUsed": "4876007",
+      "contractAddress": "0x949dc23961a14246771ce109fa6528f3af3e5163"
+    },
+    {
+      "transactionHash": "0x18ab743acacad4c9f32ded1da839cd0be8df41dd9fd483be24db0a46e4be71e2",
+      "blockNumber": 124390403,
+      "status": "success",
+      "gasUsed": "596028",
+      "contractAddress": "0x9039f58150f1ffdfb301a3d7218d47a44406a269"
+    },
+    {
+      "transactionHash": "0xf8a35e43ccdbe6a755cbc8973b7939dcd1ea75f9c51f44711fa1a2542149ff6a",
+      "blockNumber": 124390417,
+      "status": "success",
+      "gasUsed": "622604",
+      "contractAddress": "0x5a5517f63714f44f19337d34ab29d5acc652e4cf"
+    },
+    {
+      "transactionHash": "0x5bd70b9ba99e436120927b96254524dbb6827f2f8b275892c953860a41f6a3d5",
+      "blockNumber": 124390433,
+      "status": "success",
+      "gasUsed": "621909",
+      "contractAddress": "0x701e016541c503883b766fa3fc94f799b2734ca7"
+    },
+    {
+      "transactionHash": "0x5f8f8eb8b1a0658c9d2bdc8f48d711dc9f9ca2b18f1a1cee31ff43ac9bebf970",
+      "blockNumber": 124390444,
+      "status": "success",
+      "gasUsed": "1259207",
+      "contractAddress": "0xd70b65dd1d57999e031f661f345030f2075036a4"
+    },
+    {
+      "transactionHash": "0xa4e3f50b1f819d6a6244f486ac421417a4bf0d1d4358c78212ec05c39307226e",
+      "blockNumber": 124390450,
+      "status": "success",
+      "gasUsed": "4790797",
+      "contractAddress": "0x353749ffa9640c4152dd28068c416adfc2eb168e"
+    },
+    {
+      "transactionHash": "0x1701dffe3c2b2d7906c61d4a97d17e8f329a41abd4615ca3d8fbe9b797c1be73",
+      "blockNumber": 124390466,
+      "status": "success",
+      "gasUsed": "208574",
+      "contractAddress": "0x1392633904edb77aec9f1aed81d4f0773f72c8c7"
+    },
+    {
+      "transactionHash": "0x6c7982a84e7b9e4069b6d82b695b8510047de110aad3f0c789c8d045bd269359",
+      "blockNumber": 124390481,
+      "status": "success",
+      "gasUsed": "5322170"
+    },
+    {
+      "transactionHash": "0x077c31090e5ef5f743010ccedd7adc6e89566d4e29df0f51a3abfafa1a984c92",
+      "blockNumber": 124390495,
+      "status": "success",
+      "gasUsed": "50657"
+    },
+    {
+      "transactionHash": "0xd1486304c2662b44ac23d6853246d50fc6431c553efc8fe2ec3c53f8ba33438e",
+      "blockNumber": 124390507,
+      "status": "success",
+      "gasUsed": "124309"
+    },
+    {
+      "transactionHash": "0x7bdcff44c3ec69179e2ee462d6b20c53935dc15e82a934519ac586c234a1e96e",
+      "blockNumber": 124390523,
+      "status": "success",
+      "gasUsed": "54715"
+    },
+    {
+      "transactionHash": "0x03aff5bf3378bb73a288bc6ea9021f17ba1bf3939350ebab15800d3974eceb4b",
+      "blockNumber": 124390542,
+      "status": "success",
+      "gasUsed": "54747"
+    },
+    {
+      "transactionHash": "0xa6f25ab9cdb40a05e540a02484b97ec0eeedc3d9306a98dcd82b8e4132672f91",
+      "blockNumber": 124390556,
+      "status": "success",
+      "gasUsed": "76382"
+    },
+    {
+      "transactionHash": "0xa735c69190e2f0b844a1e65db33f88ed1975ba0062ab37c04b0ad3f5037bc606",
+      "blockNumber": 124390568,
+      "status": "success",
+      "gasUsed": "59258"
+    },
+    {
+      "transactionHash": "0xdffc81391014a3445805c4f55e98e8527c31733c1b0acffadf35386d15b50b18",
+      "blockNumber": 124390580,
+      "status": "success",
+      "gasUsed": "54252"
+    },
+    {
+      "transactionHash": "0xaaa7bb4fe2cee962e26d97d9b68192b9e7a3b8e93e8850d6338f896c0e0f5a15",
+      "blockNumber": 124390592,
+      "status": "success",
+      "gasUsed": "84612"
+    },
+    {
+      "transactionHash": "0x46ca1b7610f58364137e8671cdb863cc12772bd78ee8d7b91f7d3fbfbef3da83",
+      "blockNumber": 124390602,
+      "status": "success",
+      "gasUsed": "361575"
+    },
+    {
+      "transactionHash": "0x8b7566fe18842e56d042f3dc7a7f962ac14d1e8b9077796c9571bb61f9d27f54",
+      "blockNumber": 124390616,
+      "status": "success",
+      "gasUsed": "377424"
+    }
+  ],
+  "provenance": {
+    "classification": "TEAM_DEPLOYED_NON_PRODUCTION",
+    "contractSourceCommit": "e63612377295025c0cd450038a44647ab25377f5",
+    "deploymentSourceCommit": "e63612377295025c0cd450038a44647ab25377f5",
+    "v4CoreCommit": "46c6834698c48bc4a463a86d8420f4eb1d7f3b75",
+    "openZeppelinCommit": "dbb6104ce834628e473d2173bbc9d47f81a9eec3",
+    "solidityVersion": "0.8.26",
+    "evmVersion": "cancun",
+    "deploymentScript": "DeployBossPool.s.sol:DeployBossPool",
+    "poolManager": "Team deployed from the pinned v4-core source; no official Robinhood PoolManager is claimed."
+  }
+}

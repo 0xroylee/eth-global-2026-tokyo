@@ -8,7 +8,7 @@ import {
 } from "@boss-pool/chain";
 
 const root = process.cwd();
-const manifestPath = path.join(root, "apps/web/public/deployments/local.json");
+const manifestPath = resolveManifestPath();
 const statusNames = ["Setup", "Active", "Stage cleared", "Defeated", "Expired"];
 
 async function main() {
@@ -52,3 +52,16 @@ main().catch((error) => {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 });
+
+function resolveManifestPath(): string {
+  const defaultPath = path.join(root, "apps/web/public/deployments/local.json");
+  const override = process.env.LOCAL_DEPLOYMENT_PATH;
+  if (!override) return defaultPath;
+  const resolved = path.resolve(root, override);
+  const relative = path.relative(root, resolved);
+  if (
+    relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) ||
+    !relative.startsWith(`.scratch${path.sep}`)
+  ) throw new Error("LOCAL_DEPLOYMENT_PATH overrides must stay under .scratch/.");
+  return resolved;
+}

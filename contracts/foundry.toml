@@ -13,3 +13,6 @@ remappings = [
   "forge-std/=lib/v4-core/lib/forge-std/src/",
   "@openzeppelin/contracts/=lib/v4-core/lib/openzeppelin-contracts/contracts/"
 ]
+
+[rpc_endpoints]
+robinhood = "${ROBINHOOD_RPC_URL}"

@@ -10,6 +10,10 @@
     "contracts:test": "cd contracts && forge test",
     "abi:export": "bun run contracts:build && bun scripts/export-abi.ts",
     "abi:check": "bun run contracts:build && bun scripts/export-abi.ts --check",
+    "testnet:preflight": "bun scripts/testnet-preflight.ts",
+    "testnet:deploy": "bun scripts/testnet-deploy.ts",
+    "testnet:exercise": "bun scripts/exercise-boss-pool.ts testnet",
+    "local:exercise": "bun scripts/exercise-boss-pool.ts local",
     "local:node": "anvil --chain-id 31337 --port 8547",
     "web:dev": "bun --filter @boss-pool/web dev",
     "web:build": "bun --filter @boss-pool/web build",
@@ -21,6 +25,7 @@
     "@boss-pool/chain": "workspace:*",
     "@types/bun": "1.3.8",
     "@types/node": "26.6.2",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "viem": "2.56.9"
   }
 }

@@ -15,7 +15,7 @@ const anvilSender = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const root = process.cwd();
 const contractsDir = path.join(root, "contracts");
 const rpcUrl = process.env.LOCAL_RPC_URL ?? DEFAULT_LOCAL_RPC_URL;
-const manifestPath = path.join(root, "apps/web/public/deployments/local.json");
+const manifestPath = resolveManifestPath();
 
 async function main() {
   if (!isLocalRpcUrl(rpcUrl)) throw new Error("LOCAL_RPC_URL must be a credential-free loopback HTTP URL.");
@@ -81,6 +81,21 @@ async function main() {
   await writeFile(temporaryPath, `${JSON.stringify(deployment, null, 2)}\n`);
   await rename(temporaryPath, manifestPath);
   console.log(`Wrote verified local deployment metadata to ${path.relative(root, manifestPath)}.`);
+}
+
+function resolveManifestPath(): string {
+  const defaultPath = path.join(root, "apps/web/public/deployments/local.json");
+  const override = process.env.LOCAL_DEPLOYMENT_PATH;
+  if (!override) return defaultPath;
+  const resolved = path.resolve(root, override);
+  const relative = path.relative(root, resolved);
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error("LOCAL_DEPLOYMENT_PATH must stay inside this workspace.");
+  }
+  if (!relative.startsWith(`.scratch${path.sep}`)) {
+    throw new Error("LOCAL_DEPLOYMENT_PATH overrides must be written under .scratch/.");
+  }
+  return resolved;
 }
 
 function parseQuantity(value: string | number): number {
