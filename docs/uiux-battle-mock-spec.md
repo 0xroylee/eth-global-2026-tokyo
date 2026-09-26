@@ -176,7 +176,7 @@ type MockBattleState = {
 
 ## 8. 換真數據路徑（swap path）
 
-Historical note: this section describes the SDK before its write methods and deadline reads existed. The current [live battle page context](technical-spec.md#live-battle-page-context) replaces this integration plan. The mock-only timers, fixed damage, and claim placeholders elsewhere in this document describe the old preview rather than the planned live page.
+Historical note: this section describes the SDK before its write methods and deadline reads existed. The current [live battle page context](technical-spec.md#live-battle-page-context) replaces this integration plan. The mock-only timers, fixed damage, and claim placeholders elsewhere in this document describe the old preview rather than the live page.
 
 | 替換點 | mock 現況 | 真鏈做法（共用 SDK 就緒後） |
 | --- | --- | --- |

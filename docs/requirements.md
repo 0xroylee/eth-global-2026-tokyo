@@ -1,6 +1,6 @@
 # Boss Pool requirements
 
-Status: attacks count purchases without burns, and reward shares follow eligible BossHP rather than a per-wallet damage total. The worked claim default is transferable tokens surrendered into permanent custody; the frozen-balance alternative remains available. [BP01](bp01-foundation.md) records the local no-burn contract foundation. The full browser game and active Base Sepolia deployment remain unverified; the earlier Robinhood deployment is historical.
+Status: attacks count purchases without burns, and reward shares follow eligible BossHP rather than a per-wallet damage total. The worked claim default is transferable tokens surrendered into permanent custody; the frozen-balance alternative remains available. [BP01](bp01-foundation.md) records the local no-burn contract foundation. The browser battle consumes the live SDK and Base Sepolia has a verified deployment manifest. A manual browser-wallet transaction journey remains unverified; the earlier Robinhood deployment is historical.
 
 ## Confirmed gameplay
 
@@ -77,7 +77,7 @@ Keep the shared E2E and focused accounting checks. Optional held-Attack Token at
 
 ## Live battle page
 
-The agreed direction is to turn `/mock-battle` into the live battle page using `@boss-pool/chain`. This is a specification for the next integration; the route currently remains a mock. The existing pixel arena is the visual reference. The command label is **ATTACK**, consistent with the purchase-based attack rules above.
+`/mock-battle` is the live battle page using `@boss-pool/chain`; its URL is retained for existing links. The pixel arena presents the verified shared round. The command label is **ATTACK**, consistent with the purchase-based attack rules above.
 
 Players can inspect the shared boss without connecting a wallet. A wallet is required for approvals, attacks, and claims. Boss HP, stage, deadline, and rewards come from the selected verified deployment. An unavailable deployment shows an unavailable state. Entering or refreshing the page does not start a new round.
 
@@ -85,15 +85,15 @@ Players can inspect the shared boss without connecting a wallet. A wallet is req
 
 Each attack uses a fixed input cap of **1 MockUSD**. The player does not enter an amount or choose a preset. The fixed cap appears in the quote review before confirmation. Damage varies with the live quote. A stage-clearing attack can spend less than 1 MockUSD and returns unused input.
 
-**RUN**, **EXIT BATTLE**, and Escape close the battle view. Leaving does not refund purchases or cancel a submitted transaction. The saved transaction remains recoverable on return. **MAGIC** and **ITEM** have no live action in this scope; their placeholder presentation can be settled during UI implementation.
+**RUN**, **EXIT BATTLE**, and Escape close the battle view. Escape closes the quote or claim dialog first when it is open. Leaving does not refund purchases or cancel a submitted transaction. The saved transaction remains recoverable on return through **CHECK TRANSACTION**. Unused **MAGIC** and **ITEM** placeholders are removed.
 
-Reward rights follow the connected wallet's eligible BossHP. The working display proposal is **YOUR HP** during the fight and **YOUR SHARE** after defeat, when the denominator is frozen. A pre-defeat percentage, if retained, needs an explicit estimate label and a defined denominator. Historical damage remains separate from current token holdings.
+Reward rights follow the connected wallet's eligible BossHP. The HUD shows **YOUR HP** during the fight and **YOUR SHARE** after defeat, when the denominator is frozen. Historical damage remains separate from current token holdings; the victory card does not invent a contribution total from the wallet balance.
 
 Buying this round's BossHP from another holder or an external market transfers its reward rights to the buyer. That purchase adds no damage and does not increase the prize denominator. The current holder can redeem after victory, including when the transfer happened after defeat. Buying Attack Token alone gives no prize entitlement. The page refreshes wallet holdings independently of the player's attack history.
 
 After victory, the page supports reward preview, any required BossHP approval, and reward claiming. Optional victory-NFT claiming remains separate. After expiry, attacks close and the page explains that attack purchases are nonrefundable. The existing [core acceptance](#core-acceptance) still applies.
 
-The [battle page integration context](technical-spec.md#live-battle-page-context) maps these behaviors to current code and SDK operations. The pre-defeat share display and final treatment of unused commands remain open UI choices.
+The [battle page integration context](technical-spec.md#live-battle-page-context) maps these behaviors to current code and SDK operations. **BATTLE DETAILS** opens the shared quote and claim controls. The network selector and wallet controls remain available from the battle itself.
 
 ## Coordination
 

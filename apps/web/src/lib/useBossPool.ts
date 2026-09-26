@@ -76,6 +76,7 @@ export type DeploymentState =
       context: VerifiedContext;
       round: Awaited<ReturnType<BossPoolSdk["readRound"]>>;
       player?: Awaited<ReturnType<BossPoolSdk["readPlayer"]>>;
+      /** Local clock anchor for blockTimestamp, retained when that timestamp has not advanced. */
       readAt: number;
     };
 
@@ -88,10 +89,10 @@ declare global {
 const REFRESH_MS = 5_000;
 const PENDING_STORAGE_KEY = "boss-pool.pending-write.v2";
 
-export function useBossPool() {
-  const [network, setNetwork] = useState<NetworkKey>("base-sepolia");
+export function useBossPool(initialNetwork: NetworkKey = "base-sepolia") {
+  const [network, setNetwork] = useState<NetworkKey>(initialNetwork);
   const [wallet, setWallet] = useState<WalletState>({ status: "checking" });
-  const [deployment, setDeployment] = useState<DeploymentState>({ kind: "loading", network: "base-sepolia" });
+  const [deployment, setDeployment] = useState<DeploymentState>({ kind: "loading", network: initialNetwork });
   const [refreshVersion, setRefreshVersion] = useState(0);
   const contextRef = useRef<VerifiedContext | null>(null);
   const pendingRef = useRef<StoredPending | null>(null);
@@ -217,7 +218,7 @@ export function useBossPool() {
         if (!context) throw new Error("Verified deployment context is unavailable.");
         const snapshot = await context.publicSdk.readState(wallet.account);
         if (active && contextRef.current === context) {
-          setDeployment({
+          setDeployment((current) => ({
             kind: "live",
             network,
             manifest: context.manifest,
@@ -225,8 +226,10 @@ export function useBossPool() {
             context,
             round: snapshot.round,
             player: snapshot.player,
-            readAt: Date.now(),
-          });
+            readAt: current.kind === "live" && current.network === network &&
+              current.manifest.deploymentTxHash === context.manifest.deploymentTxHash &&
+              current.round.blockTimestamp === snapshot.round.blockTimestamp ? current.readAt : Date.now(),
+          }));
         }
       } catch (error) {
         if (!active) return;

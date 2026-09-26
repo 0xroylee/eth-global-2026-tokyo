@@ -1,6 +1,6 @@
 # Battle 畫面 v2 改版規格（UI/UX Battle v2 Spec）
 
-Historical scope: this specification describes the mock's visual implementation. The [live battle requirements](requirements.md#live-battle-page) and [SDK integration context](technical-spec.md#live-battle-page-context) govern its planned conversion to a live page. The mock-preservation constraints below apply to the historical v2 work only.
+Historical scope: this specification describes the mock's visual implementation. The [live battle requirements](requirements.md#live-battle-page) and [SDK integration context](technical-spec.md#live-battle-page-context) govern its conversion to a live page. The mock-preservation constraints below apply to the historical v2 work only.
 
 - 分支：`feat/uiux-battle`｜品質模式：standard（threshold 85）｜PLAN Round 1
 - 讀者：edison-ui-designer（EXECUTE）｜驗收：smith（實作）+ Neo（截圖）

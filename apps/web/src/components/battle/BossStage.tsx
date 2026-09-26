@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- art masters are static PNGs; no optimisation needed yet */
 
 import { useEffect, useRef, useState } from "react";
-import { STAGE_HUES, type BossVisualState } from "@/lib/mockBattle";
+import { STAGE_HUES, type BossVisualState } from "@/lib/battle";
 
 const BOSS_IMAGES = {
   1: "/images/boss-cat-form-b.png",

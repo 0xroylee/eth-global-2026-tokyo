@@ -7,10 +7,9 @@ import {
   type ApprovalStatus,
   type AttackQuote,
   type AttackResult,
-  type RoundSnapshot,
   type RewardPreview,
 } from "@boss-pool/chain";
-import { displayAmount, roundStatusLabel } from "@/lib/format";
+import { displayAmount, displayEstimate, roundStatusLabel } from "@/lib/format";
 import { type useBossPool } from "@/lib/useBossPool";
 
 type Arena = ReturnType<typeof useBossPool>;
@@ -35,13 +34,13 @@ const MOCK_USD_DECIMALS = 6;
 const BOSS_HP_DECIMALS = 18;
 const PUBLIC_FAUCET_AMOUNT = 100n * 10n ** BigInt(MOCK_USD_DECIMALS);
 const DEFAULT_SLIPPAGE_BPS = 100;
+const ATTACK_CAP = 1_000_000n;
 
 export function BossActions({
   arena,
 }: {
   arena: Arena;
 }) {
-  const [amountText, setAmountText] = useState("50");
   const [quoteState, setQuoteState] = useState<QuoteState | null>(null);
   const [quoteBusy, setQuoteBusy] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -57,7 +56,7 @@ export function BossActions({
   const account = arena.wallet.account;
   const player = live?.player;
   const round = live?.round;
-  const inputAmount = parseTokenAmount(amountText, MOCK_USD_DECIMALS);
+  const inputAmount = ATTACK_CAP;
   const hpAmount = parseTokenAmount(claimText, BOSS_HP_DECIMALS);
   const attackAllowance = player?.attackAllowance;
   const claimAllowance = player?.claimAllowance;
@@ -66,10 +65,12 @@ export function BossActions({
   const redeemedHP = round?.redeemedHP;
   const originalPrize = round?.originalPrize;
   const writeBusy = arena.writeState.status === "prompting" || arena.writeState.status === "pending" || arena.writeState.status === "unresolved";
-  const inputError = amountText.length > 0 && inputAmount === null ? "Enter a MockUSD amount with up to 6 decimal places." : null;
   const claimInputError = claimText.length > 0 && hpAmount === null ? "Enter a BossHP amount with up to 18 decimal places." : null;
   const chainTimestamp = round?.blockTimestamp ?? 0n;
-  const active = Boolean(round && round.status === 1 && chainTimestamp < round.deadline);
+  const observedTimestamp = round && live
+    ? round.blockTimestamp + BigInt(Math.max(0, Math.floor((now - live.readAt) / 1_000)))
+    : chainTimestamp;
+  const active = Boolean(round && round.status === 1 && observedTimestamp < round.deadline);
   const quoteTimestamp = quoteState
     ? quoteState.quote.quotedAt + BigInt(Math.max(0, Math.floor((now - quoteState.receivedAt) / 1_000)))
     : chainTimestamp;
@@ -264,14 +265,14 @@ export function BossActions({
           </div>
           {round && <div className="text-right">
             <p className="font-mono text-[9px] tracking-[0.12em] text-dim">CURRENT STAGE HP</p>
-            <p className="mt-1 text-sm text-fog">{displayAmount(remainingHp(round), BOSS_HP_DECIMALS)} remaining</p>
+            <p className="mt-1 break-all text-sm text-fog">{displayAmount(round.remainingSellableHP, BOSS_HP_DECIMALS)} remaining</p>
           </div>}
         </div>
         {round && <p className="mt-2 font-mono text-[9px] text-faint">ON-CHAIN DEADLINE · {formatUtc(round.deadline)}</p>}
         </>
       )}
 
-      <section aria-labelledby="quote-heading">
+      {!defeated && <section aria-labelledby="quote-heading">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="eyebrow">STEP 01 · PUBLIC PREVIEW</p>
@@ -279,18 +280,8 @@ export function BossActions({
           </div>
           <span className="font-mono text-[9px] tracking-[0.1em] text-dim">NO WALLET OR ALLOWANCE NEEDED</span>
         </div>
-        <label className="mt-3 block text-xs text-muted" htmlFor="attack-cap">MockUSD input cap</label>
-        <div className="mt-1 flex gap-2">
-          <input
-            id="attack-cap"
-            value={amountText}
-            onChange={(event) => { setAmountText(event.target.value); setQuoteError(null); }}
-            inputMode="decimal"
-            autoComplete="off"
-            aria-invalid={Boolean(inputError)}
-            aria-describedby={inputError ? "attack-cap-error" : undefined}
-            className="min-w-0 flex-1 rounded-lg border border-white/12 bg-ink px-3 py-2.5 font-mono text-sm text-fog outline-none focus:border-accent/70"
-          />
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <p className="text-sm text-fog">1 MockUSD maximum per attack</p>
           <button
             type="button"
             onClick={() => void requestQuote()}
@@ -300,7 +291,6 @@ export function BossActions({
             {quoteBusy ? "QUOTING…" : "GET QUOTE"}
           </button>
         </div>
-        {inputError && <p id="attack-cap-error" className="mt-1.5 text-xs text-danger" role="alert">{inputError}</p>}
         {arena.deployment.kind === "not-deployed" && <p className="mt-2 text-xs text-muted">No deployment manifest exists for this network, so no quote is available.</p>}
         {arena.deployment.kind === "error" && <p className="mt-2 text-xs text-danger" role="status">Public quote unavailable: {arena.deployment.message}</p>}
         {round && !active && !quoteError && (
@@ -355,9 +345,12 @@ export function BossActions({
             <p className="mt-1 font-mono text-[9px] text-faint">
               {quoteFresh ? `${quoteSecondsLeft}s remaining` : "Get another quote to refresh this preview"} · 1% output tolerance
             </p>
+            <p className="mt-1 text-xs text-muted">
+              Supply pool fee: {quoteState.quote.supplyPoolFee / 10_000}% · Boss pool fee: {quoteState.quote.bossPoolFee / 10_000}%
+            </p>
           </div>
         )}
-      </section>
+      </section>}
 
       <div className="hairline my-4 border-t" />
 
@@ -374,7 +367,7 @@ export function BossActions({
               {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD · {displayAmount(player.royBalance, BOSS_HP_DECIMALS)} Attack Token · {displayAmount(player.bossHPBalance, BOSS_HP_DECIMALS)} BossHP · {displayAmount(player.nativeBalance, BOSS_HP_DECIMALS)} ETH gas
               <span className="ml-2">{player.hasAttacked ? "ATTACKED" : "NO ATTACK YET"}</span>
             </p>
-            <ReadinessRow step="A" title="MockUSD faucet" state={needsFaucet ? "needed" : "ready"}>
+            {!defeated && <><ReadinessRow step="A" title="MockUSD faucet" state={needsFaucet ? "needed" : "ready"}>
               <p className="text-xs text-muted">Balance: {displayAmount(player.mockUSDBalance, MOCK_USD_DECIMALS)} mUSD</p>
               {needsFaucet && (
                 <ActionButton disabled={!arena.canWrite || arena.networkMismatch || writeBusy || Boolean(arena.pendingRecord)} onClick={() => void faucetMockUSD()}>
@@ -410,6 +403,7 @@ export function BossActions({
                 ATTACK · STAGE {round ? round.currentStage + 1 : "—"}
               </ActionButton>
             </ReadinessRow>
+            </>}
           </div>
         )}
       </section>
@@ -482,7 +476,12 @@ export function BossActions({
 
       {lastResult && <ConfirmedResult result={lastResult} />}
       {arena.writeState.status !== "idle" && <WriteStatus state={arena.writeState} />}
-      {arena.pendingRecord && <p className="mt-2 text-xs text-danger">A transaction from {arena.pendingRecord.network} is unresolved. Resolve its saved hash before another write.</p>}
+      {arena.pendingRecord && <div className="mt-2">
+        <p className="text-xs text-muted">A transaction from {arena.pendingRecord.network} is saved. Check its receipt before another write.</p>
+        <ActionButton disabled={arena.writeState.status === "pending" || arena.writeState.status === "prompting"} onClick={() => void arena.resumePending()}>
+          Check saved transaction
+        </ActionButton>
+      </div>}
       {round && !active && !defeated && round.status === 4 && (
         <p className="hairline mt-4 border-t pt-3 text-xs text-muted">Round expired at its on-chain deadline. Attacks are closed.</p>
       )}
@@ -631,12 +630,6 @@ function recoveredSummary(result: unknown): string {
   return "Receipt validated by the shared chain SDK.";
 }
 
-function remainingHp(round: RoundSnapshot) {
-  const sold = round.stageSold[round.currentStage] ?? 0n;
-  const cap = round.stageCapacity[round.currentStage] ?? 0n;
-  return cap > sold ? cap - sold : 0n;
-}
-
 function parseTokenAmount(value: string, decimals: number): bigint | null {
   const normalized = value.trim();
   if (!/^(?:\d+)(?:\.\d*)?$/.test(normalized)) return null;
@@ -644,13 +637,6 @@ function parseTokenAmount(value: string, decimals: number): bigint | null {
   if (fraction.length > decimals) return null;
   const scale = 10n ** BigInt(decimals);
   return BigInt(whole) * scale + BigInt((fraction + "0".repeat(decimals)).slice(0, decimals) || "0");
-}
-
-function displayEstimate(value: bigint, decimals: number, fractionDigits = 4): string {
-  const places = Math.min(decimals, fractionDigits);
-  const factor = 10n ** BigInt(decimals - places);
-  const rounded = (value + factor / 2n) / factor;
-  return displayAmount(rounded, places);
 }
 
 function shortAddress(address: string): string {

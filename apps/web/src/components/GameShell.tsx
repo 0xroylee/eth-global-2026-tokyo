@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type Address, type DecodedContractEvent, type DeploymentManifest } from "@boss-pool/chain";
+import { type Address, type DeploymentManifest } from "@boss-pool/chain";
+import { confirmedBattleAttack } from "@/lib/battle";
 import { findBoss, type BossId } from "@/game/bosses";
 import { GameBridge } from "@/game/bridge";
 import { useHubGuide } from "@/lib/useHubGuide";
@@ -78,13 +79,13 @@ export function GameShell() {
     const writingAttack = originMatchesSelected && (
       writeState.status === "prompting" || writeState.status === "pending" || writeState.status === "unresolved"
     );
-    const confirmedAttack = originMatchesSelected && writeState.status === "confirmed";
+    const confirmedAttack = confirmedBattleAttack(writeState, arena.network, live?.manifest, arena.wallet.account);
     bridge.send("attack:pending", {
       active: Boolean(writingAttack),
       stage: live?.round.currentStage,
     });
-    if (confirmedAttack && live) sendConfirmedAttack(bridge, writeState.result, live.manifest.addresses.hook);
-  }, [arena.network, arena.selectedChainId, bridge, deployment, writeState]);
+    if (confirmedAttack) bridge.send("attack:confirmed", confirmedAttack);
+  }, [arena.network, arena.selectedChainId, arena.wallet.account, bridge, deployment, writeState]);
 
   useEffect(() => {
     if (!showChain) return;
@@ -389,20 +390,4 @@ function matchesSelectedDeployment(
     origin.manifest.addresses.router.toLowerCase() === selected.addresses.router.toLowerCase() &&
     origin.manifest.addresses.hook.toLowerCase() === selected.addresses.hook.toLowerCase() &&
     origin.target.toLowerCase() === selected.addresses.router.toLowerCase();
-}
-
-function sendConfirmedAttack(bridge: GameBridge, value: unknown, expectedHook: string) {
-  if (!value || typeof value !== "object" || !("events" in value)) return;
-  const events = (value as { events?: readonly DecodedContractEvent[] }).events;
-  const event = events?.find((item) => item.eventName === "AttackRecorded" && item.address.toLowerCase() === expectedHook.toLowerCase());
-  if (!event || !("stage" in event.args) || !("bossHPOut" in event.args)) return;
-  const stage = event.args.stage;
-  const bossHPOut = event.args.bossHPOut;
-  if (typeof stage !== "number" || typeof bossHPOut !== "bigint") return;
-  bridge.send("attack:confirmed", {
-    transactionHash: event.transactionHash,
-    logIndex: event.logIndex,
-    stage,
-    bossHPOut,
-  });
 }

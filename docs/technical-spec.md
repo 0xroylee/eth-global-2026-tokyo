@@ -87,7 +87,7 @@ Preserve the existing approval, simulation, receipt, and stale-stage rules. Atta
 
 ### Live battle page context
 
-This context covers the planned conversion of `/mock-battle` to a live SDK consumer. [Live battle page requirements](requirements.md#live-battle-page) owns the user flow and outstanding UX choices. The current route is still a deterministic mock. No live page integration is established by this document.
+`/mock-battle` now consumes the live SDK while retaining its existing URL. [Live battle page requirements](requirements.md#live-battle-page) owns the user flow. The route uses the selected verified deployment and has no simulated-damage fallback.
 
 The page represents one shared, deployed Boss Pool round. The lake arena, player sprite, Attack Token boss forms, pixel windows, command menu, and dialog describe that encounter. Attack Token in the nameplate is the boss identity; its displayed level follows the stage. The nameplate is not the connected wallet's identity or a separate player progression system. On-chain stage indices are zero-based; labels and artwork use stages 1 through 3.
 
@@ -95,11 +95,11 @@ The existing integration code provides the starting points:
 
 | File | Current responsibility | Role in the live page |
 | --- | --- | --- |
-| [`mock-battle/page.tsx`](../apps/web/src/app/mock-battle/page.tsx) | Calls `useMockBattle` and renders `BattleView`; exit navigates to `/`. | Route entry for the live battle controller. |
-| [`BattleView.tsx`](../apps/web/src/components/battle/BattleView.tsx) | Arena layout, commands, dialog, and overlays. Imports mock types and fixed damage. | Presentation fed by confirmed round data, player data, transaction state, and callbacks. |
+| [`mock-battle/page.tsx`](../apps/web/src/app/mock-battle/page.tsx) | Reads the selected network from route parameters and renders `BattlePage`; exit navigates to `/`. | Route entry for the live battle controller. |
+| [`BattleView.tsx`](../apps/web/src/components/battle/BattleView.tsx) | `BattlePage` owns the arena hook. `BattleView` renders the arena, controls, native action dialog, and confirmed effects. | Round and player state come from the shared SDK. |
 | [`useBossPool.ts`](../apps/web/src/lib/useBossPool.ts) | Verifies deployments, manages the injected wallet, polls every five seconds, and saves pending requests. | Existing owner of SDK access, refresh, `runPending`, and `resumePending`. |
-| [`BossActions.tsx`](../apps/web/src/components/BossActions.tsx) | Implements amount parsing, quote freshness, approval, attack, reward, NFT, and faucet actions. | Existing action logic to share with the battle UI. Avoid a second independently maintained transaction flow. |
-| [`GameShell.tsx`](../apps/web/src/components/GameShell.tsx) and [`BossEntryPanel.tsx`](../apps/web/src/components/BossEntryPanel.tsx) | The hub owns one `useBossPool` instance and presents live actions separately from the mock link. | Entry into the live battle. Any battle embedded in the hub receives the same arena state. |
+| [`BossActions.tsx`](../apps/web/src/components/BossActions.tsx) | Implements the fixed 1 MockUSD cap, quote freshness, approval, attack, reward, NFT, faucet, and receipt recovery actions. | The hub and battle use the same component. |
+| [`GameShell.tsx`](../apps/web/src/components/GameShell.tsx) and [`BossEntryPanel.tsx`](../apps/web/src/components/BossEntryPanel.tsx) | The hub owns one `useBossPool` instance and links to the battle with the selected network. | The shared `confirmedBattleAttack` helper scopes receipt effects in both views. |
 | [`reads.ts`](../packages/chain/src/reads.ts) and [`sdk.ts`](../packages/chain/src/sdk.ts) | Export `RoundSnapshot`, `PlayerSnapshot`, quotes, writes, decoded receipt events, and recovery. | Authoritative application interface through `@boss-pool/chain`. |
 
 A direct page visit needs its own arena owner because `layout.tsx` currently supplies no shared arena provider. An embedded battle uses its parent's arena instance. The presentation components do not create SDK clients or keep a second copy of on-chain HP. A small controller can adapt existing arena and action state into props. Wallet selection, deployment identity, and pending-write recovery must have one owner within the mounted flow.
@@ -111,7 +111,7 @@ The screen data maps as follows:
 | Boss HP | `round.remainingSellableHP`, `round.stageCapacity[round.currentStage]` | Remaining purchasable HP against the current nominal capacity. Rounded display values do not determine stage completion. |
 | Stage dots, Attack Token level, boss form | `round.currentStage` and `round.status` | One shared round with three forms. The existing art order is form-b, form-a, then form-c. |
 | Round deadline | `round.deadline`, `round.blockTimestamp`, snapshot receipt time | Countdown derived from the chain deadline. Elapsed local time can animate the countdown between reads; it cannot reset the deadline or authorize an attack. |
-| Player HP during the fight | `player.bossHPBalance` | Current reward-bearing holdings. The proposed label is YOUR HP until defeat. Disconnected wallets show a connect prompt or unavailable value. |
+| Player HP during the fight | `player.bossHPBalance` | Current reward-bearing holdings, labeled YOUR HP until defeat. Disconnected wallets show a connect prompt or unavailable value. |
 | Reward share after defeat | `player.bossHPBalance / round.finalEligibleHP` | Share of the original prize represented by current unredeemed holdings. The denominator stays fixed after claims. No percentage is calculated with a zero denominator. |
 | Reward preview | `sdk.previewReward(hpAmount, account)` | Payout for the selected redemption amount, with SDK claimability checks. MockUSD uses six decimals; Attack Token and BossHP use eighteen. |
 | Hit message and hit animation | Confirmed `AttackResult.bossHPOut` or the matching decoded `AttackRecorded` event | Actual output of that attack. A quote supplies a preview only. |
@@ -141,7 +141,7 @@ The action flow reuses these SDK operations:
 | Claim optional NFT | `sdk.claimVictoryNFT()` through `runPending` | Separate action subject to `hasAttacked` and `victoryClaimed`. Holding transferred BossHP alone does not establish NFT eligibility. |
 | Obtain test funds when needed | `sdk.faucetMockUSD(amount)` through `runPending` | Existing test-only funding action. Its current UI amount is 100 MockUSD; its location in the battle flow remains a UI choice. |
 
-The live page uses a fixed cap of 1 MockUSD per attack, with no amount editor or preset selector. Its SDK value is `1_000_000n`, because MockUSD uses six decimals. The existing `BossActions` has an editable 50 MockUSD default; sharing its action logic must not carry that old amount into this page. Existing action logic uses 100 basis points of slippage, and the SDK defaults to a five-minute quote lifetime bounded by the round deadline. The player's MockUSD balance must cover the 1 MockUSD cap. Actual spend can be lower when a stage clears, and unused MockUSD and intermediate Attack Token are returned. A fixed cap does not produce fixed damage.
+The live page and hub use a fixed cap of 1 MockUSD per attack, with no amount editor or preset selector. Its SDK value is `1_000_000n`, because MockUSD uses six decimals. Shared action logic uses 100 basis points of slippage, and the SDK defaults to a five-minute quote lifetime bounded by the round deadline. The player's MockUSD balance must cover the cap. Actual spend can be lower when a stage clears, and unused MockUSD and intermediate Attack Token are returned. A fixed cap does not produce fixed damage.
 
 Quote freshness follows the existing checks in `BossActions`. Configured cap, account, wallet chain, selected deployment, stage, observed stage sales or boss price, and elapsed quote lifetime can invalidate the preview. `sdk.attack` then enforces the accepted output floors with a fresh authenticated simulation. A changed quote requires another review; a failed simulation never authorizes looser output floors automatically.
 
@@ -164,11 +164,11 @@ One confirmed attack can clear a stage and activate the next stage atomically. P
 
 Leaving the page changes navigation only. Once a hash is saved, the existing pending record supports receipt recovery after refresh or return. Escape closes an inner quote or claim panel before closing the battle. Focus returns to the initiating control, transaction results use accessible live messages, and the countdown does not announce every second. Existing reduced-motion handling applies to battle effects.
 
-Several mock assumptions need explicit replacement. `MockBattleState`, the fixed 60/120/180 damage values, mount-time deadline, fake signing delays, and single-player victory values are not live data contracts. Contrary to the historical mock specification, the SDK already exposes `deadline`, writes, and receipt recovery. `BattleView` and its children need player and transaction props as well as round props; replacing the hook alone is insufficient.
+The mock reducer, timer-driven attack hook, and mock badge are removed. [`battle.ts`](../apps/web/src/lib/battle.ts) contains the shared receipt-effect filter and deadline calculation. Confirmed receipts keep their original stage and exact damage, even when the refreshed round has already advanced. Quote, signature, and receipt timing follows the actual SDK operations. Repeated reads of an unchanged block timestamp retain their clock anchor so the countdown continues between polls.
 
-Two data gaps remain visible in the current SDK. Historical per-wallet damage needs event reads beyond a single transaction. The requirement to show both swap fees also needs verified fee data because `AttackQuote` and `AttackResult` do not expose fee fields. Those values belong in the shared chain interface when implemented. Frontend constants must not stand in for unavailable contract data.
+The SDK exposes both configured pool fee rates in `RoundSnapshot` and `AttackQuote`, read from the Router's pool keys at the snapshot block. Quote review shows both rates. The newly available paginated `readActivity` API can supply historical contribution, but the battle's current HUD displays wallet holdings and rewards only. It does not sum an incomplete session history or count transfer events as attacks.
 
-Base Sepolia is the existing target. Local Anvil remains available for integration with a real deployed fixture; historical Robinhood is read-only. The current lack of a Base Sepolia Boss Pool manifest is an expected unavailable state, not a reason to fall back to simulated attacks. This context records source inspection only; it does not add browser or deployment verification evidence.
+Base Sepolia is the default target, and the published deployment manifest is included. Local Anvil remains available for integration with a real deployed fixture; historical Robinhood is read-only. Missing manifests and failed verification still produce unavailable states. Browser and local-chain verification are recorded separately in the PR; this integration does not broadcast transactions to Base Sepolia.
 
 ## Deployment and proof gate
 
