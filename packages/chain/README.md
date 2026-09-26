@@ -1,6 +1,6 @@
 # Boss Pool chain SDK
 
-`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses generated Foundry ABIs and pinned Router/Hook creation bytecode. Standalone round deployment and maker administration remain CLI operations. A verified Base Sepolia manifest is published under `apps/web/public/deployments/base-sepolia.json`; no Factory address is configured there yet.
+`@boss-pool/chain` is a browser-safe viem SDK for local chain `31337`, Base Sepolia `84532`, and historical Robinhood testnet `46630`. It uses generated Foundry ABIs and pinned Router/Hook creation bytecode. Standalone round deployment and maker administration remain CLI operations. The Base Sepolia deployment manifest includes the Boss Factory address.
 
 The attack currency is named **Attack Token** in the UI and documentation. SDK fields such as `royBought`, `roySpent`, `royRefunded`, `minRoyOut`, and `royBalance`, plus the manifest key `roy` and contract `RoyToken`, retain their existing names for deployment compatibility. All refer to Attack Token. See [domain language](../../CONTEXT.md).
 

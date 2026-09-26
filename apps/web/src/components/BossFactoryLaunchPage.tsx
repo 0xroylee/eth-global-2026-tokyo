@@ -7,10 +7,12 @@ import {
   createBaseSepoliaPublicClient,
   createBaseSepoliaWalletClient,
   createBossFactorySdk,
+  fetchBaseSepoliaDeployment,
   formatUnits,
   isAddress,
   parseUnits,
   readErc20TokenInfo,
+  verifyDeployment,
   type Address,
   type Erc20TokenInfo,
   type FactoryLaunchConfig,
@@ -24,7 +26,7 @@ import { WalletProvider, useWallet } from "@/wallet/WalletProvider";
 const BASE_SEPOLIA_RPC_URL =
   process.env.NEXT_PUBLIC_BOSS_POOL_BASE_SEPOLIA_RPC_URL ?? "https://sepolia.base.org";
 const rawFactoryAddress = process.env.NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_ADDRESS;
-const factoryAddress = rawFactoryAddress && isAddress(rawFactoryAddress, { strict: false })
+const configuredFactoryAddress = rawFactoryAddress && isAddress(rawFactoryAddress, { strict: false })
   ? rawFactoryAddress as Address
   : undefined;
 
@@ -42,10 +44,22 @@ function LaunchForm() {
   const { state: walletState } = useWallet();
   const account = walletState.status === "connected" ? walletState.account : undefined;
   const provider = walletState.status === "connected" ? walletState.selected.provider : undefined;
+  const [factoryAddress, setFactoryAddress] = useState(configuredFactoryAddress);
   const publicClient = useMemo(() => createBaseSepoliaPublicClient(BASE_SEPOLIA_RPC_URL), []);
+  useEffect(() => {
+    if (configuredFactoryAddress) return;
+    let active = true;
+    void fetchBaseSepoliaDeployment().then(async (manifest) => {
+      await verifyDeployment(publicClient, manifest);
+      if (active && manifest.bossFactory) setFactoryAddress(manifest.bossFactory);
+    }).catch((cause) => {
+      if (active) setError(errorMessage(cause));
+    });
+    return () => { active = false; };
+  }, [publicClient]);
   const reader = useMemo(
     () => factoryAddress ? createBossFactorySdk({ publicClient, factory: factoryAddress }) : undefined,
-    [publicClient],
+    [factoryAddress, publicClient],
   );
   const sdk = useMemo(() => {
     if (!reader || !provider || !account) return undefined;

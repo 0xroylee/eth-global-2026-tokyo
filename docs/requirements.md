@@ -12,7 +12,7 @@ Status: attacks count purchases without burns, and reward shares follow eligible
 - The creator deposits the full MEME allocation. A chosen percentage funds the victory prize in MEME; the remaining inventory funds the boss pool and its stage transitions.
 - Eligible MockUSD purchase volume counts once per attack and only in proportion to Attack Token spent on the MEME purchase. Refunded MockUSD, returned Attack Token, transfers, outside-market activity, refills, and liquidity changes earn no progress.
 - The target unlocks three stages in a 1:2:3 ratio. Each clearing attack settles the purchase, records volume, performs the bounded refill, and releases the next stage atomically. A failed transition reverts the purchase and volume credit.
-- The creator form is at `/launch`. It uses a pasted token address because ERC-20 does not enumerate wallet holdings. No Factory address is configured on Base Sepolia yet, and the player fight/claim UI for Factory rounds remains outstanding.
+- The creator form is at `/launch`. It uses a pasted token address because ERC-20 does not enumerate wallet holdings. It reads the Factory address from the Base Sepolia deployment manifest. The player fight/claim UI for Factory rounds remains outstanding.
 
 ### Standalone BossHP demo
 

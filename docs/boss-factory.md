@@ -84,7 +84,7 @@ Damage is the purchased meme-token amount. Actual traded input and output appear
 
 The factory deployment script is `contracts/script/DeployBossFactory.s.sol:DeployBossFactory`. It reads `BOSS_POOL_MANAGER`, `BOSS_MOCK_USD_TOKEN`, and `BOSS_ATTACK_TOKEN`, and pins hashes from the current compiled artifacts. It supports local chain 31337 and Base Sepolia 84532. Base Sepolia uses `TESTNET_DEPLOYER_PRIVATE_KEY`, as the standalone deployment does. It creates no tokens, market liquidity, or boss encounters.
 
-The creator form is available at `/launch`. Configure `NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_ADDRESS` after deploying the factory. The chain SDK reads the submitted token's metadata and wallet balance, quotes the launch, checks the compiled Router and Hook bytecode against the factory, mines a valid hook salt, requests the required MEME approval, and submits the launch. Token choices are entered by contract address; ERC-20 does not provide wallet-wide token discovery. Base Sepolia does not yet have a Factory deployment, and the player attack/claim UI for Factory rounds is not implemented.
+The creator form is available at `/launch` and reads the Base Sepolia Factory address from `apps/web/public/deployments/base-sepolia.json`. The chain SDK reads the submitted token's metadata and wallet balance, quotes the launch, checks the compiled Router and Hook bytecode against the factory, mines a valid hook salt, requests the required MEME approval, and submits the launch. Token choices are entered by contract address; ERC-20 does not provide wallet-wide token discovery. The Factory was deployed at block `47330324`; see the [deployment evidence](evidence/base-sepolia-boss-factory-deployment.json) and [transaction receipt](https://sepolia.basescan.org/tx/0xf9f15e3858636914ace7b23da41eefe1c9cf2476b1a717cc26e2f9530b4535d5). The player attack/claim UI for Factory rounds is not implemented.
 
 ## Local verification
 
@@ -93,4 +93,4 @@ Verified on 26 September 2026 against the merge-updated working tree for PR #38.
 - `cd contracts && forge build --sizes` passes runtime and initcode limits. Factory 17,965 bytes, hook 21,453 bytes, and router 24,534 bytes. The router is 42 bytes under EIP-170.
 - `cd contracts && forge test --match-contract BossPoolCoreTest -vv` passes all nine shared scenarios. Coverage includes the standalone round, factory rounds with either token ordering, three volume-gated stages, public quote simulation, MEME prizes, creators reusing a token and launch salt, six-decimal MEME, failed-transition rollback, funding errors, expiry, and LP recovery with outstanding claims.
 
-These runs use the real pinned v4 PoolManager. Network deployment remains unverified.
+These local runs use the real pinned v4 PoolManager. The Base Sepolia Factory deployment is recorded above; a Factory launch and player E2E have not yet been run there.
