@@ -188,13 +188,12 @@ export class HubScene extends Phaser.Scene {
         if (step !== "find") this.hintArrow?.setVisible(false);
       }),
       this.bridge.onCommand("ui:modal", ({ open }) => {
+        if (this.input.keyboard) this.input.keyboard.enabled = !open;
+        // A repeated close must preserve the movement key that dismissed the panel.
+        if (this.modalOpen === open) return;
         this.modalOpen = open;
         this.resetKeyboardState();
         if (open) this.showIdle();
-        if (!this.input.keyboard) return;
-        this.input.keyboard.enabled = !open;
-        // Drop keys that went up while Phaser was ignoring the keyboard, so closing a panel does not resume a drift.
-        if (!open) this.input.keyboard.resetKeys();
       }),
       this.bridge.onCommand("round:state", (state) => this.applyRoundState(state)),
       this.bridge.onCommand("round:unavailable", ({ label }) => this.showRoundUnavailable(label)),
@@ -205,7 +204,9 @@ export class HubScene extends Phaser.Scene {
       }),
       this.bridge.onCommand("attack:confirmed", (effect) => this.showConfirmedAttack(effect)),
     );
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    const cleanup = () => {
+      this.events.off(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+      this.events.off(Phaser.Scenes.Events.DESTROY, cleanup);
       this.scale.off(Phaser.Scale.Events.RESIZE, this.onCameraResize);
       this.crispLabels = [];
       this.hintArrow?.destroy();
@@ -218,7 +219,9 @@ export class HubScene extends Phaser.Scene {
       document.removeEventListener("focusout", handleFocusOut);
       if (focusOutTimer !== undefined) window.clearTimeout(focusOutTimer);
       this.resetKeyboardState();
-    });
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+    this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
 
     this.exposeDevProbe();
     this.bridge.emit("region:near", { exitId: null });
@@ -335,7 +338,7 @@ export class HubScene extends Phaser.Scene {
         .setDepth(LABEL_DEPTH);
       plate.setStrokeStyle(1, color, 0.6);
       const stageLabel = boss.id === "cat"
-        ? this.add.text(cx, base + 18, "CHECKING ROUND", {
+        ? this.add.text(cx, label.y + blockHeight + 4, "CHECKING ROUND", {
             fontFamily: "var(--font-dm-mono), monospace",
             fontSize: "9px",
             color: "#f5b04a",
@@ -586,7 +589,7 @@ export class HubScene extends Phaser.Scene {
 
   private resetKeyboardState() {
     this.input.keyboard?.resetKeys();
-    this.player?.setVelocity(0, 0);
+    if (this.player?.body) this.player.setVelocity(0, 0);
   }
 
   /** Counts resolved travel during the move step. Walls, pauses, and idle frames do not add distance. */

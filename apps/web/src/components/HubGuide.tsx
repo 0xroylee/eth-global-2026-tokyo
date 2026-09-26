@@ -76,7 +76,6 @@ function WelcomeDialog({ onStart, onSkip }: { onStart: () => void; onSkip: () =>
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.querySelector<HTMLElement>('[aria-label="Map sound effects"]')?.focus();
     };
   }, [onSkip]);
 

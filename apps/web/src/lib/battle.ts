@@ -4,7 +4,8 @@ import type { NetworkKey, WriteState } from "./useBossPool";
 export type BossVisualState = "idle" | "hit" | "transition" | "defeated";
 export const STAGE_HUES = ["#95a7f6", "#b685ff", "#f08cff"] as const;
 
-export function roundSecondsLeft(round: Pick<RoundSnapshot, "deadline" | "blockTimestamp">, readAt: number, now: number): number {
+export function roundSecondsLeft(round: Pick<RoundSnapshot, "deadline" | "blockTimestamp">, readAt: number, now: number): number | null {
+  if (round.deadline === 0n) return null;
   const elapsed = Math.max(0, Math.floor((now - readAt) / 1_000));
   return Math.max(0, Number(round.deadline - round.blockTimestamp) - elapsed);
 }
@@ -14,24 +15,27 @@ export function confirmedBattleAttack(
   state: WriteState,
   network: NetworkKey,
   manifest: DeploymentManifest | undefined,
+  hookAddress: Address | string | undefined,
   account: Address | undefined,
 ) {
-  if (state.status !== "confirmed" || !manifest || !account) return null;
+  if (state.status !== "confirmed" || !manifest || !hookAddress || !account) return null;
   const { record } = state;
   if (record.request.kind !== "attack" || record.network !== network ||
     record.request.chainId !== manifest.chainId ||
     record.request.account.toLowerCase() !== account.toLowerCase() ||
     record.manifest.deploymentTxHash.toLowerCase() !== manifest.deploymentTxHash.toLowerCase() ||
+    (record.hookAddress ?? record.manifest.addresses.hook).toLowerCase() !== hookAddress.toLowerCase() ||
     record.request.target.toLowerCase() !== manifest.addresses.router.toLowerCase()) return null;
   if (!state.result || typeof state.result !== "object" || !("events" in state.result) || !Array.isArray(state.result.events)) return null;
   const events = (state.result.events as readonly DecodedContractEvent[]).filter(
-    (event) => event.address.toLowerCase() === manifest.addresses.hook.toLowerCase(),
+    (event) => event.address.toLowerCase() === hookAddress.toLowerCase(),
   );
   const hit = events.find((event) => event.eventName === "AttackRecorded");
   if (!hit || hit.args.player.toLowerCase() !== account.toLowerCase() || hit.args.bossHPOut <= 0n ||
     hit.args.stage < 0 || hit.args.stage > 2) return null;
   return {
-    id: `${manifest.chainId}:${manifest.deploymentTxHash}:${hit.transactionHash}:${hit.logIndex}`,
+    id: `${manifest.chainId}:${hookAddress.toLowerCase()}:${manifest.deploymentTxHash}:${hit.transactionHash}:${hit.logIndex}`,
+    hookAddress: hookAddress as Address,
     transactionHash: hit.transactionHash,
     logIndex: hit.logIndex,
     stage: hit.args.stage,
@@ -42,3 +46,16 @@ export function confirmedBattleAttack(
 }
 
 export type ConfirmedBattleAttack = NonNullable<ReturnType<typeof confirmedBattleAttack>>;
+
+export function writeStateMatchesEncounter(state: WriteState, network: NetworkKey, hookAddress: string | undefined): boolean {
+  if (state.status === "idle") return true;
+  if (!hookAddress) return false;
+  if (state.status === "prompting") {
+    return state.network === network && state.hookAddress.toLowerCase() === hookAddress.toLowerCase();
+  }
+  if (state.status === "pending" || state.status === "unresolved" || state.status === "confirmed") {
+    const recordHook = state.record.hookAddress ?? state.record.manifest.addresses.hook;
+    return state.record.network === network && recordHook.toLowerCase() === hookAddress.toLowerCase();
+  }
+  return state.network === network && state.hookAddress?.toLowerCase() === hookAddress.toLowerCase();
+}

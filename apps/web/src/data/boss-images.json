@@ -1,0 +1,46 @@
+{
+  "bosses": [
+    {
+      "id": "pool-unis",
+      "name": "Pool Unis",
+      "evolution": ["form-a", "form-b", "form-c"],
+      "images": {
+        "form-a": { "label": "Form A", "src": "/images/boss-cat-form-a.png" },
+        "form-b": { "label": "Form B", "src": "/images/boss-cat-form-b.png" },
+        "form-c": { "label": "Form C", "src": "/images/boss-cat-form-c.png" }
+      }
+    },
+    {
+      "id": "super-cat",
+      "name": "Super Cat",
+      "evolution": ["form-1", "form-2", "form-3", "form-4", "form-5", "form-6"],
+      "images": {
+        "form-1": { "label": "Base", "src": "/images/super_cat_form_1.png" },
+        "form-2": { "label": "Gold", "src": "/images/super_cat_form_2.png" },
+        "form-3": { "label": "Lightning", "src": "/images/super_cat_form_3.png" },
+        "form-4": { "label": "Mane", "src": "/images/super_cat_form_4.png" },
+        "form-5": { "label": "Crimson", "src": "/images/super_cat_form_5.png" },
+        "form-6": { "label": "Silver", "src": "/images/super_cat_form_6.png" }
+      }
+    },
+    {
+      "id": "little-eth",
+      "name": "Little ETH",
+      "evolution": ["slime", "king", "tide"],
+      "images": {
+        "slime": { "label": "Little ETH", "src": "/images/little-eth-slime.png" },
+        "king": { "label": "Little ETH King", "src": "/images/little-eth-king-a.png" },
+        "tide": { "label": "Little ETH Tide", "src": "/images/little-eth-king-b.png" }
+      },
+      "sheet": "/images/little-eth-evolution-strip.png"
+    },
+    {
+      "id": "macro-whale",
+      "name": "Macro Whale",
+      "evolution": ["portrait"],
+      "images": {
+        "portrait": { "label": "Macro Whale", "src": "/images/boss-macro-whale-portrait.png" }
+      }
+    }
+  ]
+}

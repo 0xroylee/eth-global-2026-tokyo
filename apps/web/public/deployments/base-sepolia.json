@@ -223,5 +223,12 @@
     "evmVersion": "cancun",
     "deploymentScript": "DeployBossPool.s.sol:DeployBossPool",
     "poolManager": "Team deployed from the pinned v4-core source; no official Base PoolManager is claimed."
-  }
+  },
+  "bossFactoryDeployedAtBlock": 47334087,
+  "previousBossFactories": [
+    {
+      "address": "0x9039F58150F1fFDFB301A3D7218D47A44406a269",
+      "deployedAtBlock": 47332647
+    }
+  ]
 }

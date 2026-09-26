@@ -10,7 +10,7 @@ Approved in the 26 September 2026 grilling session. The user confirmed implement
 - A Factory boss stays active until defeated. It has no expiry, cancellation, or creator withdrawal, including after defeat. LP assets, unused reserves, and prize funds cannot be recovered by the creator. Normal stage refills remain allowed. Earned player prizes remain claimable indefinitely.
 - Retain short-lived attack quote and transaction deadlines. Existing deployed bosses and the standalone BossHP demo keep their existing rules.
 - Closing the form hides it without cancelling submitted transactions. Persist pending operations and confirmed launch results across navigation and reload.
-- Success shows the confirmed boss identifiers and transaction link. Factory battle-page integration is outside this change.
+- Success shows the confirmed boss identifiers and transaction link. The Hook-address battle feature merged from main is retained, including its optional success link. Integration changes only adapt that existing feature to zero deadlines and retain verified discovery of bosses from the previous Factory.
 - Deploy a new compatible Factory on Base Sepolia and update its manifest only after verification. Do not relaunch or replace an existing boss.
 
 ## Implementation and acceptance

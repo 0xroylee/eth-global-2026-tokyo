@@ -5,18 +5,15 @@
 import { useEffect, useRef, useState } from "react";
 import type { BossVisualState } from "@/lib/battle";
 
-/** Stage 1 form A, stage 2 form B, stage 3 form C. */
-const BOSS_IMAGES = {
-  1: "/images/boss-cat-form-a.png?v=6",
-  2: "/images/boss-cat-form-b.png?v=6",
-  3: "/images/boss-cat-form-c.png?v=8",
-} as const;
-
 /**
  * Boss sprite, painted directly on the battlefield. The PNGs are transparent;
  * this box has no fill, so the lake shows around the character.
  */
-export function BossStage({ stage, state }: { stage: 1 | 2 | 3; state: BossVisualState }) {
+export function BossStage({ stage, stageImages, state }: {
+  stage: 1 | 2 | 3;
+  stageImages: readonly [string, string, string];
+  state: BossVisualState;
+}) {
   const [beat, setBeat] = useState<"left" | "right" | null>(null);
   const [entering, setEntering] = useState(false);
   const prevState = useRef(state);
@@ -61,7 +58,7 @@ export function BossStage({ stage, state }: { stage: 1 | 2 | 3; state: BossVisua
       className={`relative h-full w-full bg-transparent ${idle ? "boss-float" : ""}`}
     >
       <img
-        src={BOSS_IMAGES[stage]}
+        src={stageImages[stage - 1]}
         alt=""
         aria-hidden
         className="boss-sprite absolute inset-0 h-full w-full bg-transparent object-contain object-bottom opacity-100 [image-rendering:pixelated] transition-[transform,opacity] duration-[120ms] ease-[var(--ease-out-strong)]"

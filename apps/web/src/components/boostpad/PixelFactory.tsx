@@ -2,6 +2,8 @@
 
 /* eslint-disable @next/next/no-img-element -- reuse the existing boss art */
 
+import Link from "next/link";
+import { POOL_UNIS_PRESENTATION } from "@/game/bosses";
 import { formatUnits } from "@boss-pool/chain";
 import type { ReactNode } from "react";
 import { WalletControl } from "../WalletControl";
@@ -10,7 +12,6 @@ import type { BoostPadForm } from "./useBoostPadForm";
 
 const INPUT = "mt-2 w-full border-2 border-[#092B61] bg-white px-3 py-2 font-pixel text-[16px] leading-normal text-[#092B61] placeholder:text-[#6d7c9c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#092B61] disabled:opacity-50";
 const BUTTON = "bg-[#092B61] px-3 py-2 text-[16px] leading-snug text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#092B61] disabled:cursor-not-allowed disabled:opacity-40";
-const PORTRAITS = ["/images/boss-cat-form-a.png?v=6", "/images/boss-cat-form-b.png?v=6", "/images/boss-cat-form-c.png?v=8"];
 
 export function PixelFactory({ pad }: { pad: BoostPadForm }) {
   const locked = Boolean(pad.busy || pad.factoryLocked);
@@ -37,6 +38,7 @@ export function PixelFactory({ pad }: { pad: BoostPadForm }) {
               <Detail label="Hook" value={pad.result.hook} />
               <Detail label="Router" value={pad.result.router} />
             </dl>
+            <Link href={`/battle/${pad.result.hook}?network=base-sepolia`} className={`${BUTTON} inline-block`}>ENTER BATTLE</Link>
             <TransactionLink hash={pad.result.hash} />
             <button type="button" onClick={pad.startAnother} disabled={pad.factoryLocked} className={`${BUTTON} block`}>CREATE ANOTHER BOSS</button>
           </div>
@@ -95,7 +97,7 @@ export function PixelFactory({ pad }: { pad: BoostPadForm }) {
             <div>
               <p>6 · THREE STAGES</p>
               <div className="mt-2 grid grid-cols-3 gap-2">
-                {PORTRAITS.map((src, index) => (
+                {POOL_UNIS_PRESENTATION.stageImages.map((src, index) => (
                   <div key={src} className="border-2 border-[#092B61] bg-white p-2 text-center">
                     <img src={src} alt={`Stage ${index + 1} boss`} className="h-16 w-full object-contain [image-rendering:pixelated]" />
                     <p className="mt-1 text-[12px]">STAGE {index + 1}</p>

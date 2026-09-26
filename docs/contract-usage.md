@@ -2,7 +2,7 @@
 
 This guide covers the no-entry contracts in `contracts/src` and the player operations in `@boss-pool/chain`. A fresh wallet attacks directly after approving MockUSD to BossRouter when needed. The local deployment script creates an active round on Anvil. The Foundry fixture exercises a separate two-wallet round through all three stages and claims. The browser app reads public state and quotes without a wallet, then sends player transactions only through the selected wallet.
 
-For creator-selected MEME launches, MockUSD volume tracking, MEME prizes, stage gates, price quotes, and permanent creator fund locks, see [Boss Factory](boss-factory.md). The creator form and launch SDK are available at `/boostpad` (`/launch` redirects); the page reads the Factory address from the Base Sepolia deployment manifest. The player battle page still targets the standalone BossHP deployment.
+For creator-selected MEME launches, MockUSD volume tracking, MEME prizes, stage gates, price quotes, and permanent creator fund locks, see [Boss Factory](boss-factory.md). The creator form and launch SDK are available at `/boostpad` (`/launch` redirects); the page reads the Factory address from the Base Sepolia deployment manifest. The player battle page also supports verified Factory encounters by Hook address.
 
 ## Run the local deployment
 

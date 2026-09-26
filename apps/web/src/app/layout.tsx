@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Mono, Silkscreen, Space_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
-import { FactoryOperationProvider } from "@/components/FactoryOperationProvider";
 import { BossPoolProvider } from "@/components/BossPoolProvider";
+import { FactoryOperationProvider } from "@/components/FactoryOperationProvider";
 import { WalletChooserHost } from "@/components/WalletControl";
 import { WalletProvider } from "@/wallet/WalletProvider";
 import "./globals.css";

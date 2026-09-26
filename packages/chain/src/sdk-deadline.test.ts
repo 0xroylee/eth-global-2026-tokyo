@@ -21,7 +21,7 @@ test.each([0n, 1_100n])("keeps transaction expiry for round deadline %s", async 
         manager: addresses.poolManager, router: addresses.router, bossHP: addresses.bossHP,
         roy: addresses.roy, mockUSD: addresses.mockUSD, collectibles: addresses.collectibles,
         bossHook: addresses.hook, minter: addresses.hook,
-        status: 1, currentStage: 0, stageSold: 0n, stageCapacity: 1_000n,
+        symbol: "BHP", decimals: 18, status: 1, currentStage: 0, stageSold: 0n, stageCapacity: 1_000n,
         stageEndSqrtPriceX96: 0n, remainingSellableHP: 1_000n, bossIsCurrency0: true,
         LOWER_TICK: 0, UPPER_TICK: 1920, sqrtLowerX96: 1n, sqrtUpperX96: 2n,
         lastSqrtPriceX96: 1n, deadline, originalPrize: 1_000n, finalEligibleHP: 0n,
