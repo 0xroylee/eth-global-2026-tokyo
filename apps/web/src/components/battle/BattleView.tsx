@@ -2,14 +2,14 @@
 
 /* eslint-disable @next/next/no-img-element -- static pixel artwork */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { confirmedBattleAttack, roundSecondsLeft, writeStateMatchesEncounter, type ConfirmedBattleAttack } from "@/lib/battle";
 import { displayAmount } from "@/lib/format";
 import { findBossPresentation, POOL_UNIS_PRESENTATION } from "@/game/bosses";
 import type { useBossPool, NetworkKey } from "@/lib/useBossPool";
 import { useArena } from "../BossPoolProvider";
-import { BossActions } from "../BossActions";
+import { BossActions, type AttackQuotePreview, type BossActionsHandle } from "../BossActions";
 import { BossStage } from "./BossStage";
 import { CommandWindow } from "./CommandWindow";
 import { CroppedSprite } from "./CroppedSprite";
@@ -20,6 +20,20 @@ import { VictoryCard } from "./VictoryCard";
 
 const STAGES = [1, 2, 3] as const;
 const BUTTON = "min-h-11 border-2 border-[#FFF9E9] bg-[#092B61] px-3 py-2 font-pixel text-[10px] leading-relaxed text-white shadow-[3px_3px_0_#041833] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff] disabled:opacity-60";
+const EMPTY_ATTACK_PREVIEW: AttackQuotePreview = {
+  quote: null,
+  fresh: false,
+  loading: false,
+  error: null,
+  allowanceLoading: false,
+  allowanceMissing: false,
+  hasInputBalance: false,
+  ready: false,
+  playerReady: false,
+  allowanceReady: false,
+  outputSymbol: "HP",
+  outputDecimals: 18,
+};
 
 export function BattlePage({ initialNetwork, hookAddress }: { initialNetwork: NetworkKey; hookAddress?: string }) {
   const arena = useArena();
@@ -43,9 +57,14 @@ export function BattlePage({ initialNetwork, hookAddress }: { initialNetwork: Ne
 export function BattleView({ arena, routeHookAddress, onClose }: { arena: ReturnType<typeof useBossPool>; routeHookAddress?: string; onClose: () => void }) {
   const [now, setNow] = useState(Date.now);
   const [effect, setEffect] = useState<ConfirmedBattleAttack | null>(null);
+  const [attackPreview, setAttackPreview] = useState(EMPTY_ATTACK_PREVIEW);
+  const [approvalOnly, setApprovalOnly] = useState(false);
+  const [restoreAttackFocus, setRestoreAttackFocus] = useState(false);
   const router = useRouter();
   const seenEffects = useRef(new Set<string>());
   const actionsDialog = useRef<HTMLDialogElement>(null);
+  const bossActions = useRef<BossActionsHandle>(null);
+  const attackButtonRef = useRef<HTMLButtonElement>(null);
   const live = arena.deployment.kind === "live" ? arena.deployment : null;
   const round = live?.round;
   const hpDecimals = round?.hpToken.decimals ?? 18;
@@ -64,6 +83,21 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
     () => confirmedBattleAttack(arena.writeState, arena.network, manifest, hookAddress, account),
     [arena.writeState, arena.network, manifest, hookAddress, account],
   );
+  const updateAttackPreview = useCallback((preview: AttackQuotePreview) => setAttackPreview(preview), []);
+  const closeActions = useCallback(() => {
+    setApprovalOnly(false);
+    setRestoreAttackFocus(false);
+    actionsDialog.current?.close();
+  }, []);
+  const returnToAttack = useCallback(() => {
+    setApprovalOnly(false);
+    setRestoreAttackFocus(true);
+    actionsDialog.current?.close();
+  }, []);
+  const openApproval = useCallback(() => {
+    setApprovalOnly(true);
+    actionsDialog.current?.showModal();
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -85,11 +119,20 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
     if (!hit || seenEffects.current.has(hit.id)) return;
     seenEffects.current.add(hit.id);
     setEffect(hit);
+    setApprovalOnly(false);
+    setRestoreAttackFocus(false);
     actionsDialog.current?.close();
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const timer = window.setTimeout(() => setEffect(null), reduced ? 100 : 1_400);
     return () => window.clearTimeout(timer);
   }, [hit, identity]);
+
+  const previousIdentity = useRef(identity);
+  useEffect(() => {
+    if (previousIdentity.current === identity) return;
+    previousIdentity.current = identity;
+    if (approvalOnly) closeActions();
+  }, [identity, approvalOnly, closeActions]);
 
   const secondsLeft = live ? roundSecondsLeft(live.round, live.readAt, now) : 0;
   const defeated = round?.status === 3;
@@ -98,9 +141,16 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
   const canAttack = round?.status === 1 && (secondsLeft === null || secondsLeft > 0) && !busy;
   const stage = round ? STAGES[round.currentStage] : undefined;
   const visualStage = visibleEffect ? STAGES[visibleEffect.stage] : stage;
-  const openActions = () => actionsDialog.current?.showModal();
+  const openActions = () => {
+    setApprovalOnly(false);
+    actionsDialog.current?.showModal();
+  };
   const connectOrSwitch = () => {
     void (account && arena.networkMismatch ? arena.switchToSelectedNetwork() : arena.connect()).catch(() => undefined);
+  };
+  const attackFromCommand = () => {
+    if (!account || arena.networkMismatch) connectOrSwitch();
+    else bossActions.current?.attackOrRequestApproval();
   };
   const changeNetwork = (nextNetwork: NetworkKey) => {
     if (hookAddress) {
@@ -113,9 +163,38 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
   };
 
   const action = visibleEffect ? "HIT CONFIRMED" : busy ? writeMatches ? arena.writeState.status === "prompting" ? "PREPARING" : "PENDING" : "OTHER TRANSACTION" : defeated ? "DEFEATED" : expired ? "ROUND ENDED" : canAttack ? "SWAP ATTACK" : "WAITING";
+  const commandChecking = Boolean(account && live && (!attackPreview.playerReady || (!attackPreview.allowanceReady && attackPreview.allowanceLoading)));
+  const allowanceUnavailable = Boolean(account && live && attackPreview.playerReady && !attackPreview.allowanceReady && !attackPreview.allowanceLoading);
+  const commandWaitingForQuote = Boolean(account && !arena.networkMismatch && round?.status === 1 &&
+    (!attackPreview.quote || !attackPreview.fresh || attackPreview.loading));
+  const commandLabel = !account
+    ? arena.wallet.status === "checking" ? "CHECKING WALLET" : arena.wallet.status === "missing" ? "WALLET UNAVAILABLE" : "SWAP ATTACK"
+    : arena.networkMismatch ? "SWITCH NETWORK"
+      : busy ? "WAIT FOR RECEIPT"
+        : commandChecking ? "CHECKING WALLET"
+          : allowanceUnavailable ? "ALLOWANCE UNAVAILABLE"
+          : commandWaitingForQuote ? attackPreview.loading ? "QUOTING ATTACK" : "REFRESHING QUOTE"
+            : !attackPreview.hasInputBalance ? "NEED 1 MockUSD"
+              : "SWAP ATTACK";
+  const commandDisabled = !canAttack || arena.wallet.busy || (!account && (arena.wallet.status === "checking" || arena.wallet.status === "missing")) ||
+    commandChecking || allowanceUnavailable || commandWaitingForQuote || Boolean(account && !arena.networkMismatch && !attackPreview.hasInputBalance) ||
+    Boolean(account && !arena.networkMismatch && !attackPreview.ready && !attackPreview.allowanceMissing);
+
+  useEffect(() => {
+    if (!restoreAttackFocus) return;
+    if (commandDisabled) {
+      const timer = window.setTimeout(() => setRestoreAttackFocus(false), 5_000);
+      return () => window.clearTimeout(timer);
+    }
+    const frame = window.requestAnimationFrame(() => {
+      attackButtonRef.current?.focus();
+      setRestoreAttackFocus(false);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [restoreAttackFocus, commandDisabled]);
   let title = presentation ? `${presentation.name} appeared.` : "BOSS APPEARANCE NOT CONFIGURED";
   let detail = presentation
-    ? `${presentation.name} appeared. Each swap attack spends up to 1 MockUSD; review the expected damage first.`
+    ? "Each swap attack spends up to 1 MockUSD; review the expected damage first."
     : "This verified Hook has no configured stage artwork. Its on-chain encounter remains available.";
   if (!round) {
     title = arena.deployment.kind === "loading" ? "CHECKING THE ROUND…" : "ROUND UNAVAILABLE";
@@ -164,25 +243,25 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
           <button type="button" className={BUTTON} onClick={openActions}>{arena.pendingRecord ? "CHECK TRANSACTION" : "BATTLE DETAILS"}</button>
           <button type="button" onClick={onClose} className={BUTTON}>ESC · EXIT</button>
         </div>
-        <div className="min-w-0 md:col-start-1 md:row-start-2 lg:absolute lg:left-6 lg:top-7 lg:z-20 lg:w-[44vw]"><StatusPanel deployment={arena.deployment} /></div>
-        <div className="w-full min-w-0 max-w-[480px] justify-self-end md:col-start-2 md:row-start-2 lg:absolute lg:right-4 lg:top-16 lg:z-20 lg:w-auto lg:max-w-none"><NamePlate stage={stage} action={action} presentation={presentation} /></div>
+        <div className="min-w-0 md:col-start-1 md:row-start-2 lg:absolute lg:col-auto lg:row-auto lg:left-6 lg:top-7 lg:z-20 lg:w-[44vw]"><StatusPanel deployment={arena.deployment} /></div>
+        <div className="w-full min-w-0 max-w-[480px] justify-self-end md:col-start-2 md:row-start-2 lg:absolute lg:col-auto lg:row-auto lg:right-4 lg:top-16 lg:z-20 lg:w-auto lg:max-w-none"><NamePlate stage={stage} action={action} presentation={presentation} /></div>
         <div className="grid min-w-0 grid-cols-[minmax(100px,0.85fr)_minmax(0,1.15fr)] items-end gap-3 md:contents">
-          <div className="flex min-w-0 flex-col items-start gap-3 self-end md:col-start-1 md:row-start-3 lg:absolute lg:bottom-[calc(min(40vh,360px)+48px)] lg:left-6 lg:z-20 lg:gap-2">
+          <div className="flex min-w-0 flex-col items-start gap-3 self-end md:col-start-1 md:row-start-3 lg:absolute lg:col-auto lg:row-auto lg:bottom-[calc(min(40vh,360px)+48px)] lg:left-6 lg:z-20 lg:gap-2">
             <BattleMeta deployment={arena.deployment} now={now} />
             <div className="w-[108px] rounded-lg border-[3px] border-[#f3ead2] bg-[#16356e] p-1.5 shadow-[3px_3px_0_#041833]">
               <div className="mx-auto h-[84px] w-[70px] overflow-hidden"><CroppedSprite className="h-[140px]" /></div>
               <p className="mt-1 text-center text-base leading-none text-[#f6e7b2]">YOU</p>
             </div>
           </div>
-          <div className="relative h-[260px] min-w-0 self-end sm:h-[300px] md:col-start-2 md:row-start-3 md:h-[clamp(180px,30vh,360px)] lg:pointer-events-none lg:absolute lg:left-1/2 lg:top-[max(20%,194px)] lg:z-[18] lg:h-[min(50vh,calc(80vh-272px))] lg:w-[35%]">
+          <div className="relative h-[260px] min-w-0 self-end sm:h-[300px] md:col-start-2 md:row-start-3 md:h-[clamp(180px,30vh,360px)] lg:pointer-events-none lg:absolute lg:col-auto lg:row-auto lg:left-1/2 lg:top-[max(20%,194px)] lg:z-[18] lg:h-[min(50vh,calc(80vh-272px))] lg:w-[35%]">
             {!presentation
               ? <div className="grid h-full place-items-center p-4"><p className="window-chrome max-w-sm px-5 py-4 text-center font-pixel text-sm leading-relaxed text-[#2b4a8b]">Boss appearance not configured</p></div>
               : visualStage && <BossStage stage={visualStage} stageImages={presentation.stageImages} state={visibleEffect?.defeated || defeated ? "defeated" : visibleEffect?.stageCleared ? "transition" : visibleEffect ? "hit" : "idle"} />}
           </div>
         </div>
-        {!defeated && <div className="min-w-0 self-end md:col-start-1 md:row-start-4 lg:absolute lg:bottom-8 lg:left-6 lg:z-20 lg:h-[min(40vh,360px)] lg:w-[36vw]"><CommandWindow label="SWAP ATTACK" disabled={!canAttack} onAction={openActions} onClose={onClose} /></div>}
-        {(!defeated || visibleEffect) && <div className={`min-w-0 self-end md:row-start-4 lg:absolute lg:bottom-8 lg:left-[54%] lg:right-4 lg:z-20 lg:h-[200px] ${defeated ? "md:col-span-2" : "md:col-start-2"}`}><DialogWindow title={title} detail={detail} /></div>}
-        {defeated && round && !visibleEffect && <div className="mx-auto w-full md:col-span-2 md:row-start-4 lg:absolute lg:inset-0 lg:z-40 lg:grid lg:place-items-center lg:bg-[#041833]/80 lg:p-4">
+        {!defeated && <div className="min-w-0 self-end md:col-start-1 md:row-start-4 lg:absolute lg:col-auto lg:row-auto lg:bottom-8 lg:left-6 lg:z-20 lg:h-[min(40vh,360px)] lg:w-[36vw]"><CommandWindow label={commandLabel} disabled={commandDisabled} onAction={attackFromCommand} onClose={onClose} attackButtonRef={attackButtonRef} /></div>}
+        {(!defeated || visibleEffect) && <div className={`min-w-0 self-end md:row-start-4 lg:absolute lg:col-auto lg:row-auto lg:bottom-8 lg:left-[54%] lg:right-4 lg:z-20 lg:h-[200px] ${defeated ? "md:col-span-2" : "md:col-start-2"}`}><DialogWindow title={title} detail={detail} preview={attackPreview} showAttackQuote={round?.status === 1 && secondsLeft > 0} walletConnected={Boolean(account)} networkMismatch={arena.networkMismatch} writeBusy={busy} /></div>}
+        {defeated && round && !visibleEffect && <div className="mx-auto w-full md:col-span-2 md:row-start-4 lg:absolute lg:col-auto lg:row-auto lg:inset-0 lg:z-40 lg:grid lg:place-items-center lg:bg-[#041833]/80 lg:p-4">
           <div className="mx-auto w-full max-w-[480px]"><VictoryCard round={round} player={live?.player} onClaim={openActions} onClose={onClose} /></div>
         </div>}
         {visibleEffect?.stageCleared && !visibleEffect.defeated && <div role="status" className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-ink/70">
@@ -190,12 +269,12 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
         </div>}
       </div>
 
-      <dialog ref={actionsDialog} aria-labelledby="battle-actions-title" onCancel={(event) => event.stopPropagation()} className="m-auto max-h-[90dvh] w-[min(640px,94vw)] overflow-y-auto border-4 border-[#2b4a8b] bg-panel p-5 text-fog backdrop:bg-ink/75">
-        <div className="flex items-start justify-between gap-3">
-          <h2 id="battle-actions-title" className="font-pixel text-sm">{defeated ? "REWARDS" : "SWAP ATTACK · 1 MockUSD MAX"}</h2>
-          <button type="button" autoFocus className="min-h-[44px] border border-white/30 px-3 text-xs" onClick={() => actionsDialog.current?.close()}>CLOSE</button>
+      <dialog ref={actionsDialog} aria-labelledby="battle-actions-title" onCancel={(event) => event.stopPropagation()} onClose={() => setApprovalOnly(false)} className={`m-auto max-h-[90dvh] w-[min(640px,94vw)] overflow-y-auto backdrop:bg-ink/75 ${approvalOnly ? "window-chrome p-1" : "border-4 border-[#2b4a8b] bg-panel p-5 text-fog"}`}>
+        <div className={approvalOnly ? "window-title flex items-center justify-between gap-3 px-4 py-2" : "flex items-start justify-between gap-3"}>
+          <h2 id="battle-actions-title" className="font-pixel text-xs">{approvalOnly ? "APPROVE MOCKUSD" : defeated ? "REWARDS" : "BATTLE DETAILS"}</h2>
+          <button type="button" autoFocus className={approvalOnly ? "min-h-[44px] border border-white/60 px-3 text-xs text-white" : "min-h-[44px] border border-white/30 px-3 text-xs"} onClick={closeActions}>CLOSE</button>
         </div>
-        {(!account || arena.networkMismatch) && <button
+        {!approvalOnly && (!account || arena.networkMismatch) && <button
           type="button"
           onClick={connectOrSwitch}
           disabled={arena.wallet.busy || arena.wallet.status === "checking" || arena.wallet.status === "missing"}
@@ -203,8 +282,18 @@ export function BattleView({ arena, routeHookAddress, onClose }: { arena: Return
         >
           {!account ? "Connect wallet" : "Switch wallet network"}
         </button>}
-        {arena.wallet.error && <p role="status" className="mt-2 break-words text-sm text-danger">{arena.wallet.error}</p>}
-        <BossActions key={identity} arena={arena} />
+        {!approvalOnly && arena.wallet.error && <p role="status" className="mt-2 break-words px-4 text-sm text-[#a14845]">{arena.wallet.error}</p>}
+        <div className={approvalOnly ? "px-4 py-3" : ""}>
+          <BossActions
+            key={identity}
+            ref={bossActions}
+            arena={arena}
+            approvalOnly={approvalOnly}
+            onApprovalRequired={openApproval}
+            onApprovalReady={returnToAttack}
+            onQuotePreviewChange={updateAttackPreview}
+          />
+        </div>
       </dialog>
     </main>
   );

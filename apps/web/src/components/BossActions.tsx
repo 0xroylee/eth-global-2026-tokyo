@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   RequoteRequiredError,
   type ApprovalAction,
@@ -11,6 +11,7 @@ import {
 } from "@boss-pool/chain";
 import { displayAmount, displayEstimate, roundStatusLabel } from "@/lib/format";
 import { writeStateMatchesEncounter } from "@/lib/battle";
+import { routeAttackCommand } from "@/lib/attackCommand";
 import { type useBossPool } from "@/lib/useBossPool";
 
 type Arena = ReturnType<typeof useBossPool>;
@@ -36,20 +37,50 @@ const MOCK_USD_DECIMALS = 6;
 const DEFAULT_SLIPPAGE_BPS = 100;
 const ATTACK_CAP = 1_000_000n;
 
-export function BossActions({
-  arena,
-}: {
+export type AttackQuotePreview = {
+  quote: AttackQuote | null;
+  fresh: boolean;
+  loading: boolean;
+  allowanceLoading: boolean;
+  error: string | null;
+  allowanceMissing: boolean;
+  hasInputBalance: boolean;
+  ready: boolean;
+  playerReady: boolean;
+  allowanceReady: boolean;
+  outputSymbol: string;
+  outputDecimals: number;
+};
+
+export type BossActionsHandle = { attackOrRequestApproval: () => void };
+
+type BossActionsProps = {
   arena: Arena;
-}) {
+  approvalOnly: boolean;
+  onApprovalRequired: () => void;
+  onApprovalReady: () => void;
+  onQuotePreviewChange: (preview: AttackQuotePreview) => void;
+};
+
+export const BossActions = forwardRef<BossActionsHandle, BossActionsProps>(function BossActions({
+  arena,
+  approvalOnly,
+  onApprovalRequired,
+  onApprovalReady,
+  onQuotePreviewChange,
+}, ref) {
   const [quoteState, setQuoteState] = useState<QuoteState | null>(null);
   const [quoteBusy, setQuoteBusy] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [approvalLoading, setApprovalLoading] = useState(false);
   const [claimText, setClaimText] = useState("");
   const [rewardPreview, setRewardPreview] = useState<RewardPreview | null>(null);
   const [rewardError, setRewardError] = useState<string | null>(null);
   const [approvals, setApprovals] = useState<{ attack?: ApprovalStatus; claim?: ApprovalStatus }>({});
   const [lastResult, setLastResult] = useState<ActionResult | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [quoteRefreshVersion, setQuoteRefreshVersion] = useState(0);
+  const expiredQuoteKey = useRef<string | null>(null);
 
   const live = arena.deployment.kind === "live" ? arena.deployment : null;
   const sdk = arena.sdk;
@@ -83,6 +114,10 @@ export function BossActions({
     ? quoteState.quote.quotedAt + BigInt(Math.max(0, Math.floor((now - quoteState.receivedAt) / 1_000)))
     : chainTimestamp;
   const defeated = round?.status === 3;
+  const quoteStage = round?.currentStage;
+  const quoteStageSold = quoteStage === undefined ? undefined : round?.stageSold[quoteStage];
+  const quoteStageVolume = quoteStage === undefined ? undefined : round?.stageVolume[quoteStage];
+  const quoteBossPrice = round?.bossCurrentSqrtPriceX96;
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -93,23 +128,37 @@ export function BossActions({
     setApprovals({});
     setRewardPreview(null);
     setRewardError(null);
-    if (!sdk || !account) return;
+    if (!sdk || !account) {
+      setApprovalLoading(false);
+      return;
+    }
     let activeRequest = true;
-    const requests: [Promise<ApprovalStatus> | null, Promise<ApprovalStatus> | null] = [
-      inputAmount !== null && inputAmount > 0n
+    let retryTimer: number | undefined;
+    let retry = 0;
+    const readApprovals = async () => {
+      setApprovalLoading(true);
+      const attackRequest = inputAmount !== null && inputAmount > 0n
         ? sdk.getApproval({ kind: "attack", maxMockUSD: inputAmount }, account)
-        : null,
-      hpAmount !== null && hpAmount > 0n && defeated && !factory
+        : Promise.resolve(undefined);
+      const claimRequest = hpAmount !== null && hpAmount > 0n && defeated && !factory
         ? sdk.getApproval({ kind: "claimReward", hpAmount }, account)
-        : null,
-    ];
-    void Promise.all([
-      requests[0]?.catch(() => undefined) ?? Promise.resolve(undefined),
-      requests[1]?.catch(() => undefined) ?? Promise.resolve(undefined),
-    ]).then(([attack, claim]) => {
+        : Promise.resolve(undefined);
+      const [attackResult, claimResult] = await Promise.allSettled([attackRequest, claimRequest]);
       if (!activeRequest) return;
+      const attack = attackResult.status === "fulfilled" ? attackResult.value : undefined;
+      const claim = claimResult.status === "fulfilled" ? claimResult.value : undefined;
       setApprovals({ attack, claim });
-    });
+      setApprovalLoading(false);
+      if (attackResult.status === "rejected" || claimResult.status === "rejected") {
+        const retryDelays = [2_000, 5_000, 15_000, 30_000];
+        const delay = retryDelays[Math.min(retry, retryDelays.length - 1)];
+        retry += 1;
+        retryTimer = window.setTimeout(() => void readApprovals(), delay);
+      } else {
+        retry = 0;
+      }
+    };
+    void readApprovals();
 
     if (hpAmount !== null && hpAmount > 0n && defeated) {
       void sdk.previewReward(hpAmount, account).then((preview) => {
@@ -118,7 +167,10 @@ export function BossActions({
         if (activeRequest) setRewardError(errorMessage(error));
       });
     }
-    return () => { activeRequest = false; };
+    return () => {
+      activeRequest = false;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    };
   }, [sdk, account, inputAmount, hpAmount, defeated, factory, attackAllowance, claimAllowance, heldBossHP, rewardCredit, eligibleHP, redeemedHP, originalPrize]);
 
   const quoteFresh = useMemo(() => {
@@ -148,37 +200,114 @@ export function BossActions({
     sdk && account && arena.canWrite && !arena.networkMismatch && active && hasInputBalance &&
     quoteFresh && attackApproval && !attackApproval.approvalNeeded && !writeBusy && !arena.pendingRecord,
   );
+  const approvalCanContinue = Boolean(
+    sdk && account && arena.canWrite && !arena.networkMismatch && active && hasInputBalance &&
+    quoteFresh && attackApproval?.approvalNeeded && !writeBusy && !arena.pendingRecord,
+  );
 
-  async function requestQuote() {
-    if (!sdk || !round || inputAmount === null || inputAmount <= 0n) return;
-    setQuoteBusy(true);
-    setQuoteError(null);
-    setQuoteState(null);
-    try {
-      const quote = await sdk.quoteAttack({
-        maxMockUSD: inputAmount,
-        stage: round.currentStage,
-        account,
-        slippageBps: DEFAULT_SLIPPAGE_BPS,
-      });
-      setQuoteState({
-        quote,
-        network: arena.network,
-        account,
-        walletChainId: arena.wallet.chainId,
-        deploymentTxHash: live?.manifest.deploymentTxHash ?? "",
-        hookAddress: live?.hookAddress ?? "",
-        stageSold: round.stageSold[round.currentStage],
-        stageVolume: round.stageVolume[round.currentStage],
-        bossPrice: round.bossCurrentSqrtPriceX96,
-        receivedAt: Date.now(),
-      });
-    } catch (error) {
-      setQuoteError(errorMessage(error));
-    } finally {
+  useEffect(() => {
+    if (writeBusy || arena.pendingRecord) {
       setQuoteBusy(false);
+      return;
     }
-  }
+    if (!sdk || !live || !round || inputAmount === null || inputAmount <= 0n || !active ||
+      quoteStage === undefined || quoteStageSold === undefined || quoteStageVolume === undefined || quoteBossPrice === undefined) {
+      setQuoteState(null);
+      setQuoteBusy(false);
+      return;
+    }
+
+    let current = true;
+    let timer: number | undefined;
+    let retry = 0;
+    const context = {
+      network: arena.network,
+      account,
+      walletChainId: arena.wallet.chainId,
+      deploymentTxHash: live.manifest.deploymentTxHash,
+      hookAddress: live.hookAddress,
+      stage: quoteStage,
+      stageSold: quoteStageSold,
+      stageVolume: quoteStageVolume,
+      bossPrice: quoteBossPrice,
+    };
+
+    const request = async () => {
+      setQuoteBusy(true);
+      setQuoteError(null);
+      try {
+        const startedAt = Date.now();
+        const quote = await sdk.quoteAttack({
+          maxMockUSD: inputAmount,
+          stage: context.stage,
+          account,
+          slippageBps: DEFAULT_SLIPPAGE_BPS,
+        });
+        if (!current) return;
+        setQuoteState({
+          quote,
+          ...context,
+          receivedAt: Date.now(),
+        });
+        setQuoteError(null);
+        retry = 0;
+        const validForMs = Number(quote.expiresAt - quote.quotedAt) * 1_000 - (Date.now() - startedAt);
+        timer = window.setTimeout(request, Math.max(1_000, validForMs + 1_000));
+      } catch (error) {
+        if (!current) return;
+        setQuoteState(null);
+        setQuoteError(errorMessage(error));
+        const retryDelays = [2_000, 5_000, 15_000, 30_000];
+        const delay = retryDelays[Math.min(retry, retryDelays.length - 1)];
+        retry += 1;
+        timer = window.setTimeout(request, delay);
+      } finally {
+        if (current) setQuoteBusy(false);
+      }
+    };
+
+    setQuoteState(null);
+    void request();
+    return () => {
+      current = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [sdk, live?.hookAddress, live?.manifest.deploymentTxHash, round?.status, inputAmount, active,
+    arena.network, account, arena.wallet.chainId, quoteStage, quoteStageSold, quoteStageVolume, quoteBossPrice,
+    writeBusy, arena.pendingRecord, quoteRefreshVersion]);
+
+  useEffect(() => {
+    onQuotePreviewChange({
+      quote: quoteState?.quote ?? null,
+      fresh: quoteFresh,
+      loading: quoteBusy,
+      allowanceLoading: approvalLoading,
+      error: quoteError,
+      allowanceMissing: Boolean(attackApproval?.approvalNeeded),
+      hasInputBalance,
+      ready: attackReady,
+      playerReady: Boolean(player),
+      allowanceReady: Boolean(attackApproval),
+      outputSymbol: hpToken?.symbol ?? "HP",
+      outputDecimals: hpToken?.decimals ?? 18,
+    });
+  }, [onQuotePreviewChange, quoteState?.quote, quoteFresh, quoteBusy, quoteError, attackApproval?.approvalNeeded,
+    Boolean(attackApproval), approvalLoading, hasInputBalance, attackReady, Boolean(player), hpToken?.symbol, hpToken?.decimals]);
+
+  useEffect(() => {
+    if (!quoteState || chainTimestamp < quoteState.quote.expiresAt) {
+      expiredQuoteKey.current = null;
+      return;
+    }
+    const key = `${arena.network}:${live?.hookAddress.toLowerCase() ?? ""}:${quoteState.quote.expiresAt}`;
+    if (expiredQuoteKey.current === key) return;
+    expiredQuoteKey.current = key;
+    setQuoteRefreshVersion((version) => version + 1);
+  }, [quoteState?.quote.expiresAt, chainTimestamp, arena.network, live?.hookAddress]);
+
+  useEffect(() => {
+    if (approvalOnly && quoteFresh && attackApproval && !attackApproval.approvalNeeded) onApprovalReady();
+  }, [approvalOnly, quoteFresh, attackApproval, onApprovalReady]);
 
   async function submitApproval(action: ApprovalAction, label: string) {
     if (!sdk) return;
@@ -234,9 +363,23 @@ export function BossActions({
       if (error instanceof RequoteRequiredError) {
         setQuoteState(null);
         setQuoteError(error.message);
+        setQuoteRefreshVersion((version) => version + 1);
       }
     }
   }
+
+  useImperativeHandle(ref, () => ({
+    attackOrRequestApproval() {
+      const route = routeAttackCommand({
+        quoteFresh,
+        attackReady,
+        allowanceMissing: Boolean(attackApproval?.approvalNeeded),
+        approvalReady: approvalCanContinue,
+      });
+      if (route === "attack") void attack();
+      else if (route === "approval") onApprovalRequired();
+    },
+  }), [attackReady, approvalCanContinue, onApprovalRequired, attack]);
 
   const statusText = round ? roundStatusLabel(round.status) : arena.deployment.kind === "not-deployed" ? "Not deployed" : arena.deployment.kind === "error" ? "Unavailable" : "Checking";
   const attackBlockReason = !account
@@ -248,12 +391,48 @@ export function BossActions({
         : !hasInputBalance
           ? "The wallet needs enough MockUSD for the full input cap; unused input is refunded."
           : !quoteState
-            ? "Request a fresh public quote first."
+            ? quoteBusy ? "The public attack quote is loading." : "The public attack quote is unavailable; it will retry automatically."
             : !quoteFresh
-              ? "This quote is stale. Request a new quote before approval or attack."
+              ? "This quote is stale. Wait for the refreshed preview before attacking."
               : attackApproval?.approvalNeeded
                 ? "Approve MockUSD for BossRouter before attacking."
                 : "Ready to submit the quoted attack.";
+
+  if (approvalOnly) {
+    return (
+      <div className="font-mono text-sm leading-relaxed text-[#2b4a8b]">
+        <p>BossRouter needs permission to spend MockUSD before this attack.</p>
+        <dl className="mt-3 grid gap-1 border-y border-[#2b4a8b]/25 py-2 text-xs">
+          <div className="flex justify-between gap-3"><dt>Token</dt><dd>MockUSD</dd></div>
+          <div className="flex justify-between gap-3"><dt>Spender</dt><dd className="font-semibold">BossRouter</dd></div>
+          <div className="flex justify-between gap-3"><dt>Permission</dt><dd>Unlimited</dd></div>
+          <div className="flex justify-between gap-3"><dt>Attack cap</dt><dd>{displayAmount(inputAmount, MOCK_USD_DECIMALS)} MockUSD</dd></div>
+        </dl>
+        <p className="mt-3">1. Approve MockUSD in your wallet. 2. When this closes, click SWAP ATTACK to send the attack.</p>
+        <p className="mt-1 text-xs">Approval never sends an attack.</p>
+        {live && <details className="mt-2 text-xs">
+          <summary className="cursor-pointer">Show full token and spender addresses</summary>
+          <dl className="mt-1 grid gap-1 break-all">
+            <div><dt className="inline">MockUSD: </dt><dd className="inline">{live.manifest.addresses.mockUSD}</dd></div>
+            <div><dt className="inline">BossRouter: </dt><dd className="inline">{live.manifest.addresses.router}</dd></div>
+          </dl>
+        </details>}
+        {!quoteFresh && <p className="mt-2 text-xs text-[#a14845]" role="status">Refreshing the public quote. Approval will be ready when it is fresh.</p>}
+        {!attackApproval && <p className="mt-2 text-xs" role="status">{approvalLoading ? "Reading the current allowance…" : "Allowance is unavailable · retrying automatically."}</p>}
+        {attackApproval?.approvalNeeded && <button
+          type="button"
+          disabled={!approvalCanContinue}
+          onClick={() => void submitApproval({ kind: "attack", maxMockUSD: inputAmount }, "Approve attack input")}
+          className="mt-3 min-h-11 border-2 border-[#2b4a8b] bg-[#2b4a8b] px-4 py-2 font-pixel text-xs text-white shadow-[3px_3px_0_rgba(20,30,60,.45)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4ff] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {writeBusy ? "Approval in progress…" : !quoteFresh ? "Waiting for fresh quote…" : "Approve MockUSD"}
+        </button>}
+        {writeMatches && arena.writeState.status !== "idle" && <ApprovalWriteStatus state={arena.writeState} />}
+        {writeBusy && !writeMatches && <p className="mt-3 text-xs" role="status">A wallet action for another boss is still in progress.</p>}
+        {arena.pendingRecord && <div className="mt-2"><p className="text-xs">A submitted transaction must be checked before another write.</p><button type="button" className="mt-2 min-h-11 border-2 border-[#2b4a8b] px-3 py-2 text-xs disabled:opacity-50" disabled={arena.writeState.status === "pending" || arena.writeState.status === "prompting"} onClick={() => void arena.resumePending()}>Check saved transaction</button></div>}
+      </div>
+    );
+  }
 
   return (
     <div className="mt-5">
@@ -280,21 +459,11 @@ export function BossActions({
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="eyebrow">STEP 01 · PUBLIC PREVIEW</p>
-            <h3 id="quote-heading" className="mt-1 text-base font-medium">Quote before approval</h3>
+            <h3 id="quote-heading" className="mt-1 text-base font-medium">Automatic public quote</h3>
           </div>
           <span className="font-mono text-[9px] tracking-[0.1em] text-dim">NO WALLET OR ALLOWANCE NEEDED</span>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <p className="text-sm text-fog">1 MockUSD maximum per attack</p>
-          <button
-            type="button"
-            onClick={() => void requestQuote()}
-            disabled={!sdk || !active || inputAmount === null || inputAmount <= 0n || quoteBusy || writeBusy}
-            className="rounded-lg bg-accent px-4 py-2.5 font-mono text-[10px] font-medium tracking-[0.1em] text-ink transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {quoteBusy ? "QUOTING…" : "GET QUOTE"}
-          </button>
-        </div>
+        <p className="mt-3 text-sm text-fog">1 MockUSD maximum per attack · refreshes when the stage, pool, wallet, or quote validity changes</p>
         {arena.deployment.kind === "not-deployed" && <p className="mt-2 text-xs text-muted">No deployment manifest exists for this network, so no quote is available.</p>}
         {arena.deployment.kind === "error" && <p className="mt-2 text-xs text-danger" role="status">Public quote unavailable: {arena.deployment.message}</p>}
         {round && !active && !quoteError && (
@@ -310,7 +479,7 @@ export function BossActions({
         {quoteState && (
           <div className={`mt-3 border-l-2 pl-3 ${quoteFresh ? "border-live/60" : "border-danger/70"}`} aria-live="polite">
             <p className={`font-mono text-[9px] tracking-[0.1em] ${quoteFresh ? "text-live-soft" : "text-danger"}`}>
-              {quoteFresh ? "FRESH QUOTE" : "QUOTE STALE · REQUOTE BEFORE APPROVAL OR ATTACK"}
+              {quoteFresh ? "FRESH QUOTE" : "QUOTE STALE · REFRESHING AUTOMATICALLY"}
             </p>
             <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
               <QuoteMetric label={`${hpToken?.symbol ?? "TOKEN"} ESTIMATE`} amount={quoteState.quote.bossHPOut} decimals={hpToken?.decimals ?? 18} unit={hpToken?.symbol ?? "HP"} />
@@ -347,7 +516,7 @@ export function BossActions({
               </dl>
             </details>
             <p className="mt-1 font-mono text-[9px] text-faint">
-              {quoteFresh ? `${quoteSecondsLeft}s remaining` : "Get another quote to refresh this preview"} · 1% output tolerance
+              {quoteFresh ? `${quoteSecondsLeft}s remaining` : "Waiting for the automatic quote refresh"} · 1% output tolerance
             </p>
             <p className="mt-1 text-xs text-muted">
               Supply pool fee: {quoteState.quote.supplyPoolFee / 10_000}% · Boss pool fee: {quoteState.quote.bossPoolFee / 10_000}%
@@ -372,7 +541,7 @@ export function BossActions({
               <span className="ml-2">{player.hasAttacked ? "ATTACKED" : "NO ATTACK YET"}</span>
             </p>
             {!defeated && <><ReadinessRow step="A" title="Router allowance" state={!quoteState ? "waiting" : !quoteFresh ? "stale" : attackApproval?.approvalNeeded ? "needed" : "ready"}>
-              {!quoteState ? <p className="text-xs text-muted">Get the public quote above before approving the attack input.</p> : (
+              {!quoteState ? <p className="text-xs text-muted">The public quote loads automatically before approval or attack.</p> : (
                 <>
                   {attackApproval && (
                     <p className="text-xs text-muted">
@@ -387,7 +556,7 @@ export function BossActions({
                       Approve MockUSD for BossRouter
                     </ActionButton>
                   )}
-                  {!quoteFresh && <p className="mt-1 text-xs text-danger">Requote first. An old stage, amount, account, chain, or deployment cannot be used.</p>}
+                  {!quoteFresh && <p className="mt-1 text-xs text-danger">Waiting for a fresh quote. Bounds from an earlier stage, amount, account, chain, or deployment cannot be used.</p>}
                 </>
               )}
             </ReadinessRow>
@@ -492,7 +661,7 @@ export function BossActions({
       )}
     </div>
   );
-}
+});
 
 function ReadinessRow({
   step,
@@ -509,7 +678,7 @@ function ReadinessRow({
     ready: "READY",
     needed: "ACTION NEEDED",
     waiting: "WAITING",
-    stale: "REQUOTE",
+    stale: "REFRESHING",
     closed: "CLOSED",
   }[state];
   return (
@@ -618,6 +787,20 @@ function WriteStatus({ state, hpToken, rewardToken }: {
   }
   if (state.status === "idle") return null;
   return <p className={`mt-4 break-words text-xs ${state.status === "rejected" ? "text-muted" : "text-danger"}`} role="status">{state.status.toUpperCase()}: {state.message}{state.hash ? ` · ${state.hash}` : ""}</p>;
+}
+
+function ApprovalWriteStatus({ state }: { state: Arena["writeState"] }) {
+  if (state.status === "idle") return null;
+  const message = state.status === "prompting"
+    ? "Confirm MockUSD approval in your wallet."
+    : state.status === "pending"
+      ? "Approval submitted. Waiting for its confirmed receipt."
+      : state.status === "unresolved"
+        ? `Approval is unresolved: ${state.message}`
+        : state.status === "confirmed"
+          ? `Approval receipt confirmed · ${state.record.request.hash}. Checking the resulting allowance.`
+          : `${state.status.toUpperCase()}: ${state.message}${state.hash ? ` · ${state.hash}` : ""}`;
+  return <p className="mt-3 break-all text-xs text-[#2b4a8b]" role="status">{message}</p>;
 }
 
 function recoveredSummary(result: unknown, hpToken?: { symbol: string; decimals: number }, rewardToken?: { symbol: string; decimals: number }): string {
