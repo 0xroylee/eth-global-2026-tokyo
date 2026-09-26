@@ -93,8 +93,14 @@ export function GameShell() {
       event.preventDefault();
       setShowChain(false);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [showChain]);
+
+  const chainWasOpen = useRef(false);
+  useEffect(() => {
+    if (chainWasOpen.current && !showChain) focusHubCanvas();
+    chainWasOpen.current = showChain;
   }, [showChain]);
 
   const closeBoss = useCallback(() => setOpenBoss(null), []);
@@ -157,7 +163,19 @@ export function GameShell() {
                 aria-label="Deployment network"
                 value={arena.network}
                 disabled={overlayOpen}
-                onChange={(event) => arena.selectNetwork(event.target.value as NetworkKey)}
+                onChange={(event) => {
+                  arena.selectNetwork(event.target.value as NetworkKey);
+                  focusHubCanvas();
+                }}
+                onBlur={(event) => {
+                  const next = event.relatedTarget;
+                  if (next instanceof Element && next.closest("header")) return;
+                  focusHubCanvas();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Escape") return;
+                  focusHubCanvas();
+                }}
                 className="ml-2 bg-transparent text-fog outline-none"
               >
                 <option value="local">LOCAL · 31337</option>
@@ -285,6 +303,13 @@ export function GameShell() {
       )}
     </main>
   );
+}
+
+function focusHubCanvas() {
+  const canvas = document.querySelector("main canvas");
+  if (!(canvas instanceof HTMLCanvasElement)) return;
+  canvas.tabIndex = -1;
+  canvas.focus({ preventScroll: true });
 }
 
 function shortAddress(address: Address): string {
