@@ -77,3 +77,19 @@ _Avoid_: Merely transferring tokens to PoolManager, unrestricted token minting.
 **Refill**:
 A game-controlled BossHP-to-Attack Token exchange funded by stage reserve to restore the lower battle-pool price between stages. It earns no damage or contribution.
 _Avoid_: A player sell-back, free HP, a new attack.
+
+**BoostPad**:
+The maker's factory page, where a connected wallet describes a new boss pool. The description is ready for a contract handoff and is not a deployed round.
+_Avoid_: The live battle, a funded round.
+
+**Pool deposit**:
+The amount of the chosen token a maker puts into a described boss pool. The final prize is a maker-set percentage of this deposit, released only when the final stage is cleared.
+_Avoid_: Target volume, a per-stage prize, the live prize escrow.
+
+**Target volume**:
+The trading volume a maker sets on a boss description.
+_Avoid_: Pool deposit, prize.
+
+**Stage count**:
+The number of stages on a boss description, from one to three. Each stage has an image chosen from the existing boss images.
+_Avoid_: Changing the live round, which still has three stages.
