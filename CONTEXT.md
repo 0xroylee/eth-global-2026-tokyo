@@ -1,6 +1,17 @@
 # Boss Pool domain language
 
-Boss Pool is a sponsor-funded fight where players spend ROY to buy BossHP. Damage counts cumulative authorized purchases, while eligible BossHP represents a share of the prize. Attacks do not burn tokens.
+Boss Pool is a sponsor-funded fight where players buy a boss's token through authorized swaps. Factory bosses sell an existing meme token as HP and record prize credit for the buyer separately. The standalone demo sells fixed-supply BossHP whose eligible tokens carry reward rights. Attacks do not burn tokens.
+
+**Boss Factory**:
+A permissionless launchpad that creates and funds one isolated encounter per launch, using a creator-selected ERC-20 as HP. The creator supplies the prize and staged token allocation.
+
+**Meme-token HP**:
+The actual existing ERC-20 purchased from a factory boss's pool and delivered to the player. Its transfers do not move earned prize credit. HP measures purchased token units, not a separate token wrapper.
+
+**Reward credit**:
+An attacker's unclaimed purchase amount in one factory boss. After victory it can be consumed for a proportional prize while the player keeps the purchased tokens. Existing token balances and activity in other bosses provide no credit.
+
+The language below describes the standalone BossHP demo unless it specifies a factory boss. See [Boss Factory](docs/boss-factory.md) for its contract interface and accounting.
 
 ## Language
 

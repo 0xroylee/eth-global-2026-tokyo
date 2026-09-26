@@ -5,7 +5,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {BossHP} from "./BossHP.sol";
 import {BossHook} from "./BossHook.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
@@ -33,7 +32,8 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         SeedSupply,
         Setup,
         Attack,
-        Transition
+        Transition,
+        Recover
     }
 
     struct AttackRequest {
@@ -41,6 +41,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         uint256 maxMockUSD;
         uint256 minRoyOut;
         uint256 minBossHPOut;
+        uint256 maxRoy;
         uint8 stage;
         uint256 deadline;
     }
@@ -58,7 +59,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
     IPoolManager public immutable manager;
     IERC20 public immutable mockUSD;
     IERC20 public immutable roy;
-    BossHP public immutable bossHP;
+    IERC20 public immutable bossHP;
     BossHook public bossHook;
     PoolKey private _supplyPoolKey;
     PoolKey private _bossPoolKey;
@@ -66,8 +67,11 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
     address public activePlayer;
     uint8 public expectedStage;
     uint8 public pendingStage;
+    uint256 public activeMockUSDSpent;
+    uint256 public activeRoyBought;
     bool public supplyPoolSeeded;
     bool public activated;
+    bool public liquidityRecovered;
 
     error InvalidSetup();
     error InvalidAttack();
@@ -89,12 +93,14 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         uint256 royRefunded
     );
     event StageRefilled(uint8 indexed clearedStage, uint256 bossHPIn, uint256 royRecovered, uint8 nextStage);
+    event ReservesRecovered(address indexed maker);
 
-    constructor(IPoolManager manager_, IERC20 mockUSD_, IERC20 roy_, BossHP bossHP_, address initialOwner)
+    constructor(IPoolManager manager_, IERC20 mockUSD_, IERC20 roy_, IERC20 bossHP_, address initialOwner)
         Ownable(initialOwner)
     {
         require(address(manager_) != address(0) && address(mockUSD_) != address(0) && address(roy_) != address(0));
         require(address(bossHP_) != address(0));
+        require(address(mockUSD_) != address(roy_) && address(mockUSD_) != address(bossHP_) && address(roy_) != address(bossHP_));
         manager = manager_;
         mockUSD = mockUSD_;
         roy = roy_;
@@ -115,6 +121,9 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
 
     function setHook(BossHook hook_) external onlyOwner {
         if (address(bossHook) != address(0) || address(hook_).code.length == 0 || activated) revert InvalidSetup();
+        if (address(hook_.router()) != address(this) || address(hook_.manager()) != address(manager)
+            || address(hook_.mockUSD()) != address(mockUSD) || address(hook_.roy()) != address(roy)
+            || address(hook_.bossHP()) != address(bossHP)) revert InvalidSetup();
         bossHook = hook_;
         Currency bossCurrency = Currency.wrap(address(bossHP));
         Currency royCurrency = Currency.wrap(address(roy));
@@ -152,7 +161,7 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
     {
         if (
             address(bossHook) == address(0) || block.timestamp >= bossHook.deadline() || supplyPoolSeeded
-                || activated || liquidity == 0
+                || bossHook.externalHP() || activated || liquidity == 0
                 || tickLower >= tickUpper || tickLower % TICK_SPACING != 0 || tickUpper % TICK_SPACING != 0
         ) revert InvalidSetup();
         uint160 lowerSqrt = TickMath.getSqrtPriceAtTick(tickLower);
@@ -172,11 +181,11 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
 
     function activate() external onlyOwner nonReentrant {
         if (
-            activated || mode != Operation.Idle || !supplyPoolSeeded || address(bossHook) == address(0)
+            activated || mode != Operation.Idle || address(bossHook) == address(0)
                 || block.timestamp >= bossHook.deadline()
-                || bossHP.balanceOf(address(this)) != bossHP.totalSupply()
+                || (!bossHook.externalHP() && (!supplyPoolSeeded || bossHP.balanceOf(address(this)) != bossHP.totalSupply()))
                 || bossHP.balanceOf(address(this)) < minimumBossHPForVictoryPath()
-                || !bossHook.prizeFunded() || mockUSD.balanceOf(address(bossHook)) < bossHook.originalPrize()
+                || !bossHook.prizeFunded() || bossHook.rewardToken().balanceOf(address(bossHook)) < bossHook.originalPrize()
         ) revert InvalidSetup();
 
         mode = Operation.Setup;
@@ -208,12 +217,16 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
                 || attackStage != bossHook.currentStage() || bossHook.status() != BossHook.RoundStatus.Active
         ) revert InvalidAttack();
 
-        mockUSD.safeTransferFrom(msg.sender, address(this), maxMockUSD);
+        {
+            uint256 balanceBefore = mockUSD.balanceOf(address(this));
+            mockUSD.safeTransferFrom(msg.sender, address(this), maxMockUSD);
+            if (mockUSD.balanceOf(address(this)) - balanceBefore != maxMockUSD) revert InvalidAttack();
+        }
         mode = Operation.Attack;
         activePlayer = msg.sender;
         expectedStage = attackStage;
         bytes memory result = manager.unlock(
-            abi.encode(AttackRequest(msg.sender, maxMockUSD, minRoyOut, minBossHPOut, attackStage, callDeadline))
+            abi.encode(AttackRequest(msg.sender, maxMockUSD, minRoyOut, minBossHPOut, 0, attackStage, callDeadline))
         );
         (mockUSDSpent, royBought, roySpent, bossHPOut) = abi.decode(result, (uint256, uint256, uint256, uint256));
 
@@ -226,11 +239,57 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
         emit AttackExecuted(msg.sender, attackStage, mockUSDSpent, royBought, roySpent, bossHPOut, mockUSDRefunded, royRefunded);
     }
 
+    /// @notice Buy this boss's token with the held attack currency, without requiring a supply pool.
+    function attackWithRoy(uint256 maxRoy, uint256 minBossHPOut, uint8 attackStage, uint256 callDeadline)
+        external nonReentrant returns (uint256 roySpent, uint256 bossHPOut)
+    {
+        if (!activated || mode != Operation.Idle || maxRoy == 0 || maxRoy > uint256(uint128(type(int128).max))
+            || minBossHPOut == 0 || block.timestamp >= bossHook.deadline() || callDeadline < block.timestamp
+            || callDeadline > bossHook.deadline() || attackStage != bossHook.currentStage()
+            || bossHook.volumeTargetMockUSD() != 0
+            || bossHook.status() != BossHook.RoundStatus.Active) revert InvalidAttack();
+        {
+            uint256 balanceBefore = roy.balanceOf(address(this));
+            roy.safeTransferFrom(msg.sender, address(this), maxRoy);
+            if (roy.balanceOf(address(this)) - balanceBefore != maxRoy) revert InvalidAttack();
+        }
+        mode = Operation.Attack;
+        activePlayer = msg.sender;
+        expectedStage = attackStage;
+        {
+            bytes memory result = manager.unlock(
+                abi.encode(AttackRequest(msg.sender, 0, 0, minBossHPOut, maxRoy, attackStage, callDeadline))
+            );
+            (,, roySpent, bossHPOut) = abi.decode(result, (uint256, uint256, uint256, uint256));
+        }
+        if (maxRoy > roySpent) roy.safeTransfer(msg.sender, maxRoy - roySpent);
+        mode = Operation.Idle;
+        activePlayer = address(0);
+        expectedStage = 0;
+        emit AttackExecuted(msg.sender, attackStage, 0, 0, roySpent, bossHPOut, 0, maxRoy - roySpent);
+    }
+
+    /// @notice External-token makers recover LP proceeds and unused reserves after the fixed deadline.
+    function recoverAfterDeadline() external onlyOwner nonReentrant {
+        if (!activated || !bossHook.externalHP() || block.timestamp < bossHook.deadline()
+            || mode != Operation.Idle || liquidityRecovered) revert InvalidSetup();
+        if (bossHook.status() == BossHook.RoundStatus.Active) bossHook.expire();
+        liquidityRecovered = true;
+        mode = Operation.Recover;
+        manager.unlock(bytes(""));
+        mode = Operation.Idle;
+        bossHP.safeTransfer(owner(), bossHP.balanceOf(address(this)));
+        roy.safeTransfer(owner(), roy.balanceOf(address(this)));
+        mockUSD.safeTransfer(owner(), mockUSD.balanceOf(address(this)));
+        emit ReservesRecovered(owner());
+    }
+
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
         if (msg.sender != address(manager)) revert InvalidCallback();
         if (mode == Operation.SeedSupply) return _seedSupplyCallback(data);
         if (mode == Operation.Setup) return _activateCallback();
         if (mode == Operation.Attack) return _attackCallback(data);
+        if (mode == Operation.Recover) return _recoverCallback();
         revert InvalidCallback();
     }
 
@@ -280,9 +339,29 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
                 || bossHook.status() != BossHook.RoundStatus.Active
         ) revert InvalidCallback();
 
-        AttackResult memory result = _executeTwoHop(request);
+        if (bossHook.volumeTargetMockUSD() != 0) {
+            uint256 remaining = bossHook.remainingStageVolume();
+            if (request.maxMockUSD > remaining) request.maxMockUSD = remaining;
+            if (request.maxMockUSD == 0) revert InvalidCallback();
+        }
+        AttackResult memory result = request.maxMockUSD == 0 ? _executeDirect(request) : _executeTwoHop(request);
         if (bossHook.status() == BossHook.RoundStatus.StageCleared) _runTransition(request.stage);
         return abi.encode(result.mockUSDSpent, result.royBought, result.roySpent, result.bossHPOut);
+    }
+
+    function _executeDirect(AttackRequest memory request) private returns (AttackResult memory result) {
+        bool zeroForOne = !bossHook.bossIsCurrency0();
+        uint160 limit = bossHook.bossIsCurrency0() ? bossHook.sqrtUpperX96() : bossHook.sqrtLowerX96();
+        BalanceDelta delta = manager.swap(
+            _bossPoolKey, SwapParams(zeroForOne, -int256(request.maxRoy), limit), bytes("")
+        );
+        result.roySpent = _inputAmount(delta, zeroForOne);
+        result.bossHPOut = _outputAmount(delta, zeroForOne);
+        if (result.roySpent > request.maxRoy || result.bossHPOut < request.minBossHPOut) revert SlippageExceeded();
+        _settle(Currency.wrap(address(roy)), result.roySpent);
+        _deliverHP(request.player, result.bossHPOut);
+        _assertZero(Currency.wrap(address(roy)));
+        _assertZero(Currency.wrap(address(bossHP)));
     }
 
     function _executeTwoHop(AttackRequest memory request) private returns (AttackResult memory result) {
@@ -301,21 +380,50 @@ contract BossRouter is IUnlockCallback, Ownable, ReentrancyGuard {
 
         bool bossZeroForOne = !bossHook.bossIsCurrency0();
         uint160 bossLimit = bossHook.bossIsCurrency0() ? bossHook.sqrtUpperX96() : bossHook.sqrtLowerX96();
+        activeMockUSDSpent = result.mockUSDSpent;
+        activeRoyBought = result.royBought;
         BalanceDelta attackDelta = manager.swap(
             _bossPoolKey, SwapParams(bossZeroForOne, -int256(result.royBought), bossLimit), bytes("")
         );
         result.roySpent = _inputAmount(attackDelta, bossZeroForOne);
         result.bossHPOut = _outputAmount(attackDelta, bossZeroForOne);
+        activeMockUSDSpent = 0;
+        activeRoyBought = 0;
         if (result.bossHPOut < request.minBossHPOut || result.roySpent > result.royBought) revert SlippageExceeded();
 
         Currency bossCurrency = Currency.wrap(address(bossHP));
         Currency royCurrency = Currency.wrap(address(roy));
-        manager.take(bossCurrency, request.player, result.bossHPOut);
+        _deliverHP(request.player, result.bossHPOut);
         uint256 unusedRoy = result.royBought - result.roySpent;
         if (unusedRoy != 0) manager.take(royCurrency, request.player, unusedRoy);
         _assertZero(mockCurrency);
         _assertZero(royCurrency);
         _assertZero(bossCurrency);
+    }
+
+    function _deliverHP(address player, uint256 amount) private {
+        uint256 balanceBefore = bossHP.balanceOf(player);
+        manager.take(Currency.wrap(address(bossHP)), player, amount);
+        if (bossHP.balanceOf(player) - balanceBefore != amount) revert InvalidAttack();
+    }
+
+    function _recoverCallback() private returns (bytes memory) {
+        for (uint8 stage; stage <= bossHook.currentStage(); stage++) {
+            uint128 liquidity = bossHook.stageLiquidity(stage) - (stage == 0 ? 0 : bossHook.stageLiquidity(stage - 1));
+            manager.modifyLiquidity(_bossPoolKey, ModifyLiquidityParams(
+                bossHook.LOWER_TICK(), bossHook.UPPER_TICK(), -int256(uint256(liquidity)), bytes32(uint256(stage + 1))
+            ), bytes(""));
+        }
+        Currency hp = Currency.wrap(address(bossHP));
+        Currency payment = Currency.wrap(address(roy));
+        int256 hpDelta = manager.currencyDelta(address(this), hp);
+        int256 paymentDelta = manager.currencyDelta(address(this), payment);
+        if (hpDelta < 0 || paymentDelta < 0) revert InvalidSetup();
+        if (hpDelta > 0) manager.take(hp, address(this), uint256(hpDelta));
+        if (paymentDelta > 0) manager.take(payment, address(this), uint256(paymentDelta));
+        _assertZero(hp);
+        _assertZero(payment);
+        return bytes("");
     }
 
     function _runTransition(uint8 clearedStage) private {

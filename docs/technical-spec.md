@@ -1,8 +1,32 @@
 # Boss Pool technical specification
 
-Status: BP01 implements local no-burn contracts, transferable HP redemption and the shared real-v4 fixture. Four focused cases pass: the full HP0 round/claims path, an HP1 normalized-price/refill regression, deadline setup rejection and expiry. The workspace/local read shell is separate from the still-unimplemented full game UI. Base Sepolia deployment remains unverified; Robinhood receipts are historical.
+Status: The local real-v4 fixture covers the standalone BossHP round and the volume-based Boss Factory. Eight focused cases pass, including both factory token orderings, 6-decimal MEME, three-stage MockUSD volume settlement, MEME prizes, and atomic refill rollback. The workspace/local read shell is separate from the still-unimplemented full game UI. Base Sepolia deployment remains unverified; Robinhood receipts are historical.
 
 ## Architecture
+
+### Volume-based factory stage settlement
+
+The [launch requirements](requirements.md#volume-based-meme-token-launch) define the creator inputs: MEME allocation, prize percentage, MockUSD volume target, and deadline. `BossFactory.quoteLaunch` derives the prize amount, the saleable budget, an attack-token rate bound, and the hook's starting tick from the shared MockUSD/ROY pool. It rejects insufficient allocations and unavailable supply pools. The testnet model does not need an external MEME/USD price feed.
+
+The hook reserves the configured percentage of the deposited MEME as prize. Of the remaining battle allocation, the factory makes 99% eligible for sale in three stages split 1:2:3. The other 1% covers controller refill fees, LP rounding, and reserve headroom. The quote also checks that the exact liquidity and refill amounts fit within the deposited battle allocation.
+
+BossRouter runs one authenticated unlock for each player attack. It buys ROY with MockUSD, then spends ROY in the per-boss MEME pool. The hook calculates eligible MockUSD as `floor(MockUSDSpent * ROYSpent / ROYBought)`. Returned ROY receives no volume credit. The router limits the first hop to the current stage's remaining MockUSD threshold. Factory rounds reject the direct held-ROY attack route.
+
+The hook caps cumulative MEME output at `floor(saleBudget * totalVolume / volumeTarget)`. This prevents accepted attacks from exhausting the funded inventory before the volume target. The factory also limits each first-hop ROY output to the quoted spot rate plus 10%. A quote or attack fails when required reserves, output bounds, or token transfers do not satisfy the configured accounting.
+
+At each 1:2:3 volume threshold, BossRouter refills the existing pool positions to the start price and adds the next incremental position in the same unlock. Unsold MEME may remain in those positions. Transition swaps add no player volume. If the refill or LP addition fails, the attack, token delivery, volume credit, and stage change all revert.
+
+At final defeat, the hook freezes actual player MEME output as `finalEligibleHP` and enables proportional rewards from the MEME prize escrow. Per-player reward credit remains separate from token balances and cannot move between bosses. Players keep their bought tokens when they claim. The standalone BossHP branch retains its token-exhaustion stages and existing reward custody path.
+
+Uniswap v4 supports swap and liquidity changes within one unlocked `PoolManager` callback, with every balance delta settled before the unlock closes. See [Uniswap v4 flash accounting](https://developers.uniswap.org/docs/protocols/v4/concepts/flash-accounting). This project supplies the game-specific volume caps, price quote, stage checks, and reward accounting around those core operations.
+
+### Current implementation
+
+The [Boss Factory reference](boss-factory.md) defines the implemented permissionless extension. Each factory launch uses an existing ERC-20 for HP and deploys an isolated hook, router, and collectibles contract. Factory attacks require MockUSD, and the prize is paid in the same MEME token players buy. The standalone contract path retains token-exhaustion stages and token redemption.
+
+The factory pins router and hook creation-code hashes. Launch transactions supply the matching code, which the factory validates before deployment. This avoids embedding both large contracts in the factory's runtime or initcode. Foundry uses the Solidity IR optimizer to keep the router below the runtime size limit. Generated factory and updated game ABIs are exported through `packages/chain`.
+
+The contract lifecycle details below describe the standalone BossHP mode. Factory behavior is described above. Its fixed tick range is the zero-starting-tick instance of the factory's configurable 1,920-tick range. Refill input calculation accounts for a bitmap-word boundary in either token orientation.
 
 ```mermaid
 flowchart LR
@@ -23,7 +47,7 @@ Use two custom core contracts: BossHook and BossRouter. BossRouter combines the 
 
 BossHook is attached to the ROY/BossHP pool. The MockUSD/ROY supply pool can use ordinary v4 behavior without a game hook. Locks on the game's supply LP allocation are enforced by its controlled position owner, not by restricting the entire supply market.
 
-### Proposed contract boundaries
+### Standalone contract boundaries
 
 These boundaries guide the implementation. Actual BP01 source uses `BossHP`, `RoyToken`, `MockUSD` and `BossCollectibles` under `contracts/src`; generated ABI is authoritative. There is no LP/treasury/fee recovery path in this foundation, so those assets remain locked. Recovery, complete game UI and production NFT metadata remain downstream work.
 
@@ -42,11 +66,11 @@ BossHook is the sole source of stage state. BossRouter has a bounded execution m
 
 Hook state includes `status`, `currentStage`, `stageSold[3]`, registered position data, `originalPrize`, `finalEligibleHP`, and `redeemedHP`. Keep `hasAttacked` and `victoryClaimed` for the optional victory-NFT rules. Fresh wallets can attack without enrollment. Token payouts do not need a per-wallet damage amount or once-per-wallet token claim flag.
 
-Use zero-based `currentStage` values 0, 1 and 2 in the contract ABI and `expectedStage`; the UI displays stage 1, 2 and 3. Keep the final index at 2 after defeat. Human stage labels in diagrams and historical prototype results are not array indices. BP01 freezes generated view/event shapes with this convention.
+For both round modes, use zero-based `currentStage` values 0, 1 and 2 in the contract ABI and `expectedStage`; the UI displays stage 1, 2 and 3. Keep the final index at 2 after defeat. Human stage labels in diagrams and historical prototype results are not array indices. BP01 freezes generated view/event shapes with this convention.
 
 The router's transition sequence is a private implementation step, not an arbitrary public stage-release command. Its calls into the hook are restricted to the configured router and current transition context. The hook verifies the registered price/liquidity result before advancing the stage exactly once. A failed verification reverts the entire attack transaction.
 
-The hook holds the sponsor-funded MockUSD prize. There are no entry proceeds. The prize ledger funds victory claims or the maker's expired-round refund. Attack/LP funds never borrow from it. Surrendered HP is never approved to the router or exposed through a generic recovery function. Reserve/LP HP stays under router control until the reward restrictions allow release.
+The standalone hook holds the sponsor-funded MockUSD prize. Factory hooks hold the configured MEME prize. There are no entry proceeds. The prize ledger funds victory claims or the maker's expired-round refund. Attack/LP funds never borrow from it. Surrendered HP is never approved to the router or exposed through a generic recovery function. Reserve/LP HP stays under router control until the reward restrictions allow release.
 
 ### Monorepo and ownership
 
@@ -83,7 +107,7 @@ Use a viem public client with the configured HTTP RPC for reads, simulations, an
 
 The wallet flow must handle account permission, network switching, rejection, `accountsChanged`, `chainChanged`, and disconnect events. Remove provider listeners on cleanup and discard stale player reads and quotes after an account or chain change. Recheck the selected account, chain, and expected stage before a write. Keep public round reads available without a connected wallet. [EIP-1193 provider API](https://eips.ethereum.org/EIPS/eip-1193)
 
-Preserve the existing approval, simulation, receipt, and stale-stage rules. Attacks approve MockUSD to BossRouter only when allowance is insufficient; redemption approves BossHP to BossHook. Each attack buys ROY and BossHP in one transaction without an entry-NFT mint. Keep victory-NFT claims separate. Derive damage and stage transitions from confirmed receipts and refreshed canonical state.
+Preserve the existing approval, simulation, receipt, and stale-stage rules. Standalone attacks approve MockUSD to BossRouter; factory attacks use the same approval and buy ROY and MEME in one transaction. Factory prize claims do not require MEME approval. Keep victory-NFT claims separate. Derive damage and stage transitions from confirmed receipts and refreshed canonical state.
 
 ## Deployment and proof gate
 
@@ -120,7 +144,7 @@ The hook callback sender is a router or liquidity manager, not automatically the
 
 Whitelisting the shared PositionManager address alone does not authenticate a stage release: other users can call it too. Validate an active release context tied to the trusted reserve/controller, canonical key, stage, position action, asset maxima, and expected owner. Reject arbitrary external LP additions to the Boss pool that bypass this plan.
 
-## One atomic attack
+## Standalone BossHP attack
 
 Primary inputs are MockUSD input cap, minimum ROY output, minimum BossHP output/damage, expected stage, and deadline. No burn cap or physical/magic selector remains. An approval transaction may precede Attack.
 
@@ -139,7 +163,7 @@ ROY input remains in LP assets until an authorized refill exchanges reserve HP f
 
 This path uses ordinary v4 output settlement and a state-only `afterSwap`, without custom output accounting. See the pinned [hook dispatch](https://github.com/Uniswap/v4-core/blob/46c6834698c48bc4a463a86d8420f4eb1d7f3b75/src/libraries/Hooks.sol) and [flash accounting](https://developers.uniswap.org/docs/protocols/v4/concepts/flash-accounting).
 
-## Actual stage liquidity release
+## Standalone BossHP liquidity release
 
 Stage 1 positions are funded at activation. Stage 2 and 3 assets remain in the gated reserve until their predecessors clear. Token transfers to PoolManager or a frontend stage animation do not constitute an LP release.
 
@@ -153,7 +177,7 @@ Keep additions separate from LP withdrawals. Old positions stay in place through
 
 The existing callback guard must not block its own intended authenticated LP addition. Conversely, v4 hook self-call suppression must not provide an unrestricted bypass. Preserve PoolManager authentication and the narrow release context rather than a blanket callback reentrancy guard that prevents the legitimate nested liquidity callback.
 
-## HP quotas and liveness
+## Standalone BossHP quotas and liveness
 
 Stage HP is [300, 600, 900] in BossHP base-unit equivalents. At a successful attack:
 
@@ -171,7 +195,7 @@ Do not require `stageSold == nominalStageHP`: rounding can leave an unsellable b
 
 Each request pins expectedStage. A transaction that arrives after another player advances the stage reverts and requires a new quote. Within a clearing attack, pending-next-stage state prevents damage spilling into the next allocation.
 
-## Funds and lifecycle
+## Standalone BossHP funds and lifecycle
 
 Keep these balances and authorities separate:
 
@@ -186,7 +210,7 @@ Ordinary LP principal withdrawals are blocked from activation through the fixed 
 
 Attacks stop at the deadline. If the boss survives, anyone can expire the round and the maker can reclaim the unawarded prize once. If stage 3 was defeated earlier, there is no prize refund to the maker. Attack purchases are not refundable through expiry.
 
-## Rewards and client interface
+## Standalone BossHP rewards and client interface
 
 Use integer base units, bigint in TypeScript, and decimal strings in JSON. Freeze `originalPrize` and `finalEligibleHP = sum(stageSold)` at final defeat. The worked default is `claimReward(hpAmount)`: atomically take that many eligible BossHP into permanent claim custody and pay `floor(originalPrize * hpAmount / finalEligibleHP)` with full-precision multiplication/division. Reuse SafeERC20, guard reentrancy, update redeemed/paid totals before external calls, and revert the entire operation on any failure. Require a positive payout and cumulative redeemed HP no greater than the frozen eligible supply. Do not return, lend, approve, or withdraw redeemed HP back into circulation.
 

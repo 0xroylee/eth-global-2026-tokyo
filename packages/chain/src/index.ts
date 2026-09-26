@@ -13,6 +13,7 @@ import {
 } from "./generated/abi";
 
 export {
+  bossFactoryAbi,
   bossCollectiblesAbi,
   bossHpAbi,
   bossPoolHookAbi,

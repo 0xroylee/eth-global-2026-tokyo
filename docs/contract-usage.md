@@ -1,6 +1,6 @@
 # Use the Boss Pool contracts
 
-This guide covers the contracts that exist in `contracts/src`. The local deployment script creates an active round on Anvil. The Foundry fixture exercises a separate two-wallet round through all three stages and claims. The browser app reads state. It does not send transactions.
+This guide covers the standalone BossHP demo. The [Boss Factory reference](boss-factory.md) documents volume-targeted MEME launches, where the prize is paid in the selected token. The local deployment script creates an active standalone round on Anvil. The Foundry fixture exercises a separate two-wallet round through all three stages and claims. The browser app reads state. It does not send transactions.
 
 ## Run the local deployment
 
@@ -135,7 +135,7 @@ new MockUSD()
 new RoyToken(address initialHolder, uint256 initialSupply)
 new BossHP(address initialHolder, uint256 initialSupply)
 new BossCollectibles(address initialOwner)
-new BossRouter(IPoolManager manager, IERC20 mockUSD, IERC20 roy, BossHP bossHP, address initialOwner)
+new BossRouter(IPoolManager manager, IERC20 mockUSD, IERC20 roy, IERC20 bossHP, address initialOwner)
 new BossHook(
     IPoolManager manager,
     IBossRouterContext router,
@@ -144,10 +144,11 @@ new BossHook(
     IERC20 bossHP,
     BossCollectibles collectibles,
     address maker,
-    uint256 prizeAmount,
-    uint256 deadline
+    BossHook.RoundConfig config
 )
 ```
+
+The standalone script passes `BossHook.RoundConfig(prizeAmount, deadline, 300e18, 0, false)`. Factory launches set the final field to `true` and configure their own allocation and starting tick.
 
 BossHP sorting changes the raw tick bounds but keeps the human ROY-per-HP band fixed. If BossHP is currency0, the Hook uses ticks `[0,1920]`. If BossHP is currency1, it uses `[-1920,0]`. Read `bossIsCurrency0()`, `LOWER_TICK()`, `UPPER_TICK()`, and the square-root price getters. Do not infer the band from token addresses yourself.
 
@@ -164,7 +165,7 @@ The following ABI signatures use the actual caller and argument types. ERC20 `ap
 | `BossRouter.setHook(address hook_)` | Router owner | Once, before activation |
 | `BossCollectibles.setMinter(address gameHook)` | Collectibles owner | Once |
 | `BossRouter.seedSupplyPool(uint160 initialSqrtPriceX96, int24 tickLower, int24 tickUpper, uint128 liquidity)` | Router owner | Once before the deadline, with an interior price and enough sellable ROY |
-| `BossHook.fundPrize()` | Immutable maker | Approve MockUSD to Hook first, then call before activation |
+| `BossHook.fundPrize()` | Any funder | Approve MockUSD to Hook first. Fund once, before activation and the deadline. The immutable maker retains expiry-refund rights. |
 | `BossRouter.activate()` | Router owner | Before the deadline, after pool seed and all custody checks pass |
 | `BossRouter.attackWithMockUSD(uint256 maxMockUSD, uint256 minRoyOut, uint256 minBossHPOut, uint8 attackStage, uint256 callDeadline) returns (uint256 mockUSDSpent, uint256 royBought, uint256 roySpent, uint256 bossHPOut)` | Any player | Approve MockUSD to Router when needed. Round must be Active. Use a fresh stage and set both deadlines. |
 | `BossHook.claimReward(uint256 hpAmount) returns (uint256 payout)` | Any eligible HP holder | Round must be Defeated. Approve BossHP to Hook and request a positive payout. |
@@ -309,7 +310,7 @@ The Hook enum values are 0 for Setup, 1 for Active, 2 for StageCleared, 3 for De
 
 ## Limits of the current implementation
 
-The contracts have no public BossHP sell-back route, held-ROY attack route, LP removal method, fee collection method, treasury withdrawal, or generic token recovery. `beforeRemoveLiquidity` always reverts. Router-held reserves and LP assets remain locked, including after all HP rewards are redeemed. The expired-round path refunds only the original MockUSD prize. `BossCollectibles` has no configured metadata URI.
+The standalone BossHP round has no public sell-back or LP removal route. Its expired-round path refunds the original MockUSD prize. Factory rounds add volume-metered MEME rewards and post-deadline recovery; see the [Boss Factory reference](boss-factory.md). `BossCollectibles` has no configured metadata URI.
 
 The local Foundry suite runs the full two-wallet HP0 flow against a pinned real PoolManager, including three stages, claims, and NFTs. A focused HP1 test covers normalized price and the first stage refill. The local Anvil exercise completes the full two-wallet flow with BossHP as currency1, including both refills and reward claims. `local:seed` and `local:exercise` send transactions only to loopback Anvil; `local:smoke` is read-only. The browser app remains read-only.
 

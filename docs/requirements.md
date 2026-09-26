@@ -4,6 +4,52 @@ Status: attacks count purchases without burns, and reward shares follow eligible
 
 ## Confirmed gameplay
 
+### Permissionless meme-token bosses
+
+#### Volume-based meme-token launch
+
+The creator selects an existing meme token from their wallet, enters their own total meme-token allocation, sets a target trading volume in MockUSD, and chooses a prize percentage. No fixed allocation such as one million tokens is required. The launch preview must calculate funding from those inputs and the pool-pricing policy.
+
+Confirmed in the product discussion:
+
+- Players use MockUSD to buy the attack token, then spend the attack token to buy the selected meme token.
+- The route uses a MockUSD/attack-token supply pool and a newly created attack-token/meme-token boss pool. Each boss creates its own second pool. Purchases for the encounter occur in that new boss pool.
+- The target is denominated in MockUSD and refers to actual player purchases. Controller refills and token transfers do not earn progress. The two swaps in one purchase must not be counted as two contributions to the target.
+- Victory depends on reaching the actual recorded MockUSD purchase-volume target. It is not merely a launch-time estimate of the cost of selling a token allocation.
+- For the testnet version, derive the initial price from the launch inputs and pool configuration. An external meme-token market price is not required. Production price sourcing remains a separate decision.
+- The victory prize is paid in the selected meme token and is a percentage of the creator's total deposited meme-token allocation. The creator chooses both values.
+- Product discussion uses Chinese. Repository documents use English.
+
+For a total allocation `N` in meme-token base units and prize rate `r` in basis points, reserve `P = floor(N * r / 10_000)` for victory prizes. Set the remaining battle allocation to `B = N - P`. The sellable battle budget is `S = 6 * floor(floor(B * 9_900 / 10_000) / 6)`. The unsold part of `B` covers refill fees, LP rounding, and reserve headroom. The creator deposits all `N` tokens at launch. The prize stays in escrow, and the battle tokens stay in the router or the boss positions.
+
+The testnet factory reads the current MockUSD/attack-token pool price. It allows quoted attack-token output to rise by 10% when checking each first-hop purchase. It sets the boss-pool starting tick so the first price cannot sell the configured battle inventory before the volume target. A quote fails when the pools or token budget cannot fund the three releases and refills.
+
+The stage-release model uses the selected volume-based victory condition. Its funding quote must establish that each stage can reach its volume threshold within the permitted pricing bounds. Funding requirements do not guarantee player participation or completion.
+
+Stage release retains the three-stage ratio of 1:2:3:
+
+| Stage | Additional eligible MockUSD volume | Cumulative threshold for a 6,000 MockUSD target | Action at the threshold |
+| --- | --- | --- | --- |
+| 1 | `floor(V / 6)` | 1,000 | Activate the second stage's incremental liquidity. |
+| 2 | `floor(V / 3)` | 3,000 | Activate the third stage's incremental liquidity. |
+| 3 | `V - floor(V / 6) - floor(V / 3)` | 6,000 | Defeat the boss and enable meme-token prize claims. |
+
+All prize and battle funding is deposited at launch. Only first-stage liquidity is active initially. The remaining incremental LP allocations and maintenance reserves stay in controlled custody until their stage gate. Reaching a volume threshold advances the stage while unsold MEME remains in its positions. Pool exhaustion is not the completion condition.
+
+The clearing transaction settles the player's purchase, records eligible MockUSD volume once, and performs the bounded refill and next-stage LP addition atomically. Volume credit is `floor(MockUSD spent * attack token spent / attack token bought)`. Returned attack tokens do not earn credit. Maintenance earns no volume or reward credit. A player attack affects only its starting stage. The router caps input at the current stage's remaining MockUSD target. A failed transition rolls back the purchase and its credit.
+
+Stage inventory must be quoted against the permitted conversion-rate and price ranges, including fees and rounding. A reserve buffer alone does not prove that the threshold remains reachable. The launch calculation and execution guards must prevent accepted purchases from exhausting the stage inventory before its volume gate. The locked prize cannot be used to fix an inventory shortfall, and future-stage reserves cannot be released early.
+
+Factory volume rounds require the MockUSD route. The legacy direct attack-currency route cannot add measured MockUSD volume and is disabled for factory bosses.
+
+The contracts implement this volume model. The game UI still uses the standalone BossHP deployment.
+
+#### Current contract implementation
+
+`BossFactory` implements the volume model. It quotes the initial MEME/attack-token price from the active MockUSD/attack-token pool and derives a 1:2:3 MEME pool stage plan. An attack spends MockUSD on both hops in one router unlock, credits only the MockUSD share attributable to attack tokens spent on MEME, and returns unused input. A completed stage performs its refill and next liquidity addition atomically. Victory prizes are paid in MEME from the creator's allocation. The launch UI and network deployment remain outstanding.
+
+### Standalone demo
+
 1. Use MockUSD / ROY as the supply pool and ROY / BossHP as a real second pool.
 2. Connect a wallet and press Attack. After any required MockUSD approval to the Router, one transaction buys ROY and then BossHP. No enrollment, entry fee, starter grant, or entry NFT is required.
 3. ROY is paid into the Boss pool. The hook adds actual BossHP output to the current stage's `stageSold`. One purchased BossHP equals one effective damage unit. The player receives the tokens, which represent reward rights; no burn occurs.

@@ -1,6 +1,6 @@
 # Boss Pool
 
-Players spend MockUSD through the supply pool to buy ROY, then BossHP through Uniswap v4. The Hook counts actual BossHP output as damage without burning tokens. Each defeated stage unlocks a new allocation of BossHP liquidity. After final defeat, eligible BossHP represents a share of the sponsor-funded prize.
+The standalone game uses MockUSD to buy ROY, then BossHP through Uniswap v4. The permissionless Boss Factory lets a creator choose an existing MEME, an allocation, a prize percentage, and a MockUSD volume target. It derives an initial price and releases a separate MEME pool stage at each 1:2:3 volume gate. Winners claim a share of the MEME prize allocation.
 
 廣東話 pitch：MockUSD 買 ROY，ROY 換 BossHP；hook 累計買入 HP 當傷害，清一階先放下一階流動性，打贏按貢獻分獎。
 
@@ -20,7 +20,7 @@ The user confirmed this replacement for the earlier physical/magic design:
 
 ## Status
 
-The private Bun workspace, minimal read-only Vite arena, generated contract client, and local deployment flow are in place. Four focused Foundry cases pass, including the full no-burn HP0 round and a targeted HP1 first-stage/refill case. The reusable local Anvil exercise also completes both wallets through all three stages, claims, and victory NFTs. A historical team deployment completed the full two-wallet journey on Robinhood testnet. The active testnet target is Base Sepolia and needs its own deployment and verification. See the [contract usage guide](docs/contract-usage.md) and [testnet verification report](docs/testnet-verification.md). The browser remains read-only; expiry and prize refund have local Foundry coverage only.
+The private Bun workspace, minimal read-only Vite arena, generated contract client, and local deployment flow are in place. The shared real-v4 Foundry fixture passes eight focused scenarios, including volume-gated factory stages, MEME prizes, and atomic rollback. The reusable local Anvil exercise completes both wallets through the standalone BossHP stages, claims, and victory NFTs. A historical team deployment completed the full two-wallet journey on Robinhood testnet. The active testnet target is Base Sepolia and needs its own deployment and verification. See the [contract usage guide](docs/contract-usage.md) and [testnet verification report](docs/testnet-verification.md). The browser remains read-only; expiry and prize refund have local Foundry coverage only.
 
 The arena shell now runs on Next.js App Router and Tailwind CSS; the read-only round state, deployment validation, and not-deployed/error states are preserved from BP01. Direct viem wallet connection and the Phaser hub/battle scenes are the next frontend slices. See [apps/web/AGENTS.md](apps/web/AGENTS.md) for frontend rules.
 
@@ -35,6 +35,7 @@ The 1,000 MockUSD prize is a test fixture. [Refill math](docs/refill-math.md) gi
 | [Requirements](docs/requirements.md) | Confirmed gameplay and proposed bounded defaults |
 | [Technical specification](docs/technical-spec.md) | Atomic two-hop settlement and stage LP control |
 | [Contract usage guide](docs/contract-usage.md) | Local deployment, player calls, rewards, reads, and testnet status |
+| [Boss Factory](docs/boss-factory.md) | Permissionless meme-token bosses, launch configuration, prize credit, and creator withdrawals |
 | [Testnet verification](docs/testnet-verification.md) | Verified team deployment and outstanding exercise evidence |
 | [Economy](docs/economy.md) | Separate ROY/BossHP budgets and the new proof gate |
 | [HP lifecycle](docs/hp-lifecycle.md) | Purchase counters, clearing evidence, and stage release |

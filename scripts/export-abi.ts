@@ -4,6 +4,7 @@ import path from "node:path";
 const root = process.cwd();
 const outputPath = path.join(root, "packages/chain/src/generated/abi.ts");
 const contracts = {
+  BossFactory: "bossFactoryAbi",
   BossHook: "bossPoolHookAbi",
   BossRouter: "bossRouterAbi",
   BossHP: "bossHpAbi",
