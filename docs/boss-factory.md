@@ -87,11 +87,27 @@ The accounting expects ordinary ERC-20 transfers with stable balances. Funding a
 
 Damage is the purchased meme-token amount. Actual traded input and output appear in `AttackExecuted`; they are not USD notional volume without an independent conversion. Maintenance appears in `StageRefilled` and earns no player credit. The contracts create no automated trades or self-trading loops, and purchases occur in the boss's own v4 pool. They do not create volume in an unrelated existing market for the same meme token.
 
+## Base Sepolia deployment
+
 The factory deployment script is `contracts/script/DeployBossFactory.s.sol:DeployBossFactory`. It reads `BOSS_POOL_MANAGER`, `BOSS_MOCK_USD_TOKEN`, and `BOSS_ATTACK_TOKEN`, and pins hashes from the current compiled artifacts. It supports local chain 31337 and Base Sepolia 84532. Base Sepolia uses `TESTNET_DEPLOYER_PRIVATE_KEY`, as the standalone deployment does. It creates no tokens, market liquidity, or boss encounters.
 
 The creator form is available at `/launch`. The form loads the Factory from the verified Base Sepolia manifest unless `NEXT_PUBLIC_BOSS_FACTORY_BASE_SEPOLIA_ADDRESS` overrides it. The chain SDK reads the submitted token's metadata and wallet balance, quotes the launch, freezes the accepted rate, checks the compiled Router and Hook bytecode against the factory, mines a valid hook salt, requests the required MEME approval, and submits the launch. Submitted operations are persisted before receipt waiting. Read-only recovery validates the original call and events, and a root provider keeps the write lock across navigation and both approval steps. Token choices are entered by contract address; ERC-20 does not provide wallet-wide token discovery. The player attack/claim UI for Factory rounds is not implemented.
 
-The original Base Sepolia Factory was deployed at block `47330324`; its address and pinned code hashes are preserved in the [deployment record](evidence/base-sepolia-boss-factory-deployment.json). That immutable instance predates the review fixes in this revision. A new Factory deployment using the corrected Router and Hook bytecode is required. The SDK checks build compatibility before quotes, approvals, and launches and rejects the older build. Read-only receipt recovery remains independent of the current bundled code hashes.
+The corrected Factory was deployed at block `47332647` from commit `4efa8f01e73dbabdc3383d444ab03079f6c63493`. Its creation transaction matches the compiled artifact, its Router and Hook hashes match the SDK, and its infrastructure wiring is verified. The public Base Sepolia manifest now selects this Factory. See the [current Factory evidence](evidence/base-sepolia-boss-factory-current.json).
+
+The first demo boss was created by the Factory at block `47332745`. It uses a fresh fixed-supply `BossHP` token as its selected ERC-20, with 10,000 BHP deposited, a 10% prize of 1,000 BHP, a 60 MockUSD volume target, and a deadline of 3 October 2026 at 14:42:42 UTC. This encounter uses Factory reward credit, so players keep purchased BHP when claiming the BHP prize.
+
+| Contract | Base Sepolia address |
+| --- | --- |
+| BossFactory | `0x9039F58150F1fFDFB301A3D7218D47A44406a269` |
+| Demo token | `0x5a5517f63714f44F19337d34ab29d5ACC652e4CF` |
+| BossHook | `0xc11D07448948AC4757592E91D8f5155907Ef6AC0` |
+| BossRouter | `0x087D22c53082ED7841cB5716cB699111a02b0dEf` |
+| BossCollectibles | `0x85cb9a7b9c3E4e35E6C3C726ACd42E3b98D17925` |
+
+On-chain reads confirmed the registered boss, active stage one, creator ownership, prize custody, and current runtime bytecode. A read-only 1 MockUSD attack quote returned about 132.304 BHP. No player attack or claim transaction was sent, so the encounter remains fresh. See the [launch receipt](https://sepolia.basescan.org/tx/0x757a887b2de2275dcd617b8daa8eeef6fa19d8dc469185b2aaa8f0aa1517a120) and [demo boss evidence](evidence/base-sepolia-factory-demo-boss.json). The player battle page still targets the separate standalone BossHP deployment.
+
+The original Factory at block `47330324` remains in the [historical deployment record](evidence/base-sepolia-boss-factory-deployment.json). It predates the review fixes and is incompatible with the current SDK. The SDK checks build compatibility before quotes, approvals, and launches. Read-only receipt recovery remains independent of the current bundled code hashes.
 
 ## Local verification
 
@@ -100,7 +116,7 @@ Verified on 26 September 2026 against the merge-updated working tree for PR #38.
 - `cd contracts && forge build --sizes` passes runtime and initcode limits. Factory 20,355 bytes, hook 21,404 bytes, and router 24,307 bytes. The router is 269 bytes under EIP-170.
 - `cd contracts && forge test --match-contract BossPoolCoreTest -vv` passes all twelve shared scenarios. Coverage includes the standalone round, factory rounds with either token ordering, three volume-gated stages, public quote simulation, MEME prizes, creators reusing a token and launch salt, six-decimal MEME, failed-transition rollback, funding errors, expiry, and LP recovery with outstanding claims. Review regressions cover a one-base-unit volume tail, stable mined addresses through a supply-price move, and partial-price bitmap fee rounding.
 
-These runs use the real pinned v4 PoolManager. They verify the corrected build locally; the original Base Sepolia Factory deployment does not include these fixes.
+These runs use the real pinned v4 PoolManager. They verify the corrected build locally. The current Base Sepolia Factory and demo boss use this build; the original Factory remains historical.
 
 The contract and local transaction results were verified through code commit `93ae695a24e57fca5b3c083bf80c82d9eae878d9`. After integrating main and adding the deployed-build guard, seventeen SDK/UI regression checks, typecheck, and production web build pass. Generated ABI/bytecode consistency also passes. A local Factory SDK smoke covered exact approval including a zero reset, frozen-rate launch, captured transaction identities, and read-only recovery without another transaction.
 
