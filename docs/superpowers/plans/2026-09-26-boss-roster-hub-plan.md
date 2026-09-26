@@ -350,5 +350,123 @@ export type GameEvents = {
 內容：LLM 雙軌（§6.5，含 `/api/sage` route + 腳本兜底）；`scripts/fetch-trending.ts`（GeckoTerminal 刷新 `boss-roster.json` 供開發期使用，demo 一律跑快照，研究 §2.3）。
 **可 demo 成果**：老智者自由回答（世界觀事實不亂編）；榜單換批只需一鍵。
 
+## 10. 任務拆解表
+
+估時以「天」為單位（hackathon 節奏，半日＝0.5）；粒度＝工程師可直接開工。
+
+| task-id | 描述 | 涉及檔案 | 依賴 | 估時 | 負責 |
+|---|---|---|---|---|---|
+| T1 | `BossDefinition` 擴充 + `boss-roster.json` + `BOSSES` 組合 | `bosses.ts`、新 `boss-roster.json` | — | 0.25d | JK |
+| T2 | 地圖重畫：GATES 12 筆、sage marker、pond 移位、route/cluster 重挑 | `scripts/generate-hub-map.ts` | T1（bossId 命名） | 0.5d | JK |
+| T3 | checker：12 gate + bossIds 集合相等 + sage 斷言 | `scripts/check-hub-map.ts` | T2 | 0.25d | JK |
+| T4 | gate 渲染 data-driven：accent/status/ticker/rank chip/字首盾牌；crop 迴圈 | `src/game/HubScene.ts` | T1、T2 | 0.5d | JK |
+| T5 | sage entity：marker 讀取、crop、static body、bob、zone、E 第三分支 + bridge events | `HubScene.ts`、`bridge.ts` | T2、T4 | 0.5d | JK |
+| T6 | `SageDialog` + `useTypewriter` + `sageLines` + GameShell 接線（overlay、prompt 優先序） | 新 `SageDialog.tsx`、`useTypewriter.ts`、`sageLines.ts`、`GameShell.tsx` | T5 | 0.5d | JK |
+| T7 | `BossRosterCard`：非 cat 門 E 分流（gate:enter 依 boss.source/status 分流） | 新 `BossRosterCard.tsx`、`GameShell.tsx` | T1、T4 | 0.25d | JK |
+| T8 | battle-entry 界線審查：確認 T7 分流不影響 cat 流程、`BossEntryPanel` 零編輯 | 無檔（review） | T7 | 0.25d | Roy |
+| T9 | HUD chip `12 CHALLENGERS` + guide 回歸檢查（`chooseHintGate` 12 門行為） | `GameShell.tsx`、`hubGuide.ts`（僅若必要） | T4、T5 | 0.25d | JK |
+| T10 | Phase 2：ROO 巡邏 FSM（waypoint + bezier + 互斥過濾） | `HubScene.ts`（或新 `rosterPatrol.ts`） | T4 | 0.5d | JK |
+| T11 | Phase 2：cat DEFEATED → sage 台詞切換 + defeated 標記 | `sageLines.ts`、`GameShell.tsx` | T6 | 0.25d | JK |
+| T12 | Phase 3（可選）：LLM 雙軌 `/api/sage` + 腳本兜底 | 新 `app/api/sage/route.ts`、`SageDialog.tsx` | T6 | 0.5–1d | JK |
+| T13 | Phase 3（可選）：`scripts/fetch-trending.ts` 刷新 snapshot | 新 script | T1 | 0.25d | 任何人 |
+
+- **Phase 1 小計 ≈ 3.25d**（含 Roy 0.25d）；Phase 2 ≈ 0.75d；Phase 3 ≈ 0.75–1.25d。
+- 依賴鏈：T1→{T2→T3, T4}→T5→{T6, T9}→T7→T8；T10/T11 在 Phase 1 後並行；T12/T13 皆可獨立啟動。
+
+## 11. 風險與未決問題
+
+| # | 風險/未決 | 嚴重度 | 緩解 |
+|---|---|---|---|
+| R1 | **規格變更需批准**（art-direction :64、completion-pass :20/:23） | High | §1.2 表單化呈報；批准前不動 codebase；本計畫含備案範圍縮減（只做 10 門不碰 guide） |
+| R2 | **BossEntryPanel partner 界線**（`BossEntryPanel.tsx:35,113,148-149` 特判） | High | D6：新 `BossRosterCard` 繞開；T8 由 Roy 驗證 cat 流程不回歸；`BossEntryPanel` 零編輯寫入 DoD |
+| R3 | **資產授權**：`npc-thesis-wizard.png` 無 txt、roster portrait 版權 | High | §7.1 actions 列表；Phase 1 字首盾牌零資產；demo 前完成授權確認，未過用備案圖 |
+| R4 | 名單漂移：榜單日拋、demo 前名單過時 | Med | snapshot 換檔即換（D5）；老智者台詞自帶 snapshot 日期（研究 §2.3 第 3 點）；T13 一鍵刷新 |
+| R5 | 地圖回歸：`check-hub-map` BFS 可達性、外圈全封、pond 移位 | Med | T3 集合相等斷言 + BFS 自動驗證 12 門可達；`map:check` 納入 DoD；備案 44×32（§4.1） |
+| R6 | 無觸控決策：對話/門互動在行動端不可用 | Med（既定） | 既定否決不推翻；本版僅桌面 demo；記錄為已知限制 |
+| R7 | battle 進場金鏈接線：cat 門移動後 gate:enter→BossEntryPanel 鏈路 | Med | T8 Roy 驗證；cat 門在頂列正北、zone 半徑不變（`HubScene.ts:351`）；`mock-battle` 鏈路不動 |
+| R8 | guide 回歸：`chooseHintGate` 在 12 unlocked 門下箭頭跳動、find 步文案「a boss pool」 | Low–Med | T9 檢查；行為（取最近）不變，僅驗文案仍通順 |
+| R9 | crop 像素品質：sprite 降採樣模糊（`textures.ts` 兩段式已緩解） | Low | 沿用既有管線；瀏覽器實測調 crop 1–2 次 |
+| R10 | 未決：10 隻最終選角（研究 §5 待答 ⑤：敘事型 vs 熱度型） | Low | 用 snapshot Top-10 原班（§2.2）；換批成本＝改 JSON |
+
+## 12. 驗收標準（DoD）
+
+JK 實作完成後，依序驗證：
+
+1. `bun run typecheck`、`bun run web:build` 全綠（`apps/web/AGENTS.md` Verification）。
+2. `bun run map:build` → `bun run map:check`（12 gate 集合相等 + BFS 可達 + 外圈全封）。
+3. 瀏覽器實測清單（desktop）：
+   - spawn 第一眼構圖：sage 在畫面內、頂列天際線可見 ≥5 門（§3.1）；
+   - sage：接近出 E 提示、對話打字機（補句/下一句兩段式）、ESC 關閉、重複可開、首訪/回訪台詞正確、`reduce-motion` 全文直出且無 bob；
+   - 12 門：名牌 TICKER + caption（roster＝`LB #N · ROBINHOOD`）、字首盾牌、status chip 正確、無 Live/Ready 字樣；
+   - 每門 E：roster 門開 `BossRosterCard`；cat 門開 `BossEntryPanel` 且 BOSS ACTIONS 按鈕（`GameShell.tsx:157-165`）不回歸；`/mock-battle` 不回歸；
+   - guide：welcome→move→find→inspect→done 流程在 12 門下走完；REPLAY GUIDE 正常；
+   - region-exit：東路 `NEXT REGION` 提示仍正常；HUD `12 CHALLENGERS` chip 顯示；
+   - console 無新增錯誤（既有 Anvil `ERR_CONNECTION_REFUSED` 與 Next preload warnings 為已知既有，repo memory 記錄）。
+4. `git diff` 確認 `BossEntryPanel.tsx` 零變更（R2 的硬性驗證）。
+
+## 13. Mermaid 圖
+
+### 13.1 系統互動 sequence（player → sage → dialog → gate → battle entry）
+
+```mermaid
+sequenceDiagram
+    participant P as Player (canvas)
+    participant HS as HubScene
+    participant B as GameBridge
+    participant GS as GameShell
+    participant SD as SageDialog
+    participant RC as BossRosterCard
+    participant BE as BossEntryPanel (既有)
+
+    P->>HS: 走進 sage zone
+    HS->>B: emit "npc:near" {npcId:"sage"}
+    B->>GS: setNearSage(true) → 顯示 E 提示
+    P->>HS: 按 E（setupInput 第三分支）
+    HS->>B: emit "npc:talk" {npcId:"sage"}
+    B->>GS: setSageOpen(true) → overlayOpen → ui:modal{open:true}
+    GS->>SD: 開啟（sageLines 依 firstVisit/defeated 選集）
+    P->>SD: E 補句 / 再 E 下一句 / ESC 關閉
+    SD->>GS: onClose → overlayOpen=false → ui:modal{open:false}
+    P->>HS: 走進 gate zone
+    HS->>B: emit "gate:near" {bossId}
+    P->>HS: 按 E
+    HS->>B: emit "gate:enter" {bossId}
+    GS->>GS: boss.source==="chain" ? cat : roster
+    alt cat（唯一 playable）
+        GS->>BE: BossEntryPanel（既有流程，零編輯）
+    else roster / fixture
+        GS->>RC: BossRosterCard（ticker/名次/敘事，NO CONTRACT）
+    end
+```
+
+### 13.2 實作分期 / 依賴 flowchart
+
+```mermaid
+flowchart LR
+    A[T1 bosses.ts + roster JSON] --> B[T2 generate-hub-map 重畫]
+    B --> C[T3 check-hub-map 斷言]
+    A --> D[T4 gate 渲染 data-driven]
+    B --> E[T5 sage entity + bridge events]
+    D --> E
+    E --> F[T6 SageDialog + useTypewriter]
+    D --> G[T7 BossRosterCard 分流]
+    G --> H[T8 Roy 界線審查]
+    F --> I[T9 HUD chip + guide 回歸]
+    subgraph Phase 1
+        A; B; C; D; E; F; G; H; I
+    end
+    D --> J[T10 ROO 巡邏 FSM]
+    F --> K[T11 defeated 台詞切換]
+    subgraph Phase 2
+        J; K
+    end
+    F --> L[T12 LLM 雙軌]
+    A --> M[T13 fetch-trending 刷新]
+    subgraph Phase 3 可選
+        L; M
+    end
+```
+
+
 
 
