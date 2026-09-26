@@ -59,7 +59,7 @@ export function BossStage({ stage, state }: { stage: 1 | 2 | 3; state: BossVisua
   const hue = STAGE_HUES[stage - 1];
 
   return (
-    <div className="relative mx-auto flex aspect-square w-full max-w-[360px] items-center justify-center">
+    <div className="relative h-full w-full">
       <div
         aria-hidden
         className="absolute inset-8 rounded-full"
@@ -69,8 +69,17 @@ export function BossStage({ stage, state }: { stage: 1 | 2 | 3; state: BossVisua
         src={BOSS_IMAGES[stage]}
         alt=""
         aria-hidden
-        className="relative max-h-full max-w-full object-contain transition-[transform,opacity] duration-[120ms] ease-[var(--ease-out-strong)]"
+        className="absolute inset-0 h-full w-full object-contain [image-rendering:pixelated] transition-[transform,opacity] duration-[120ms] ease-[var(--ease-out-strong)]"
         style={{ transform, opacity }}
+      />
+      {/* Stone slab plinth echoing arena-lake-background.png's platform. */}
+      <div
+        aria-hidden
+        className="absolute bottom-[7%] left-1/2 h-[6%] w-[62%] -translate-x-1/2 bg-[#66728e] [clip-path:polygon(12%_0,88%_0,100%_100%,0_100%)]"
+      />
+      <div
+        aria-hidden
+        className="absolute bottom-[2%] left-1/2 h-[3%] w-[72%] -translate-x-1/2 rounded-[50%] bg-[#080b14]/60"
       />
     </div>
   );
