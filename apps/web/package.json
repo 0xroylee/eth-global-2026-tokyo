@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "map:build": "bun scripts/generate-hub-map.ts",
-    "map:check": "bun scripts/check-hub-map.ts"
+    "map:check": "bun scripts/check-hub-map.ts",
+    "test:wallet": "bun test ../../packages/chain/src/wallet.test.ts src/wallet/discovery.test.ts"
   },
   "dependencies": {
     "@boss-pool/chain": "workspace:*",

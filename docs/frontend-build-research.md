@@ -1,5 +1,7 @@
 # Frontend build research
 
+Network update, 26 September 2026: Base Sepolia supersedes Robinhood testnet as the active frontend wallet and future deployment target. Robinhood findings below remain historical evidence only.
+
 Updated 26 September 2026. The user selected Next.js, direct viem, and Tailwind CSS. This decision supersedes the earlier Vite/plain-CSS/wagmi recommendation. The repository still runs the BP01 Vite shell; migration and wallet implementation remain pending. No dependencies were installed and no transactions were submitted during this research.
 
 ## Selected stack
@@ -27,7 +29,7 @@ Keep browser provider access in Client Component effects or event handlers. An i
 
 Verify the migration with typecheck, a production build, and browser checks for missing-deployment and live-local round states. Extend the existing two-wallet journey as transaction flows land. Package installation, dependency compatibility, and wallet behavior have not been validated for the new stack yet.
 
-## Robinhood testnet and demo wallet
+## Robinhood testnet and demo wallet (historical)
 
 The official network configuration is:
 
@@ -43,7 +45,7 @@ Robinhood now also documents mainnet chain ID 4663. Boss Pool remains explicitly
 
 MetaMask is the practical rehearsal wallet because Robinhood documents EVM wallet support and MetaMask documents manual custom-network configuration. Use two prepared test accounts in separate browser profiles to exercise independent sessions. Add or switch to the exact testnet network and fund both accounts with testnet ETH before rehearsal. Mobile and extension network settings do not automatically synchronize. [Robinhood wallet setup](https://docs.robinhood.com/chain/add-network-to-wallet/), [MetaMask custom networks](https://support.metamask.io/configure/networks/how-to-add-a-custom-network-rpc).
 
-The injected wallet still needs to accept the selected chain and RPC. Robinhood Wallet is an optional second target because the official documentation names it; its testnet session flow has not been verified here. A wallet brand or an EVM-support claim does not close BP11. [Robinhood wallet setup](https://docs.robinhood.com/chain/add-network-to-wallet/)
+The injected wallet still needs to accept the selected chain and RPC. Robinhood Wallet was an optional second target while Robinhood testnet was active because the official documentation names it; its testnet session flow has not been verified here. A wallet brand or an EVM-support claim does not close BP11. [Robinhood wallet setup](https://docs.robinhood.com/chain/add-network-to-wallet/)
 
 A fresh `eth_chainId` request to the official public testnet RPC returned HTTP 403 from this environment on 26 September. This confirms the existing release blocker, not a network outage. Robinhood lists Alchemy and other providers; an accessible endpoint still needs chain ID, browser access, deployed bytecode, and real transaction checks. Do not guess Multicall addresses or mark a deployment as verified from configuration alone. [Official provider options](https://docs.robinhood.com/chain/connecting/).
 

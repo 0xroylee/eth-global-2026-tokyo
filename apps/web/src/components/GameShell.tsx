@@ -7,6 +7,7 @@ import { useLocalRound, type DeploymentState } from "@/lib/useLocalRound";
 import { BossEntryPanel } from "./BossEntryPanel";
 import { GameCanvas } from "./GameCanvas";
 import { RoundStatePanel } from "./RoundStatePanel";
+import { WalletControl } from "./WalletControl";
 
 export function GameShell() {
   const bridge = useMemo(() => new GameBridge(), []);
@@ -14,6 +15,7 @@ export function GameShell() {
   const [nearBoss, setNearBoss] = useState<BossId | null>(null);
   const [openBoss, setOpenBoss] = useState<BossId | null>(null);
   const [showChain, setShowChain] = useState(false);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
 
   useEffect(() => {
     const offNear = bridge.on("gate:near", ({ bossId }) => setNearBoss(bossId));
@@ -26,14 +28,19 @@ export function GameShell() {
   }, [bridge]);
 
   useEffect(() => {
-    bridge.send("ui:modal", { open: openBoss !== null || showChain });
-  }, [bridge, openBoss, showChain]);
+    bridge.send("ui:modal", { open: openBoss !== null || showChain || walletModalOpen });
+  }, [bridge, openBoss, showChain, walletModalOpen]);
 
   const closeBoss = useCallback(() => setOpenBoss(null), []);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-[1180px] flex-col px-4 md:px-[38px]">
-      <Hud deployment={deployment} onToggleChain={() => setShowChain((v) => !v)} chainOpen={showChain} />
+      <Hud
+        deployment={deployment}
+        onToggleChain={() => setShowChain((v) => !v)}
+        chainOpen={showChain}
+        onWalletModalChange={setWalletModalOpen}
+      />
 
       <section className="relative mt-3">
         <GameCanvas bridge={bridge} />
@@ -75,39 +82,46 @@ function Hud({
   deployment,
   chainOpen,
   onToggleChain,
+  onWalletModalChange,
 }: {
   deployment: DeploymentState;
   chainOpen: boolean;
   onToggleChain: () => void;
+  onWalletModalChange: (open: boolean) => void;
 }) {
   const live = deployment.kind === "live";
   const label =
     deployment.kind === "loading" ? "CHECKING" : live ? "LIVE" : deployment.kind === "error" ? "RPC ERROR" : "NOT DEPLOYED";
   return (
-    <header className="hairline flex h-16 items-center justify-between border-b">
+    <header className="hairline flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b py-2">
       <a className="inline-flex items-center gap-[11px] text-xs font-bold tracking-[0.15em] text-fog no-underline" href="/">
         <span className="grid size-[30px] place-items-center rounded-[9px] border border-accent-soft/50 text-[10px] tracking-normal text-accent-soft">
           BP
         </span>
         <span>BOSS POOL</span>
       </a>
-      <button
-        type="button"
-        onClick={onToggleChain}
-        aria-pressed={chainOpen}
-        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-[9px] tracking-[0.12em] transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] ${
-          live ? "border-live/25 text-live-soft" : "border-white/12 text-[#9da8c3]"
-        }`}
-      >
-        <span
-          className={`size-[7px] rounded-full ${live ? "bg-live shadow-[0_0_12px_rgba(79,218,165,0.55)]" : "bg-[#8e9bb9]"}`}
-          aria-hidden="true"
-        />
-        CHAIN · {label}
-        <span aria-hidden="true" className="text-dim">
-          {chainOpen ? "▴" : "▾"}
-        </span>
-      </button>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {/* Round pill reports the local contract read; the wallet control reports Base Sepolia. Keep them visibly separate. */}
+        <button
+          type="button"
+          onClick={onToggleChain}
+          aria-pressed={chainOpen}
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-[9px] tracking-[0.12em] transition-transform duration-150 ease-[var(--ease-out-strong)] active:scale-[0.97] ${
+            live ? "border-live/25 text-live-soft" : "border-white/12 text-[#9da8c3]"
+          }`}
+        >
+          <span
+            className={`size-[7px] rounded-full ${live ? "bg-live shadow-[0_0_12px_rgba(79,218,165,0.55)]" : "bg-[#8e9bb9]"}`}
+            aria-hidden="true"
+          />
+          <span className="hidden sm:inline">ROUND · LOCAL · </span>
+          {label}
+          <span aria-hidden="true" className="text-dim">
+            {chainOpen ? "▴" : "▾"}
+          </span>
+        </button>
+        <WalletControl onModalChange={onWalletModalChange} />
+      </div>
     </header>
   );
 }

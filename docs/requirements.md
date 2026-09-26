@@ -1,6 +1,6 @@
 # Boss Pool requirements
 
-Status: attacks count purchases without burns, and reward shares follow eligible BossHP rather than a per-wallet damage total. The worked claim default is transferable tokens surrendered into permanent custody; the frozen-balance alternative remains available. [BP01](bp01-foundation.md) records the local no-burn contract foundation. The full browser game and Robinhood deployment remain unverified.
+Status: attacks count purchases without burns, and reward shares follow eligible BossHP rather than a per-wallet damage total. The worked claim default is transferable tokens surrendered into permanent custody; the frozen-balance alternative remains available. [BP01](bp01-foundation.md) records the local no-burn contract foundation. The full browser game and testnet deployment remain unverified. Base Sepolia is the selected testnet target for new wallet and deployment work. The existing Robinhood testnet evidence is historical and does not prove a Base deployment.
 
 ## Confirmed gameplay
 
@@ -10,7 +10,7 @@ Status: attacks count purchases without burns, and reward shares follow eligible
 4. Retain independent stage HP budgets of 300, 600, and 900. One attack affects only its starting stage.
 5. Once the current registered allocation has no sellable HP, reset its price with a controller-only reserve-funded refill and add the next stage's incremental liquidity. Preloading every future allocation into active positions would violate this choice.
 6. Final defeat freezes the eligible supply as the sum of actual player attack outputs. Eligible BossHP determines proportional MockUSD rewards. Victory NFT eligibility remains separate from transferable token reward rights.
-7. Keep fixed prefunded supply, a separate sponsor prize, Next.js with TypeScript and Tailwind CSS, direct viem wallet/contract access, Bun, Uniswap v4, Robinhood testnet, and the small monorepo.
+7. Keep fixed prefunded supply, a separate sponsor prize, Next.js with TypeScript and Tailwind CSS, direct viem wallet/contract access, Bun, Uniswap v4, Base Sepolia testnet, and the small monorepo.
 8. Use the established two-person ownership: contracts/backend and UI/interface/gaming. Reuse existing solutions and verify the core through a shared E2E scenario.
 
 There is one attack currency, ROY. MROY, two attack types, the 3x magic multiplier, and the 5x magic price are removed. Attacks burn neither ROY nor BossHP.
@@ -55,7 +55,7 @@ HP budgets are nominal stage allocations, not PoolManager's raw ERC-20 balance. 
 
 | ID | Story |
 | --- | --- |
-| US01 | Connect to Robinhood testnet and verify the two-hop route and stage LP primitives. |
+| US01 | Connect to Base Sepolia and verify the two-hop route and stage LP primitives. |
 | US02 | Fund and activate a round with the prize, initial LP, and gated future-stage reserve. |
 | US03 | Enroll once and receive the entry NFT and starter ROY. |
 | US04 | Press Attack and atomically buy ROY, receive BossHP, and record its actual output as damage. |
