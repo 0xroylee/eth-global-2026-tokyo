@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { BOSSES, findBoss, isBossId, type BossDefinition, type BossId } from "./bosses";
+import { BOSSES, findBoss, isBossId, type BossDefinition } from "./bosses";
 import type { GameBridge, GameCommands } from "./bridge";
 import { HUB_LAYERS, HUB_TILESET } from "./hubTiles";
 import { makeCroppedTexture } from "./textures";
@@ -21,11 +21,10 @@ const OVERHEAD_DEPTH = 5_000;
 /** Labels sit above every y-sorted prop and the overhead layer. */
 const LABEL_DEPTH = 10_000;
 
-const GATE_COLORS: Record<BossId, number> = {
-  cat: 0xf5b04a,
-  "macro-whale": 0x5aa9ff,
-  locked: 0x6b7080,
-};
+/** Gate accents are authored as hex strings; Phaser draws with packed integers. */
+function accentColor(hex: string): number {
+  return Phaser.Display.Color.HexStringToColor(hex).color;
+}
 
 type Gate = {
   boss: BossDefinition;
@@ -118,8 +117,12 @@ export class HubScene extends Phaser.Scene {
     this.nearRegion = false;
     this.crispLabels = [];
     this.registerWalk();
-    makeCroppedTexture(this, "portrait-cat", "portrait-master-cat", { x: 120, y: 60, w: 880, h: 1240 }, 28);
-    makeCroppedTexture(this, "portrait-macro-whale", "portrait-master-macro-whale", { x: 160, y: 80, w: 940, h: 940 }, 28);
+    // Crop specs live on the boss definition, so adding a portrait needs no scene edit.
+    for (const boss of BOSSES) {
+      if (boss.portrait && boss.crop) {
+        makeCroppedTexture(this, `portrait-${boss.id}`, `portrait-master-${boss.id}`, boss.crop, boss.crop.targetHeight);
+      }
+    }
 
     const map = this.make.tilemap({ key: "hub" });
     const tileset = map.addTilesetImage(HUB_TILESET.name, "tiles");
@@ -273,7 +276,7 @@ export class HubScene extends Phaser.Scene {
       if (obj.x === undefined || obj.y === undefined) continue;
 
       const boss = findBoss(bossId);
-      const color = GATE_COLORS[boss.id];
+      const color = accentColor(boss.accent);
       const cx = obj.x + GATE.width / 2;
       const base = obj.y + GATE.height;
 
@@ -315,7 +318,7 @@ export class HubScene extends Phaser.Scene {
             .text(cx, label.y + label.height, "BOSS POOL", {
               fontFamily: "var(--font-dm-mono), monospace",
               fontSize: "4px",
-              color: "#f5b04a",
+              color: boss.accent,
               letterSpacing: 0.6,
               resolution: ZOOM,
             })
