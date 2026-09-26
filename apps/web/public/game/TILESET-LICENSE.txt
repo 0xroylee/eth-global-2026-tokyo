@@ -28,6 +28,10 @@ Tile index notes (1-based Tiled gids, firstgid 1, row-major, 12 columns)
 
 Read from the sheet on 2026-09-26.
 
+Trees, sprouts, mushrooms, fences and the sign have transparent backgrounds,
+so they go on the `props` (under player) or `overhead` (over player) layer
+with grass left on `ground` beneath them.
+
 Grass
 - 1   plain grass
 - 2   grass, light speckle
